@@ -1,0 +1,13 @@
+[tool.flet.web]
+# Excluir pacotes pesados desnecessários para reduzir app.zip
+exclude = [
+    "numpy",
+    "pandas",
+    "scipy",
+    "matplotlib",
+    "PIL",
+    "cv2",
+    "sklearn",
+    "tensorflow",
+    "torch",
+]

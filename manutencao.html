@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Onion Payroll — Em Manutenção</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background-color: #0B0F14;
+      color: #E8EDF2;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    .card {
+      background: #121A23;
+      border: 1px solid #22303D;
+      border-radius: 20px;
+      padding: 48px 40px;
+      max-width: 420px;
+      width: 100%;
+      text-align: center;
+    }
+
+    .icon {
+      font-size: 64px;
+      margin-bottom: 24px;
+      display: block;
+    }
+
+    .title {
+      font-size: 22px;
+      font-weight: 800;
+      color: #E8EDF2;
+      letter-spacing: 2px;
+      margin-bottom: 6px;
+    }
+
+    .subtitle {
+      font-size: 11px;
+      color: #00C2A8;
+      letter-spacing: 3px;
+      margin-bottom: 32px;
+    }
+
+    .divider {
+      height: 1px;
+      background: #22303D;
+      margin: 24px 0;
+    }
+
+    .message {
+      font-size: 15px;
+      color: #8D9AA7;
+      line-height: 1.7;
+      margin-bottom: 24px;
+    }
+
+    .message strong {
+      color: #E8EDF2;
+    }
+
+    .badge {
+      display: inline-block;
+      background: #1A2535;
+      border: 1px solid #00C2A8;
+      color: #00C2A8;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 8px 20px;
+      border-radius: 20px;
+      letter-spacing: 1px;
+    }
+
+    .footer {
+      margin-top: 32px;
+      font-size: 11px;
+      color: #4A5568;
+    }
+
+    /* Animação sutil no ícone */
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.08); }
+    }
+    .icon { animation: pulse 2.5s ease-in-out infinite; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <span class="icon">🧅</span>
+    <div class="title">ONION PAYROLL</div>
+    <div class="subtitle">DESCASQUE SEU SALÁRIO</div>
+    <div class="divider"></div>
+    <p class="message">
+      O aplicativo está temporariamente
+      <strong>em manutenção</strong>.<br><br>
+      Estamos trabalhando em melhorias
+      para você. Voltamos em breve!
+    </p>
+    <span class="badge">⚙️ Em Manutenção</span>
+    <div class="footer">
+      Onion Payroll © 2026 — kamebug.github.io
+    </div>
+  </div>
+</body>
+</html>
