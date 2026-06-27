@@ -383,22 +383,22 @@ def boot_load_storage(page: ft.Page):
 # ─────────────────────────────────────────────
 
 # ── Tema Claro Corporativo ───────────────────────────────────────
-BG_DEEP        = "#F0F4F7"   # Fundo principal — cinza claro
+BG_DEEP        = "#2c2c2a"   # Fundo principal — cinza escuro quente
 BG_CARD        = "#FFFFFF"   # Cards — branco puro
 BG_SURFACE     = "#F8FAFC"   # Inputs e superfícies internas
 ACCENT         = "#00C2A8"   # Destaque turquesa
-ACCENT_LITE    = "#00A896"   # Versão escura do accent (sobre claro)
+ACCENT_LITE    = "#5EEAD4"   # Versão clara do accent (sobre fundo escuro)
 ACCENT_DARK    = "#007A6E"   # Versão mais escura
 WORK_COLOR     = "#D1FAE5"   # Trabalho — verde claro
 OFF_COLOR      = "#DBEAFE"   # Folga — azul claro
 HOL_COLOR      = "#FEE2E2"   # Feriado nacional — vermelho claro
-TEXT_PRIMARY   = "#1A2535"   # Texto principal — quase preto
-TEXT_SECONDARY = "#64748B"   # Texto secundário — cinza médio
-TEXT_MUTED     = "#94A3B8"   # Texto terciário — cinza claro
-SUCCESS        = "#059669"   # Verde escuro sobre fundo claro
-WARNING        = "#D97706"   # Âmbar escuro sobre fundo claro
-DANGER         = "#DC2626"   # Vermelho escuro sobre fundo claro
-YEN_GOLD       = "#92610A"   # Dourado escuro sobre fundo claro
+TEXT_PRIMARY   = "#E8EDF2"   # Texto principal — branco frio (sobre fundo escuro)
+TEXT_SECONDARY = "#A8B5C0"   # Texto secundário — cinza claro legível
+TEXT_MUTED     = "#94A3B8"   # Texto terciário — ok
+SUCCESS        = "#34D399"   # Verde claro — legível sobre fundo escuro
+WARNING        = "#FBB940"   # Âmbar claro — legível sobre fundo escuro
+DANGER         = "#F87171"   # Vermelho claro — legível sobre fundo escuro
+YEN_GOLD       = "#F0C040"   # Dourado brilhante — legível sobre fundo escuro
 
 # Cores específicas do header e nav (escuros)
 HEADER_BG      = "#1A2535"
@@ -482,20 +482,20 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
             ],
             bgcolor="#F8FAFC", color="#1A2535",
             border_color=ACCENT_DARK, focused_border_color=ACCENT,
-            label_style=ft.TextStyle(color=TEXT_SECONDARY),
+            label_style=ft.TextStyle(color="#475569"),
         )
         start_f = ft.TextField(
             label="Entrada (HH:MM)", value=ov.get("start", ""),
             bgcolor="#F8FAFC", color="#1A2535",
             border_color=ACCENT_DARK, focused_border_color=ACCENT,
-            label_style=ft.TextStyle(color=TEXT_SECONDARY),
+            label_style=ft.TextStyle(color="#475569"),
             expand=1,
         )
         end_f = ft.TextField(
             label="Saída (HH:MM)", value=ov.get("end", ""),
             bgcolor="#F8FAFC", color="#1A2535",
             border_color=ACCENT_DARK, focused_border_color=ACCENT,
-            label_style=ft.TextStyle(color=TEXT_SECONDARY),
+            label_style=ft.TextStyle(color="#475569"),
             expand=1,
         )
         break_f = ft.TextField(
@@ -503,7 +503,7 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
             keyboard_type=ft.KeyboardType.NUMBER,
             bgcolor="#F8FAFC", color="#1A2535",
             border_color=ACCENT_DARK, focused_border_color=ACCENT,
-            label_style=ft.TextStyle(color=TEXT_SECONDARY),
+            label_style=ft.TextStyle(color="#475569"),
         )
         yukyu_sw = ft.Switch(
             label="有休 em Feriado (+8h)",
@@ -1052,7 +1052,7 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
                 label=lbl, value=val, keyboard_type=kb,
                 bgcolor="#F8FAFC", color="#1A2535",
                 border_color=ACCENT_DARK, focused_border_color=ACCENT,
-                label_style=ft.TextStyle(color=TEXT_SECONDARY, size=9),
+                label_style=ft.TextStyle(color="#475569", size=9),
                 text_size=13, dense=True, expand=1,
             )
 
@@ -1394,7 +1394,7 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
             label=label_str, value=str(settings.get(key, "")),
             keyboard_type=kb, bgcolor="#F8FAFC", color="#1A2535",
             border_color=ACCENT_DARK, focused_border_color=ACCENT,
-            label_style=ft.TextStyle(color=TEXT_SECONDARY),
+            label_style=ft.TextStyle(color="#475569"),
             on_blur=_blur,
         )
 
@@ -1407,7 +1407,7 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
         ],
         bgcolor="#F8FAFC", color="#1A2535",
         border_color=ACCENT_DARK, focused_border_color=ACCENT,
-        label_style=ft.TextStyle(color=TEXT_SECONDARY),
+        label_style=ft.TextStyle(color="#475569"),
     )
     group_dd.on_change = lambda e: [settings.__setitem__("group", e.control.value), _save()]
 
@@ -1421,7 +1421,7 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
         ],
         bgcolor="#F8FAFC", color="#1A2535",
         border_color=ACCENT_DARK, focused_border_color=ACCENT,
-        label_style=ft.TextStyle(color=TEXT_SECONDARY),
+        label_style=ft.TextStyle(color="#475569"),
     )
     block_dd.on_change = lambda e: [settings.__setitem__("block", int(e.control.value)), _save()]
 
@@ -1434,7 +1434,7 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
         ],
         bgcolor="#F8FAFC", color="#1A2535",
         border_color=ACCENT_DARK, focused_border_color=ACCENT,
-        label_style=ft.TextStyle(color=TEXT_SECONDARY),
+        label_style=ft.TextStyle(color="#475569"),
     )
     ded_mode_dd.on_change = lambda e: [settings.__setitem__("deduction_mode", e.control.value), _save()]
 
@@ -1456,7 +1456,7 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
             hint_text="2025-05-03,jp\n2025-08-13,corp\n2025-01-01",
             bgcolor="#F8FAFC", color="#1A2535",
             border_color=ACCENT_DARK, focused_border_color=ACCENT,
-            label_style=ft.TextStyle(color=TEXT_SECONDARY),
+            label_style=ft.TextStyle(color="#475569"),
         )
 
         def _close(_=None):
@@ -1690,13 +1690,13 @@ def build_holidays_tab(page: ft.Page, state: dict, refresh_all):
             value=f"{view_year}-01-01",
             bgcolor="#F8FAFC", color="#1A2535",
             border_color=ACCENT_DARK, focused_border_color=ACCENT,
-            label_style=ft.TextStyle(color=TEXT_SECONDARY),
+            label_style=ft.TextStyle(color="#475569"),
         )
         note_f = ft.TextField(
             label="Descrição (opcional)",
             bgcolor="#F8FAFC", color="#1A2535",
             border_color=ACCENT_DARK, focused_border_color=ACCENT,
-            label_style=ft.TextStyle(color=TEXT_SECONDARY),
+            label_style=ft.TextStyle(color="#475569"),
         )
         def _save(_=None):
             try:
@@ -1887,16 +1887,16 @@ def build_holidays_tab(page: ft.Page, state: dict, refresh_all):
 def build_help_tab(page: ft.Page, state: dict, refresh_all):
 
     ACCENT_LITE = "#00A896"
-    TEXT_PRIMARY = "#1A2535"
-    TEXT_SECONDARY = "#64748B"
+    TEXT_PRIMARY = "#E8EDF2"
+    TEXT_SECONDARY = "#A8B5C0"
     TEXT_MUTED = "#94A3B8"
     BG_CARD = "#FFFFFF"
     BG_SURFACE = "#F8FAFC"
     ACCENT_DARK = "#007A6E"
-    SUCCESS = "#059669"
-    WARNING = "#D97706"
-    DANGER = "#DC2626"
-    YEN_GOLD = "#92610A"
+    SUCCESS = "#34D399"
+    WARNING = "#FBB940"
+    DANGER = "#F87171"
+    YEN_GOLD = "#F0C040"
 
     def _title(t):
         return ft.Container(
