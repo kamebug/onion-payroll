@@ -1,6 +1,6 @@
 {
     "name": "Onion Payroll",
-    "short_name": "onion_payroll",
+    "short_name": "build_src",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#FFFFFF",
