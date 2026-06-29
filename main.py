@@ -2403,13 +2403,21 @@ def main(page: ft.Page):
         logo = ft.Text("🧅", size=36)
     title_col = ft.Column(
         controls=[
-            ft.Text("ONION PAYROLL", size=scaled(16), weight=ft.FontWeight.W_800,
-                    color=TEXT_PRIMARY,
-                    style=ft.TextStyle(letter_spacing=1.5)),
-            ft.Text("PEEL YOUR PAYCHECK", size=scaled(9), color=ACCENT_LITE,
-                    style=ft.TextStyle(letter_spacing=2.0)),
+            ft.Row(
+                controls=[
+                    ft.Text("ONION ", size=scaled(17), weight=ft.FontWeight.W_900,
+                            color="#FFFFFF",
+                            style=ft.TextStyle(letter_spacing=2.0)),
+                    ft.Text("PAYROLL", size=scaled(17), weight=ft.FontWeight.W_900,
+                            color=ACCENT,
+                            style=ft.TextStyle(letter_spacing=2.0)),
+                ],
+                spacing=0, tight=True,
+            ),
+            ft.Text("PEEL YOUR PAYCHECK", size=scaled(8), color=TEXT_SECONDARY,
+                    style=ft.TextStyle(letter_spacing=2.5)),
         ],
-        spacing=0, tight=True,
+        spacing=2, tight=True,
     )
     header = ft.Container(
         content=ft.Row(controls=[ft.Row([logo, ft.Container(width=10), title_col])]),
