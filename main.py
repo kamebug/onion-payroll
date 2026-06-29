@@ -176,8 +176,11 @@ def compute_monthly_forecast(
         # domingo/cycle="off"/feriado → +35% se tem horário
         # cycle="work" → turno normal
 
-        weekday = date(year, month, day_num).weekday()   # 0=seg … 6=dom
-        is_legal_holiday = (weekday == 6)           # domingo = folga legal
+        try:
+            weekday = date(year, month, day_num).weekday()
+            is_legal_holiday = (weekday == 6)
+        except Exception:
+            is_legal_holiday = False
 
         if status == "absent":
             shift_type = "absent"
@@ -212,11 +215,13 @@ def compute_monthly_forecast(
         eff_start = start_str if start_str else _start
         eff_end   = end_str   if end_str   else _end
         eff_break = break_min if break_min != 65 else _break
+        # Domingo (法定休日) também conta como feriado para o cálculo +35%
+        is_pay_holiday = is_holiday or is_legal_holiday
         pay = calculate_shift_pay(
             jikyuu=jikyuu, shift_type=shift_type,
             start_str=eff_start, end_str=eff_end,
             break_min=eff_break, block=block,
-            is_holiday=is_holiday, yukyu_on_holiday=yukyu_hol,
+            is_holiday=is_pay_holiday, yukyu_on_holiday=yukyu_hol,
         )
         total_base    += pay["base_pay"]
         total_ot      += pay["overtime_pay"]
@@ -1043,24 +1048,29 @@ def build_holerite_tab(page: ft.Page, state: dict, refresh_all):
         anchor = today
 
     month_key = f"{view_year}-{view_month:02d}"
-    data = compute_monthly_forecast(
-        year=view_year, month=view_month,
-        jikyuu=int(settings.get("jikyuu") or 1500),
-        anchor_date=anchor, group=settings.get("group", "B"),
-        holiday_days=holidays.get(month_key, []),
-        day_overrides=overrides.get(month_key, {}),
-        odd_month_bonus=int(state.get("hol_odd_bonus") or settings.get("odd_bonus") or 50000),
-        extra_bonus=int(state.get("extra_bonus") or 0),
-        deduction_mode=settings.get("deduction_mode", "historical"),
-        fixed_deduction=int(settings.get("fixed_deduction") or 0),
-        history_avg_pct=hist_avg,
-        block=int(settings.get("block") or 1),
-        shift_type_cfg=settings.get("shift_type", ""),
-        cfg_start=settings.get("shift_start", ""),
-        cfg_end=settings.get("shift_end", ""),
-        cfg_break=int(settings.get("shift_break") or 65),
-        cfg_ot=settings.get("shift_ot", ""),
-    )
+    try:
+        data = compute_monthly_forecast(
+            year=view_year, month=view_month,
+            jikyuu=int(settings.get("jikyuu") or 1500),
+            anchor_date=anchor, group=settings.get("group", "B"),
+            holiday_days=holidays.get(month_key, []),
+            day_overrides=overrides.get(month_key, {}),
+            odd_month_bonus=int(state.get("hol_odd_bonus") or settings.get("odd_bonus") or 50000),
+            extra_bonus=int(state.get("extra_bonus") or 0),
+            deduction_mode=settings.get("deduction_mode", "historical"),
+            fixed_deduction=int(settings.get("fixed_deduction") or 0),
+            history_avg_pct=hist_avg,
+            block=int(settings.get("block") or 1),
+            shift_type_cfg=settings.get("shift_type", ""),
+            cfg_start=settings.get("shift_start", ""),
+            cfg_end=settings.get("shift_end", ""),
+            cfg_break=int(settings.get("shift_break") or 65),
+            cfg_ot=settings.get("shift_ot", ""),
+        )
+    except Exception:
+        data = {"gross": 0, "deductions": 0, "net": 0,
+                "base_pay": 0, "overtime_pay": 0, "night_pay": 0,
+                "holiday_pay": 0, "odd_bonus": 0, "extra_bonus": 0}
 
     def _go_prev(_):
         m, y = view_month - 1, view_year
@@ -1108,9 +1118,40 @@ def build_holerite_tab(page: ft.Page, state: dict, refresh_all):
         else:
             deduction_note = f"Média histórica: {hist_avg:.1f}%"
 
+    # Campos editáveis de bônus
+    odd_f = ft.TextField(
+        label="奇数月 Bônus Mês Ímpar (¥)",
+        value=str(state.get("hol_odd_bonus") or settings.get("odd_bonus") or 50000),
+        keyboard_type=ft.KeyboardType.NUMBER,
+        bgcolor=BG_SURFACE, color=TEXT_PRIMARY,
+        border_color="#333333", focused_border_color=ACCENT,
+        label_style=ft.TextStyle(color=TEXT_SECONDARY, size=10),
+        expand=1,
+    )
+    extra_f = ft.TextField(
+        label="Abono Extra (¥)",
+        value=str(state.get("extra_bonus") or 0),
+        keyboard_type=ft.KeyboardType.NUMBER,
+        bgcolor=BG_SURFACE, color=TEXT_PRIMARY,
+        border_color="#333333", focused_border_color=ACCENT,
+        label_style=ft.TextStyle(color=TEXT_SECONDARY, size=10),
+        expand=1,
+    )
+
+    def _upd_bonus(_):
+        try: state["hol_odd_bonus"] = int(odd_f.value or 0)
+        except: pass
+        try: state["extra_bonus"] = int(extra_f.value or 0)
+        except: pass
+        refresh_all()
+
+    odd_f.on_blur   = _upd_bonus
+    extra_f.on_blur = _upd_bonus
+
     return ft.Column(
         controls=[
             nav_row, ft.Container(height=4),
+            card(ft.Row(controls=[odd_f, extra_f], spacing=8)),
             card(ft.Column(controls=[
                 section_header("支給 VENCIMENTOS"),
                 pay_row("Salário Base (基本給)",          data["base_pay"]),
