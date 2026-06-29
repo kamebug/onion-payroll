@@ -156,7 +156,8 @@ def compute_monthly_forecast(
     _end          = cfg_end   if cfg_end   else ("08:35" if _stype == "night" else "20:35")
     _break        = cfg_break if cfg_break else 65
     _ot           = cfg_ot    if cfg_ot    else ("06:35" if _stype == "night" else "18:35")
-    total_base = total_ot = total_night = total_holiday = 0
+    total_base = total_ot = total_night = total_holiday = total_legal = 0
+    days_normal = days_holiday = days_legal = 0
 
     for day_num, cycle_status in cycle.items():
         ov           = day_overrides.get(str(day_num), {})
@@ -187,6 +188,14 @@ def compute_monthly_forecast(
 
         elif status == "yukyu":
             shift_type = "yukyu"
+
+        elif status == "holiday":
+            # Marcado manualmente como feriado
+            shift_type = "holiday"
+
+        elif status == "legal":
+            # Marcado manualmente como domingo/folga legal
+            shift_type = "holiday"
 
         elif is_legal_holiday:
             # Domingo — folga legal obrigatória (法定休日)
@@ -223,22 +232,31 @@ def compute_monthly_forecast(
             break_min=eff_break, block=block,
             is_holiday=is_pay_holiday, yukyu_on_holiday=yukyu_hol,
         )
-        total_base    += pay["base_pay"]
-        total_ot      += pay["overtime_pay"]
-        total_night   += pay["night_pay"]
-        total_holiday += pay["holiday_pay"]
+        if (is_legal_holiday and not is_holiday) or status == "legal":
+            total_legal += pay["total_gross"]
+            days_legal  += 1
+        elif status == "holiday" or (is_holiday and not is_legal_holiday):
+            total_holiday += pay["total_gross"]
+            days_holiday  += 1
+        else:
+            total_base  += pay["base_pay"]
+            total_ot    += pay["overtime_pay"]
+            total_night += pay["night_pay"]
+            if pay["base_pay"] > 0:
+                days_normal += 1
 
     applied_odd = odd_month_bonus if month % 2 == 1 else 0
-    gross       = total_base + total_ot + total_night + total_holiday + applied_odd + extra_bonus
+    gross       = total_base + total_ot + total_night + total_holiday + total_legal + applied_odd + extra_bonus
     deductions  = (fixed_deduction if deduction_mode == "fixed"
                    else shisha_gofuuu(gross * history_avg_pct / 100))
 
     return {
         "base_pay": total_base, "overtime_pay": total_ot, "night_pay": total_night,
-        "holiday_pay": total_holiday, "odd_bonus": applied_odd, "extra_bonus": extra_bonus,
+        "holiday_pay": total_holiday, "legal_holiday_pay": total_legal,
+        "odd_bonus": applied_odd, "extra_bonus": extra_bonus,
         "gross": gross, "deductions": deductions, "net": gross - deductions,
+        "days_normal": days_normal, "days_holiday": days_holiday, "days_legal": days_legal,
     }
-
 
 # ─────────────────────────────────────────────
 #  MODAL HELPER — compatível com Flet 0.85
@@ -1070,7 +1088,8 @@ def build_holerite_tab(page: ft.Page, state: dict, refresh_all):
     except Exception:
         data = {"gross": 0, "deductions": 0, "net": 0,
                 "base_pay": 0, "overtime_pay": 0, "night_pay": 0,
-                "holiday_pay": 0, "odd_bonus": 0, "extra_bonus": 0}
+                "holiday_pay": 0, "legal_holiday_pay": 0,
+                "odd_bonus": 0, "extra_bonus": 0}
 
     def _go_prev(_):
         m, y = view_month - 1, view_year
@@ -1154,12 +1173,20 @@ def build_holerite_tab(page: ft.Page, state: dict, refresh_all):
             card(ft.Row(controls=[odd_f, extra_f], spacing=8)),
             card(ft.Column(controls=[
                 section_header("支給 VENCIMENTOS"),
-                pay_row("Salário Base (基本給)",          data["base_pay"]),
-                pay_row("Hora Extra 残業手当",          data["overtime_pay"], color=WARNING,     small=True),
-                pay_row("Adicional Noturno 深夜手当",        data["night_pay"],    color=ACCENT_LITE, small=True),
-                pay_row("Trabalho em Feriado 休出手当",      data["holiday_pay"],  color=DANGER,      small=True),
-                pay_row("Bônus Mês Ímpar 奇数月",     data["odd_bonus"],    color=SUCCESS,     small=True),
-                pay_row("Abono Extra",            data["extra_bonus"],  color=SUCCESS,     small=True),
+                pay_row(f"Salário Base 基本給 ({data.get('days_normal',0)}d)",
+                        data["base_pay"]),
+                pay_row("Hora Extra 残業手当",
+                        data["overtime_pay"],       color=WARNING,     small=True),
+                pay_row("Adicional Noturno 深夜手当",
+                        data["night_pay"],           color=ACCENT_LITE, small=True),
+                pay_row(f"Feriado 休出手当 ({data.get('days_holiday',0)}d)",
+                        data["holiday_pay"],         color=DANGER,      small=True),
+                pay_row(f"Domingo 法定休出 ({data.get('days_legal',0)}d)",
+                        data.get("legal_holiday_pay", 0), color="#EF9A9A", small=True),
+                pay_row("Bônus Mês Ímpar 奇数月",
+                        data["odd_bonus"],           color=SUCCESS,     small=True),
+                pay_row("Abono Extra",
+                        data["extra_bonus"],         color=SUCCESS,     small=True),
                 divider(),
                 pay_row("TOTAL BRUTO 総支給額",       data["gross"],        color=YEN_GOLD),
             ], spacing=8, tight=True)),
