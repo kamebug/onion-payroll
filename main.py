@@ -19,6 +19,31 @@ def shisha_gofuuu(value: float) -> int:
     return int(math.floor(value + 0.5))
 
 
+def normalize_hhmm(s: str) -> str:
+    """Converte entrada livre para HH:MM.
+    835 → 08:35 | 2035 → 20:35 | 8:35 → 08:35
+    """
+    if not s:
+        return ""
+    s = s.strip().replace(".", ":").replace(",", ":")
+    if ":" in s:
+        parts = s.split(":")
+        try:
+            return f"{int(parts[0]):02d}:{int(parts[1]) if len(parts)>1 else 0:02d}"
+        except:
+            return s
+    digits = "".join(c for c in s if c.isdigit())
+    try:
+        if len(digits) <= 2:
+            return f"{int(digits):02d}:00"
+        elif len(digits) == 3:
+            return f"{int(digits[0]):02d}:{int(digits[1:]):02d}"
+        else:
+            return f"{int(digits[:-2]):02d}:{int(digits[-2:]):02d}"
+    except:
+        return s
+
+
 def parse_hhmm(s: str) -> Optional[datetime]:
     try:
         return datetime.strptime(s.strip(), "%H:%M")
@@ -156,7 +181,7 @@ def compute_monthly_forecast(
     _end          = cfg_end   if cfg_end   else ("08:35" if _stype == "night" else "20:35")
     _break        = cfg_break if cfg_break else 65
     _ot           = cfg_ot    if cfg_ot    else ("06:35" if _stype == "night" else "18:35")
-    total_base = total_ot = total_night = total_holiday = total_legal = 0
+    total_base = total_ot = total_night = total_holiday = total_legal = total_abono = 0
     days_normal = days_holiday = days_legal = 0
 
     for day_num, cycle_status in cycle.items():
@@ -238,14 +263,14 @@ def compute_monthly_forecast(
         eff_end   = end_str   if end_str   else _end
         eff_break = break_min if break_min != 65 else _break
         # Domingo (法定休日) também conta como feriado para o cálculo +35%
-        is_pay_holiday = is_holiday or is_legal_holiday
+        is_pay_holiday = is_holiday or is_sunday
         pay = calculate_shift_pay(
             jikyuu=jikyuu, shift_type=shift_type,
             start_str=eff_start, end_str=eff_end,
             break_min=eff_break, block=block,
             is_holiday=is_pay_holiday, yukyu_on_holiday=yukyu_hol,
         )
-        if (is_legal_holiday and not is_holiday) or status == "legal":
+        if (is_sunday and not is_holiday) or status == "legal":
             total_legal += pay["total_gross"]
             days_legal  += 1
         elif status == "holiday" or (is_holiday and not is_legal_holiday):
@@ -257,9 +282,10 @@ def compute_monthly_forecast(
             total_night += pay["night_pay"]
             if pay["base_pay"] > 0:
                 days_normal += 1
+        total_abono += day_abono
 
     applied_odd = odd_month_bonus if month % 2 == 1 else 0
-    gross       = total_base + total_ot + total_night + total_holiday + total_legal + applied_odd + extra_bonus
+    gross       = total_base + total_ot + total_night + total_holiday + total_legal + applied_odd + extra_bonus + total_abono
     deductions  = (fixed_deduction if deduction_mode == "fixed"
                    else shisha_gofuuu(gross * history_avg_pct / 100))
 
@@ -269,6 +295,7 @@ def compute_monthly_forecast(
         "odd_bonus": applied_odd, "extra_bonus": extra_bonus,
         "gross": gross, "deductions": deductions, "net": gross - deductions,
         "days_normal": days_normal, "days_holiday": days_holiday, "days_legal": days_legal,
+        "abono_total": total_abono,
     }
 
 # ─────────────────────────────────────────────
@@ -345,6 +372,33 @@ KEY_SETTINGS  = "onion_settings"
 KEY_HISTORY   = "onion_history"
 KEY_OVERRIDES = "onion_overrides"
 KEY_HOLIDAYS  = "onion_holidays"
+
+
+# Feriados japoneses 2025-2026 embutidos no app
+JP_HOLIDAYS_BUILTIN = {
+    "2025-01": [1, 13],
+    "2025-02": [11, 23, 24],
+    "2025-03": [20],
+    "2025-04": [29],
+    "2025-05": [3, 4, 5, 6],
+    "2025-07": [21],
+    "2025-08": [11],
+    "2025-09": [15, 22, 23],
+    "2025-10": [13],
+    "2025-11": [3, 23, 24],
+    "2025-12": [31],
+    "2026-01": [1, 12],
+    "2026-02": [11, 23],
+    "2026-03": [20],
+    "2026-04": [29],
+    "2026-05": [3, 4, 5, 6],
+    "2026-07": [20],
+    "2026-08": [11],
+    "2026-09": [21, 22, 23],
+    "2026-10": [12],
+    "2026-11": [3, 23],
+    "2026-12": [31],
+}
 
 DEFAULT_SETTINGS = {
     "jikyuu": 1500, "group": "B", "anchor_date": date.today().isoformat(),
@@ -467,6 +521,7 @@ CAL_CORP       = "#F4B400"   # Banana — amarelo Google (fundo feriado corp)
 CAL_MODIF      = "#7B1FA2"   # Grape — roxo Google (falta 欠勤)
 
 # NÚMEROS — brancos brilhantes sobre fundo colorido
+CAL_SUNDAY_WORK = "#C62828"  # Domingo trabalhado — vermelho escuro
 CAL_TEXT_WORK  = "#FFFFFF"   # branco sobre verde
 CAL_TEXT_OFF   = "#FFFFFF"   # branco sobre azul
 CAL_TEXT_HOL   = "#FFFFFF"   # branco sobre vermelho
@@ -596,7 +651,7 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
             label="Status", value=ov.get("status", "normal"),
             options=[
                 ft.dropdown.Option("normal",  "Trabalho Normal"),
-                ft.dropdown.Option("early",   "Saiu Mais Cedo — horário real"),
+                ft.dropdown.Option("early",   "Saída Antecipada — horário real"),
                 ft.dropdown.Option("absent",  "Falta 欠勤"),
                 ft.dropdown.Option("yukyu",   "有休 Yukyu — 8h sem 残業/noturno"),
                 ft.dropdown.Option("holiday", "休出 Trabalho em Feriado (+35%)"),
@@ -637,6 +692,15 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
             label="延長 Minutos extras solicitados",
             hint_text="ex: 30",
             value=str(ov.get("extra_minutes", 0)),
+            keyboard_type=ft.KeyboardType.NUMBER,
+            bgcolor=BG_SURFACE, color=TEXT_PRIMARY,
+            border_color="#333333", focused_border_color=ACCENT,
+            label_style=ft.TextStyle(color=TEXT_SECONDARY, size=11),
+        )
+        abono_f = ft.TextField(
+            label="Abono / Vale do dia (¥)",
+            hint_text="ex: 500",
+            value=str(ov.get("abono", 0)),
             keyboard_type=ft.KeyboardType.NUMBER,
             bgcolor=BG_SURFACE, color=TEXT_PRIMARY,
             border_color="#333333", focused_border_color=ACCENT,
@@ -737,10 +801,18 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
             page.update()
 
         status_dd.on_change = lambda _: _update_preview()
-        start_f.on_blur     = lambda _: _update_preview()
-        end_f.on_blur       = lambda _: _update_preview()
+        def _norm_time(field):
+            def _do(_):
+                field.value = normalize_hhmm(field.value)
+                field.update()
+                _update_preview()
+            return _do
+
+        start_f.on_blur     = _norm_time(start_f)
+        end_f.on_blur       = _norm_time(end_f)
         break_f.on_blur     = lambda _: _update_preview()
         extra_min_f.on_blur = lambda _: _update_preview()
+        abono_f.on_blur     = lambda _: _update_preview()
         _update_preview()
 
         def _save(_=None):
@@ -753,6 +825,7 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
                 "break_min":        int(break_f.value or 65),
                 "yukyu_on_holiday": yukyu_sw.value,
                 "extra_minutes":    extra_m,
+                "abono":            int(abono_f.value or 0),
             }
             if month_key not in overrides:
                 overrides[month_key] = {}
@@ -775,11 +848,22 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
             bgcolor="#FEE2E2", border_radius=8,
         )
 
+        # Verificar tipo de feriado
+        _hol_key   = f"{view_year}-{view_month:02d}"
+        _jp_hols   = state.get("holidays", {}).get(_hol_key, [])
+        _corp_hols = state.get("holidays_corp", {}).get(_hol_key, [])
+        if day_num in _jp_hols:
+            _hol_label = " 🏮 Feriado Nacional"
+        elif day_num in _corp_hols:
+            _hol_label = " 🏭 Feriado Corporativo"
+        else:
+            _hol_label = ""
+
         panel = ft.Container(
             content=ft.Column(controls=[
                 # Título
                 ft.Row(controls=[
-                    ft.Text(f"{view_year}/{view_month:02d}/{day_num:02d} — Ponto",
+                    ft.Text(f"{view_year}/{view_month:02d}/{day_num:02d}{_hol_label} — Ponto",
                             size=13, color=TEXT_PRIMARY,
                             weight=ft.FontWeight.W_700, expand=True),
                     ft.TextButton("✕", on_click=_close,
@@ -793,6 +877,7 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
                 break_f,
                 yukyu_sw,
                 extra_min_f,
+                abono_f,
                 # Preview
                 ft.Container(
                     content=preview_text,
@@ -872,6 +957,8 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
             bg = C_HOL_JP        # Feriado nacional — vermelho
         elif cycle_st == "off":
             bg = C_OFF           # Folga — azul
+        elif is_sunday:
+            bg = CAL_SUNDAY_WORK # Domingo trabalhado — vermelho escuro
         else:
             bg = C_WORK          # Trabalho — verde
 
@@ -887,7 +974,7 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
         elif is_corp_hol:
             num_color = CAL_TEXT_CORP
         elif is_hol:
-            num_color = CAL_TEXT_HOL
+            num_color = "#FFD740"   # amarelo dourado — feriado nacional
         elif cycle_st == "off":
             if is_sunday:
                 num_color = C_RED
@@ -1042,11 +1129,11 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
                 _leg(WORK_COLOR,      "Trabalho"),
                 _leg(CAL_SUNDAY_WORK, "Domingo Trabalhado"),
                 _leg("#FF6D00",       "有休 Yukyu"),
-                _leg("#00796B",       "Saiu Mais Cedo"),
+                _leg("#00796B",       "Saída Antecipada"),
             ], spacing=4, tight=True),
             ft.Column(controls=[
                 _leg(OFF_COLOR,  "Folga"),
-                _leg(CAL_CORP,   "Feriado"),
+                _leg(CAL_CORP,   "Feriado Corporativo"),
                 _leg("#7B1FA2",  "欠勤 Falta"),
             ], spacing=4, tight=True),
         ],
@@ -1092,8 +1179,8 @@ def build_holerite_tab(page: ft.Page, state: dict, refresh_all):
             anchor_date=anchor, group=settings.get("group", "B"),
             holiday_days=holidays.get(month_key, []),
             day_overrides=overrides.get(month_key, {}),
-            odd_month_bonus=int(state.get("hol_odd_bonus") or settings.get("odd_bonus") or 50000),
-            extra_bonus=int(state.get("extra_bonus") or 0),
+            odd_month_bonus=int(settings.get("odd_bonus") or 50000),
+            extra_bonus=int(settings.get("extra_bonus") or 0),
             deduction_mode=settings.get("deduction_mode", "historical"),
             fixed_deduction=int(settings.get("fixed_deduction") or 0),
             history_avg_pct=hist_avg,
@@ -1145,6 +1232,7 @@ def build_holerite_tab(page: ft.Page, state: dict, refresh_all):
 
     modo = settings.get("deduction_mode", "historical")
     fixed_val = int(settings.get("fixed_deduction") or 0)
+    print(f"[DEBUG Holerite] modo={modo} fixed_val={fixed_val}")
     if modo == "fixed":
         if fixed_val == 0:
             deduction_note = "Fixo: ¥0 (sem desconto)"
@@ -1156,40 +1244,12 @@ def build_holerite_tab(page: ft.Page, state: dict, refresh_all):
         else:
             deduction_note = f"Média histórica: {hist_avg:.1f}%"
 
-    # Campos editáveis de bônus
-    odd_f = ft.TextField(
-        label="奇数月 Bônus Mês Ímpar (¥)",
-        value=str(state.get("hol_odd_bonus") or settings.get("odd_bonus") or 50000),
-        keyboard_type=ft.KeyboardType.NUMBER,
-        bgcolor=BG_SURFACE, color=TEXT_PRIMARY,
-        border_color="#333333", focused_border_color=ACCENT,
-        label_style=ft.TextStyle(color=TEXT_SECONDARY, size=10),
-        expand=1,
-    )
-    extra_f = ft.TextField(
-        label="Abono Extra (¥)",
-        value=str(state.get("extra_bonus") or 0),
-        keyboard_type=ft.KeyboardType.NUMBER,
-        bgcolor=BG_SURFACE, color=TEXT_PRIMARY,
-        border_color="#333333", focused_border_color=ACCENT,
-        label_style=ft.TextStyle(color=TEXT_SECONDARY, size=10),
-        expand=1,
-    )
-
-    def _upd_bonus(_):
-        try: state["hol_odd_bonus"] = int(odd_f.value or 0)
-        except: pass
-        try: state["extra_bonus"] = int(extra_f.value or 0)
-        except: pass
-        # Não chama refresh_all() — evita scroll voltar ao topo
-
-    odd_f.on_blur   = _upd_bonus
-    extra_f.on_blur = _upd_bonus
+    # Bônus lidos das configurações — editáveis em ⚙️ Config
+    # sem campos duplicados aqui
 
     return ft.Column(
         controls=[
             nav_row, ft.Container(height=4),
-            card(ft.Row(controls=[odd_f, extra_f], spacing=8)),
             card(ft.Column(controls=[
                 section_header("支給 VENCIMENTOS"),
                 pay_row(f"Salário Base 基本給 ({data.get('days_normal',0)}d)",
@@ -1206,6 +1266,8 @@ def build_holerite_tab(page: ft.Page, state: dict, refresh_all):
                         data["odd_bonus"],           color=SUCCESS,     small=True),
                 pay_row("Abono Extra",
                         data["extra_bonus"],         color=SUCCESS,     small=True),
+                pay_row("Abono/Vale do Dia",
+                        data.get("abono_total", 0),  color=SUCCESS,     small=True),
                 divider(),
                 pay_row("TOTAL BRUTO 総支給額",       data["gross"],        color=YEN_GOLD),
             ], spacing=8, tight=True)),
@@ -1214,7 +1276,7 @@ def build_holerite_tab(page: ft.Page, state: dict, refresh_all):
                 section_header("控除 DESCONTOS"),
                 ft.Row(
                     controls=[
-                        ft.Text("Total de Descontos", size=13, color=TEXT_PRIMARY),
+                        ft.Text(f"Total de Descontos ({settings.get('deduction_mode','historical')})", size=13, color=TEXT_PRIMARY),
                         ft.Column(
                             controls=[
                                 ft.Text(yen(data["deductions"]), size=14,
@@ -1613,6 +1675,7 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
 
 def build_settings_tab(page: ft.Page, state: dict, refresh_all):
     settings = state["settings"]
+    print(f"[DEBUG Config] deduction_mode={settings.get('deduction_mode')} fixed={settings.get('fixed_deduction')}")
 
     def _save():
         save_json(page, KEY_SETTINGS, settings)
@@ -1664,7 +1727,7 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
     )
     shift_type_dd.on_change = lambda e: [settings.__setitem__("shift_type", e.control.value), save_json(page, KEY_SETTINGS, settings), refresh_all()]
 
-    def _tf_shift(lbl, key, hint="HH:MM"):
+    def _tf_shift(lbl, key, hint="HH:MM", is_time=True):
         f = ft.TextField(
             label=lbl, value=str(settings.get(key, "")),
             hint_text=hint,
@@ -1673,16 +1736,27 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
             label_style=ft.TextStyle(color="#A0A0A0"),
             expand=1,
         )
-        def _blur(e, k=key):
-            settings[k] = e.control.value
-            _save()
+        def _blur(e, k=key, _is_time=is_time):
+            if _is_time:
+                v = normalize_hhmm(e.control.value)
+                e.control.value = v
+                e.control.update()
+            else:
+                try: v = int(e.control.value or 65)
+                except: v = 65
+                e.control.value = str(v)
+                e.control.update()
+                v = str(v)
+            settings[k] = v
+            save_json(page, KEY_SETTINGS, settings)
         f.on_blur = _blur
         return f
 
-    shift_start_f = _tf_shift("Entrada 出勤", "shift_start", "20:35")
-    shift_end_f   = _tf_shift("Saída 退勤",   "shift_end",   "08:35")
-    shift_break_f = _tf_shift("Intervalo 休憩 (min)", "shift_break", "65")
-    shift_ot_f    = _tf_shift("残業 Início Hora Extra (fim turno normal)", "shift_ot", "06:35")
+
+    shift_start_f = _tf_shift("Entrada 出勤", "shift_start", "20:35", is_time=True)
+    shift_end_f   = _tf_shift("Saída 退勤",   "shift_end",   "08:35", is_time=True)
+    shift_break_f = _tf_shift("Intervalo 休憩 (min)", "shift_break", "65", is_time=False)
+    shift_ot_f    = _tf_shift("残業 Início Hora Extra (fim turno normal)", "shift_ot", "06:35", is_time=True)
 
 
     block_dd = ft.Dropdown(
@@ -1701,7 +1775,7 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
 
     ded_mode_dd = ft.Dropdown(
         label="Modo de Desconto",
-        value=settings.get("deduction_mode", "historical"),
+        value=settings.get("deduction_mode", "historical"),  # lê sempre do dict atualizado
         options=[
             ft.dropdown.Option("historical", "Usar Média Histórica"),
             ft.dropdown.Option("fixed",      "Desconto Fixo Manual"),
@@ -1710,7 +1784,7 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
         border_color="#333333", focused_border_color="#00D2C6",
         label_style=ft.TextStyle(color="#A0A0A0"),
     )
-    ded_mode_dd.on_change = lambda e: [settings.__setitem__("deduction_mode", e.control.value), save_json(page, KEY_SETTINGS, settings)]
+    ded_mode_dd.on_change = lambda e: [settings.__setitem__("deduction_mode", e.control.value), save_json(page, KEY_SETTINGS, settings), refresh_all()]
 
     pin_switch = ft.Switch(
         label="Ativar Bloqueio PIN / Biométrico",
@@ -2487,7 +2561,15 @@ def main(page: ft.Page):
     settings  = load_json(page, KEY_SETTINGS,  DEFAULT_SETTINGS)
     history   = load_json(page, KEY_HISTORY,   [])
     overrides = load_json(page, KEY_OVERRIDES, {})
-    holidays  = load_json(page, KEY_HOLIDAYS,  {})
+    # Mesclar feriados embutidos com os importados pelo usuário
+    _imported = load_json(page, KEY_HOLIDAYS, {})
+    holidays  = {**JP_HOLIDAYS_BUILTIN}
+    for mk, days in _imported.items():
+        if mk not in holidays:
+            holidays[mk] = []
+        for d in days:
+            if d not in holidays[mk]:
+                holidays[mk].append(d)
 
     today = date.today()
     state = {
