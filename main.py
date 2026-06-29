@@ -519,6 +519,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
+BUILD_ID       = "2606292147"        # Atualizado a cada deploy
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -2665,8 +2666,12 @@ def main(page: ft.Page):
                 ],
                 spacing=0, tight=True,
             ),
-            ft.Text("PEEL YOUR PAYCHECK", size=scaled(8), color=TEXT_SECONDARY,
-                    style=ft.TextStyle(letter_spacing=2.5)),
+            ft.Row([
+                ft.Text("PEEL YOUR PAYCHECK", size=scaled(8), color=TEXT_SECONDARY,
+                        style=ft.TextStyle(letter_spacing=2.5)),
+                ft.Text(f"#{BUILD_ID}", size=scaled(7), color="#444444",
+                        style=ft.TextStyle(letter_spacing=1.0)),
+            ], spacing=6, tight=True),
         ],
         spacing=2, tight=True,
     )
