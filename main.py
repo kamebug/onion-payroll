@@ -2416,10 +2416,10 @@ def main(page: ft.Page):
     if _is_web:
         # No modo web/PWA o Flet serve assets/ automaticamente
         logo = ft.Image(src="logo_icon.png",
-                        width=scaled(48), height=scaled(48), fit="contain")
+                        width=scaled(72), height=scaled(72), fit="contain")
     elif _os.path.exists(_logo_abs):
         logo = ft.Image(src=_logo_abs,
-                        width=scaled(48), height=scaled(48), fit="contain")
+                        width=scaled(72), height=scaled(72), fit="contain")
     else:
         logo = ft.Text("🧅", size=36)
     title_col = ft.Column(
