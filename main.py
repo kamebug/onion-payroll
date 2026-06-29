@@ -176,7 +176,7 @@ def compute_monthly_forecast(
         # domingo/cycle="off"/feriado → +35% se tem horário
         # cycle="work" → turno normal
 
-        weekday = date(year, month, d).weekday()   # 0=seg … 6=dom
+        weekday = date(year, month, day_num).weekday()   # 0=seg … 6=dom
         is_legal_holiday = (weekday == 6)           # domingo = folga legal
 
         if status == "absent":
@@ -771,7 +771,7 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
             bgcolor=BG_CARD, border_radius=14,
             padding=ft.Padding(left=16, right=16, top=14, bottom=14),
             # Largura adaptativa baseada na escala
-            width=min(380, int((page.window_width or 420) * 0.92)),
+            width=min(380, int(((page.width or page.window_width or 420)) * 0.92)),
             border=ft.Border.all(1, "#333333"),
             animate_scale=ft.Animation(200, ft.AnimationCurve.EASE_OUT),
         )
@@ -1331,8 +1331,11 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
             refresh_all()
 
         # ── Layout do painel ─────────────────────────────────────────
-        win_w = page.window_width or 420
-        win_h = page.window_height or 760
+        # page.width funciona no web, window_width só no desktop
+        win_w = (page.width or page.window_width or 420)
+        win_h = (page.height or page.window_height or 760)
+        if not win_w or win_w < 100: win_w = 420
+        if not win_h or win_h < 100: win_h = 760
 
         # Solução definitiva: padding nos campos internos + scroll na Column
         # A barra de scroll ocupa ~12px no lado direito
@@ -1503,7 +1506,7 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
                 controls=[
                     ft.Text("給与明細 Histórico", size=16, color=TEXT_PRIMARY,
                             weight=ft.FontWeight.W_700, expand=True),
-                    ft.FilledButton("Registrar Holerite Real", icon="add",
+                    ft.FilledButton("+ Registrar Holerite Real",
                                     on_click=open_log_modal,
                                     style=ft.ButtonStyle(bgcolor=ACCENT, color="#121212")),
                 ],
