@@ -248,9 +248,9 @@ def show_modal(page: ft.Page, title: str, content: ft.Control,
                     ],
                     alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                 ),
-                ft.Divider(height=1, color="#555555"),
+                ft.Divider(height=1, color="#333333"),
                 content,
-                ft.Divider(height=1, color="#555555"),
+                ft.Divider(height=1, color="#333333"),
                 ft.Row(controls=actions,
                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
             ],
@@ -261,7 +261,7 @@ def show_modal(page: ft.Page, title: str, content: ft.Control,
         border_radius=16,
         padding=16,
         width=360,
-        border=ft.Border.all(1, "#555555"),
+        border=ft.Border.all(1, "#333333"),
         shadow=ft.BoxShadow(blur_radius=20, color="#00000088",
                             offset=ft.Offset(0, 4)),
     )
@@ -382,17 +382,62 @@ def boot_load_storage(page: ft.Page):
 #  TOKENS
 # ─────────────────────────────────────────────
 
-# ── Sistema de Cores — Escala de Cinza WCAG + Acentos ────────────
+# ── Sistema de Cores — Onion Payroll ─────────────────────────────
 #
-# ESCALA DE CINZA (superfícies e texto)
-GRAY_50   = "#F9F9F9"   # Fundo de página / janelas principais
-GRAY_100  = "#F0F0F0"   # Fundo de campos de input (ativo)
-GRAY_200  = "#E0E0E0"   # Bordas leves de janelas
-GRAY_300  = "#D1D1D1"   # Divisores / separadores
-GRAY_400  = "#BDBDBD"   # Bordas de campos de input
-GRAY_600  = "#757575"   # Ícones e textos secundários (sobre claro)
-GRAY_800  = "#424242"   # Textos principais (sobre claro)
-GRAY_900  = "#212121"   # Títulos em destaque (sobre claro)
+# ESCALA DE CINZA WCAG
+GRAY_50   = "#F9F9F9"
+GRAY_100  = "#F0F0F0"
+GRAY_200  = "#E0E0E0"
+GRAY_300  = "#D1D1D1"
+GRAY_400  = "#BDBDBD"
+GRAY_600  = "#757575"
+GRAY_800  = "#424242"
+GRAY_900  = "#212121"
+
+# PALETA PRINCIPAL
+BG_DEEP        = "#121212"   # Fundo principal
+BG_CARD        = "#1E1E1E"   # Cards e painéis elevados
+BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
+
+# ACENTOS — Petronas Cyan
+ACCENT         = "#00D2C6"   # Destaque principal
+ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
+ACCENT_DARK    = "#009E94"   # Turquesa escuro
+
+# CALENDÁRIO — cores vibrantes com presença visual (inspirado Google Calendar dark)
+WORK_COLOR     = "#1B5E20"   # Trabalho — verde escuro rico
+OFF_COLOR      = "#0D47A1"   # Folga — azul escuro rico
+HOL_COLOR      = "#B71C1C"   # Feriado nacional — vermelho escuro rico
+CAL_YUKYU      = "#E65100"   # Yukyu — laranja profundo
+CAL_CORP       = "#F57F17"   # Feriado corp — âmbar vibrante
+CAL_MODIF      = "#4A148C"   # Modificado — roxo profundo
+
+# TEXTO DOS DIAS (branco sobre fundos vibrantes — máximo contraste)
+CAL_TEXT_WORK  = "#A5D6A7"   # Verde claro sobre verde escuro
+CAL_TEXT_OFF   = "#90CAF9"   # Azul claro sobre azul escuro
+CAL_TEXT_HOL   = "#EF9A9A"   # Vermelho claro sobre vermelho
+CAL_TEXT_CORP  = "#FFE082"   # Amarelo claro sobre âmbar
+CAL_TEXT_YUKYU = "#FFCC80"   # Laranja claro sobre laranja
+CAL_TEXT_MODIF = "#CE93D8"   # Lilás claro sobre roxo
+CAL_BORDER_WORK= "#4CAF50"   # Borda verde vibrante
+CAL_BORDER_OFF = "#2196F3"   # Borda azul vibrante
+
+# TEXTO
+TEXT_PRIMARY   = "#F0F0F0"   # Texto principal
+TEXT_SECONDARY = "#A0A0A0"   # Texto secundário
+TEXT_MUTED     = "#D0D0D0"   # Texto hints — mais claro para contraste
+
+# SEMÂNTICAS
+SUCCESS        = "#00D2C6"   # Turquesa — valores positivos
+WARNING        = "#FFB74D"   # Âmbar claro
+DANGER         = "#EF5350"   # Vermelho
+YEN_GOLD       = "#F0F0F0"   # Salário líquido — branco puro
+
+# HEADER E NAV
+HEADER_BG      = "#0A0A0A"   # Quase preto
+NAV_BG         = "#0A0A0A"   # Quase preto
+NAV_BORDER     = "#00D2C6"   # Linha turquesa
+
 
 # FUNDO DO APP
 BG_DEEP        = "#2c2c2a"   # Fundo principal — cinza escuro quente
@@ -443,12 +488,12 @@ def card(content, padding=16, margin=8):
     return ft.Container(
         content=content, bgcolor=BG_CARD, border_radius=16,
         padding=padding, margin=margin,
-        border=ft.Border.all(1, "#555555"),
+        border=ft.Border.all(1, "#333333"),
     )
 
 
 def divider():
-    return ft.Divider(height=1, color="#555555")
+    return ft.Divider(height=1, color="#333333")
 
 
 def yen(amount: int) -> str:
@@ -500,36 +545,45 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
                 ft.dropdown.Option("absent", "Falta (欠勤)"),
                 ft.dropdown.Option("yukyu",  "Férias/Folga (有休)"),
             ],
-            bgcolor="#4a4a4a", color="#F9F9F9",
-            border_color="#BDBDBD", focused_border_color="#00C2A8",
-            label_style=ft.TextStyle(color="#BDBDBD"),
+            bgcolor="#2A2A2A", color="#F0F0F0",
+            border_color="#333333", focused_border_color="#00D2C6",
+            label_style=ft.TextStyle(color="#A0A0A0"),
         )
         start_f = ft.TextField(
             label="Entrada (HH:MM)", value=ov.get("start", ""),
-            bgcolor="#4a4a4a", color="#F9F9F9",
-            border_color="#BDBDBD", focused_border_color="#00C2A8",
-            label_style=ft.TextStyle(color="#BDBDBD"),
+            bgcolor="#2A2A2A", color="#F0F0F0",
+            border_color="#333333", focused_border_color="#00D2C6",
+            label_style=ft.TextStyle(color="#A0A0A0"),
             expand=1,
         )
         end_f = ft.TextField(
             label="Saída (HH:MM)", value=ov.get("end", ""),
-            bgcolor="#4a4a4a", color="#F9F9F9",
-            border_color="#BDBDBD", focused_border_color="#00C2A8",
-            label_style=ft.TextStyle(color="#BDBDBD"),
+            bgcolor="#2A2A2A", color="#F0F0F0",
+            border_color="#333333", focused_border_color="#00D2C6",
+            label_style=ft.TextStyle(color="#A0A0A0"),
             expand=1,
         )
         break_f = ft.TextField(
             label="Intervalo (min)", value=str(ov.get("break_min", 65)),
             keyboard_type=ft.KeyboardType.NUMBER,
-            bgcolor="#4a4a4a", color="#F9F9F9",
-            border_color="#BDBDBD", focused_border_color="#00C2A8",
-            label_style=ft.TextStyle(color="#BDBDBD"),
+            bgcolor="#2A2A2A", color="#F0F0F0",
+            border_color="#333333", focused_border_color="#00D2C6",
+            label_style=ft.TextStyle(color="#A0A0A0"),
         )
         yukyu_sw = ft.Switch(
             label="有休 em Feriado (+8h)",
             value=ov.get("yukyu_on_holiday", False),
             active_color=ACCENT,
             label_text_style=ft.TextStyle(color=TEXT_SECONDARY, size=11),
+        )
+        extra_min_f = ft.TextField(
+            label="延長 Minutos extras solicitados",
+            hint_text="ex: 30",
+            value=str(ov.get("extra_minutes", 0)),
+            keyboard_type=ft.KeyboardType.NUMBER,
+            bgcolor=BG_SURFACE, color=TEXT_PRIMARY,
+            border_color="#333333", focused_border_color=ACCENT,
+            label_style=ft.TextStyle(color=TEXT_SECONDARY, size=11),
         )
 
         ov_ref = [None]
@@ -609,24 +663,39 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
                 if pay["night_pay"]:
                     parts.append(f"深夜 +{yen(pay['night_pay'])}")
                 suffix = " (saída antecipada)" if e and not pay["overtime_pay"] else ""
-                preview_text.value = (
-                    f"{nm}min → {' | '.join(parts)} = {yen(pay['total_gross'])}{suffix}"
-                )
+                # Calcular minutos extras solicitados
+                try: extra_m = int(extra_min_f.value or 0)
+                except: extra_m = 0
+                if extra_m > 0:
+                    extra_pay = shisha_gofuuu((jikyuu / 60.0) * extra_m * 1.25)
+                    parts.append(f"延長 +{yen(extra_pay)}")
+                    total_with_extra = pay['total_gross'] + extra_pay
+                    preview_text.value = (
+                        f"{nm}min+{extra_m}延長 → {' | '.join(parts)} = {yen(total_with_extra)}{suffix}"
+                    )
+                else:
+                    preview_text.value = (
+                        f"{nm}min → {' | '.join(parts)} = {yen(pay['total_gross'])}{suffix}"
+                    )
             page.update()
 
         status_dd.on_change = lambda _: _update_preview()
         start_f.on_blur     = lambda _: _update_preview()
         end_f.on_blur       = lambda _: _update_preview()
         break_f.on_blur     = lambda _: _update_preview()
+        extra_min_f.on_blur = lambda _: _update_preview()
         _update_preview()
 
         def _save(_=None):
+            try: extra_m = int(extra_min_f.value or 0)
+            except: extra_m = 0
             entry = {
                 "status":           status_dd.value,
                 "start":            start_f.value.strip(),
                 "end":              end_f.value.strip(),
                 "break_min":        int(break_f.value or 65),
                 "yukyu_on_holiday": yukyu_sw.value,
+                "extra_minutes":    extra_m,
             }
             if month_key not in overrides:
                 overrides[month_key] = {}
@@ -659,32 +728,34 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
                     ft.TextButton("✕", on_click=_close,
                                   style=ft.ButtonStyle(color=TEXT_SECONDARY)),
                 ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-                ft.Divider(height=1, color="#555555"),
+                ft.Divider(height=1, color="#333333"),
                 hol_text,
                 status_dd,
                 # Entrada e Saída na mesma linha com expand
                 ft.Row([start_f, end_f], spacing=8),
                 break_f,
                 yukyu_sw,
+                extra_min_f,
                 # Preview
                 ft.Container(
                     content=preview_text,
-                    bgcolor="#4a4a4a", border_radius=6,
+                    bgcolor=BG_SURFACE, border_radius=6,
                     padding=ft.Padding(left=8, right=8, top=6, bottom=6),
                 ),
-                ft.Divider(height=1, color="#555555"),
+                ft.Divider(height=1, color="#333333"),
                 ft.Row(controls=[
                     ft.TextButton("Remover", on_click=_remove,
                                   style=ft.ButtonStyle(color=DANGER)),
                     ft.FilledButton("Salvar", on_click=_save,
-                                    style=ft.ButtonStyle(bgcolor=ACCENT)),
+                                    style=ft.ButtonStyle(bgcolor=ACCENT, color="#121212")),
                 ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
             ], spacing=10, tight=True),
             bgcolor=BG_CARD, border_radius=14,
             padding=ft.Padding(left=16, right=16, top=14, bottom=14),
             # Largura adaptativa baseada na escala
             width=min(380, int((page.window_width or 420) * 0.92)),
-            border=ft.Border.all(1, "#555555"),
+            border=ft.Border.all(1, "#333333"),
+            animate_scale=ft.Animation(200, ft.AnimationCurve.EASE_OUT),
         )
         bg = ft.Container(
             content=ft.Column(
@@ -692,7 +763,7 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
                 alignment=ft.MainAxisAlignment.CENTER,
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             ),
-            bgcolor="#88000022", expand=True,
+            bgcolor="#CC000000", expand=True, blur=ft.Blur(4, 4),
             alignment=ft.Alignment(0, 0),
         )
         ov_ref[0] = bg
@@ -829,6 +900,7 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
             width=scaled(46), height=scaled(48),
             on_click=_tap_handler,
             ink=True,
+            ink_color="#ffffff44",
         )
 
     # ── Grid — semana começa no DOMINGO ─────────────────────────────
@@ -893,7 +965,7 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
         return ft.Row([
             ft.Container(width=scaled(12), height=scaled(12),
                          bgcolor=color, border_radius=3,
-                         border=ft.Border.all(1, "#555555")),
+                         border=ft.Border.all(1, "#333333")),
             ft.Text(label, size=scaled(10), color=TEXT_PRIMARY,
                     weight=ft.FontWeight.W_600),
         ], spacing=4)
@@ -1053,6 +1125,15 @@ def build_holerite_tab(page: ft.Page, state: dict, refresh_all):
                 border=ft.Border.all(2, ACCENT_DARK),
                 alignment=ft.Alignment(0, 0),
             ),
+            ft.Container(
+                content=ft.Text(
+                    "⚠️ Valores estimados. Não substitui o holerite oficial. Consulte seu RH.",
+                    size=10, color=TEXT_MUTED,
+                    text_align=ft.TextAlign.CENTER,
+                    italic=True,
+                ),
+                padding=ft.Padding(left=8, right=8, top=4, bottom=4),
+            ),
         ],
         spacing=0, scroll=ft.ScrollMode.AUTO,
     )
@@ -1071,9 +1152,9 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
         def _tf(lbl, kb=ft.KeyboardType.NUMBER, val=""):
             return ft.TextField(
                 label=lbl, value=val, keyboard_type=kb,
-                bgcolor="#4a4a4a", color="#F9F9F9",
-                border_color="#BDBDBD", focused_border_color="#00C2A8",
-                label_style=ft.TextStyle(color="#BDBDBD", size=9),
+                bgcolor="#2A2A2A", color="#F0F0F0",
+                border_color="#333333", focused_border_color="#00D2C6",
+                label_style=ft.TextStyle(color="#A0A0A0", size=9),
                 text_size=13, dense=True, expand=1,
             )
 
@@ -1219,7 +1300,9 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
         win_w = page.window_width or 420
         win_h = page.window_height or 760
 
-        content = ft.Column(
+        # Usar padding=16 no lado direito para reservar espaço da barra de scroll
+        # e clip_behavior para não vazar conteúdo
+        fields_col = ft.Column(
             controls=[
                 month_f,
                 _sec("勤怠 FREQUÊNCIA / DIAS"),
@@ -1243,17 +1326,18 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
                 f_ta_kojo,
                 _sec("TOTAIS"),
                 _row(f_gross, f_ded, f_net),
-                # Espaço extra no final para a barra não cobrir o último campo
-                ft.Container(height=8),
+                ft.Container(height=16),
             ],
             spacing=5, tight=True,
-            scroll=ft.ScrollMode.ALWAYS,
         )
-
-        # Wrapper com padding direito para a barra de scroll não sobrepor campos
         content = ft.Container(
-            content=content,
-            padding=ft.Padding(left=0, right=14, top=0, bottom=0),
+            content=ft.Column(
+                controls=[fields_col],
+                scroll=ft.ScrollMode.ALWAYS,
+                spacing=0,
+            ),
+            padding=ft.Padding(left=0, right=18, top=0, bottom=0),
+            clip_behavior=ft.ClipBehavior.HARD_EDGE,
         )
 
         panel_w = min(int(win_w * 0.95), 480)
@@ -1269,15 +1353,15 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
                         ft.TextButton("✕", on_click=_close,
                                       style=ft.ButtonStyle(color=TEXT_SECONDARY)),
                     ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-                    ft.Divider(height=1, color="#555555"),
+                    ft.Divider(height=1, color="#333333"),
                     ft.Container(content=content,
                                  expand=True, clip_behavior=ft.ClipBehavior.HARD_EDGE),
-                    ft.Divider(height=1, color="#555555"),
+                    ft.Divider(height=1, color="#333333"),
                     ft.Row(controls=[
                         ft.TextButton("Cancelar", on_click=_close,
                                       style=ft.ButtonStyle(color=TEXT_SECONDARY)),
                         ft.FilledButton("Salvar", on_click=_save,
-                                        style=ft.ButtonStyle(bgcolor=ACCENT)),
+                                        style=ft.ButtonStyle(bgcolor=ACCENT, color="#121212")),
                     ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
                 ],
                 spacing=8, tight=True, expand=True,
@@ -1287,7 +1371,7 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
             padding=ft.Padding(left=16, right=16, top=14, bottom=14),
             width=panel_w,
             height=panel_h,
-            border=ft.Border.all(1, "#555555"),
+            border=ft.Border.all(1, "#333333"),
         )
 
         bg = ft.Container(
@@ -1296,7 +1380,7 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
                 alignment=ft.MainAxisAlignment.CENTER,
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             ),
-            bgcolor="#88000022", expand=True,
+            bgcolor="#CC000000", expand=True, blur=ft.Blur(4, 4),
             alignment=ft.Alignment(0, 0),
         )
         ov_ref[0] = bg
@@ -1366,7 +1450,7 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
             spacing=4, tight=True,
         ),
         bgcolor=BG_CARD, border_radius=16, padding=16, margin=8,
-        border=ft.Border.all(1, "#555555"),
+        border=ft.Border.all(1, "#333333"),
         alignment=ft.Alignment(0, 0),
     )
 
@@ -1384,7 +1468,7 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
                             weight=ft.FontWeight.W_700, expand=True),
                     ft.FilledButton("Registrar Holerite Real", icon="add",
                                     on_click=open_log_modal,
-                                    style=ft.ButtonStyle(bgcolor=ACCENT)),
+                                    style=ft.ButtonStyle(bgcolor=ACCENT, color="#121212")),
                 ],
                 alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             ),
@@ -1413,9 +1497,9 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
             _save()
         return ft.TextField(
             label=label_str, value=str(settings.get(key, "")),
-            keyboard_type=kb, bgcolor="#4a4a4a", color="#F9F9F9",
-            border_color="#BDBDBD", focused_border_color="#00C2A8",
-            label_style=ft.TextStyle(color="#BDBDBD"),
+            keyboard_type=kb, bgcolor="#2A2A2A", color="#F0F0F0",
+            border_color="#333333", focused_border_color="#00D2C6",
+            label_style=ft.TextStyle(color="#A0A0A0"),
             on_blur=_blur,
         )
 
@@ -1426,9 +1510,9 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
             ft.dropdown.Option("B", "Grupo B"),
             ft.dropdown.Option("C", "Grupo C"),
         ],
-        bgcolor="#4a4a4a", color="#F9F9F9",
-        border_color="#BDBDBD", focused_border_color="#00C2A8",
-        label_style=ft.TextStyle(color="#BDBDBD"),
+        bgcolor="#2A2A2A", color="#F0F0F0",
+        border_color="#333333", focused_border_color="#00D2C6",
+        label_style=ft.TextStyle(color="#A0A0A0"),
     )
     group_dd.on_change = lambda e: [settings.__setitem__("group", e.control.value), _save()]
 
@@ -1440,9 +1524,9 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
             ft.dropdown.Option("15", "Blocos de 15 minutos"),
             ft.dropdown.Option("30", "Blocos de 30 minutos"),
         ],
-        bgcolor="#4a4a4a", color="#F9F9F9",
-        border_color="#BDBDBD", focused_border_color="#00C2A8",
-        label_style=ft.TextStyle(color="#BDBDBD"),
+        bgcolor="#2A2A2A", color="#F0F0F0",
+        border_color="#333333", focused_border_color="#00D2C6",
+        label_style=ft.TextStyle(color="#A0A0A0"),
     )
     block_dd.on_change = lambda e: [settings.__setitem__("block", int(e.control.value)), _save()]
 
@@ -1453,9 +1537,9 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
             ft.dropdown.Option("historical", "Usar Média Histórica"),
             ft.dropdown.Option("fixed",      "Desconto Fixo Manual"),
         ],
-        bgcolor="#4a4a4a", color="#F9F9F9",
-        border_color="#BDBDBD", focused_border_color="#00C2A8",
-        label_style=ft.TextStyle(color="#BDBDBD"),
+        bgcolor="#2A2A2A", color="#F0F0F0",
+        border_color="#333333", focused_border_color="#00D2C6",
+        label_style=ft.TextStyle(color="#A0A0A0"),
     )
     ded_mode_dd.on_change = lambda e: [settings.__setitem__("deduction_mode", e.control.value), _save()]
 
@@ -1475,9 +1559,9 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
             label="Cole o conteúdo do CSV aqui",
             multiline=True, min_lines=6, max_lines=12,
             hint_text="2025-05-03,jp\n2025-08-13,corp\n2025-01-01",
-            bgcolor="#4a4a4a", color="#F9F9F9",
-            border_color="#BDBDBD", focused_border_color="#00C2A8",
-            label_style=ft.TextStyle(color="#BDBDBD"),
+            bgcolor="#2A2A2A", color="#F0F0F0",
+            border_color="#333333", focused_border_color="#00D2C6",
+            label_style=ft.TextStyle(color="#A0A0A0"),
         )
 
         def _close(_=None):
@@ -1535,7 +1619,7 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
                         ft.Text("2025-01-01      ← sem tipo = jp",
                                 size=10, color=TEXT_MUTED),
                     ], spacing=2, tight=True),
-                    bgcolor="#4a4a4a", border_radius=6,
+                    bgcolor=BG_SURFACE, border_radius=6,
                     padding=ft.Padding(left=8, right=8, top=6, bottom=6),
                 ),
                 csv_field,
@@ -1543,17 +1627,17 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
                     ft.TextButton("Cancelar", on_click=_close,
                                   style=ft.ButtonStyle(color=TEXT_SECONDARY)),
                     ft.FilledButton("Importar", on_click=_processar,
-                                    style=ft.ButtonStyle(bgcolor=ACCENT)),
+                                    style=ft.ButtonStyle(bgcolor=ACCENT, color="#121212")),
                 ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
             ], spacing=10, tight=True),
             bgcolor=BG_CARD, border_radius=14, padding=16, width=360,
-            border=ft.Border.all(1, "#555555"),
+            border=ft.Border.all(1, "#333333"),
         )
         bg = ft.Container(
             content=ft.Column(controls=[panel],
                               alignment=ft.MainAxisAlignment.CENTER,
                               horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-            bgcolor="#88000022", expand=True, alignment=ft.Alignment(0, 0),
+            bgcolor="#CC000000", expand=True, alignment=ft.Alignment(0, 0),
         )
         ov_ref[0] = bg
         page.overlay.append(bg)
@@ -1597,7 +1681,7 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
             content=ft.Column(controls=[panel],
                               alignment=ft.MainAxisAlignment.CENTER,
                               horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-            bgcolor="#88000022", expand=True, alignment=ft.Alignment(0, 0),
+            bgcolor="#CC000000", expand=True, alignment=ft.Alignment(0, 0),
         )
         ov_ref[0] = bg
         page.overlay.append(bg)
@@ -1709,15 +1793,15 @@ def build_holidays_tab(page: ft.Page, state: dict, refresh_all):
         date_f = ft.TextField(
             label="Data (AAAA-MM-DD)",
             value=f"{view_year}-01-01",
-            bgcolor="#4a4a4a", color="#F9F9F9",
-            border_color="#BDBDBD", focused_border_color="#00C2A8",
-            label_style=ft.TextStyle(color="#BDBDBD"),
+            bgcolor="#2A2A2A", color="#F0F0F0",
+            border_color="#333333", focused_border_color="#00D2C6",
+            label_style=ft.TextStyle(color="#A0A0A0"),
         )
         note_f = ft.TextField(
             label="Descrição (opcional)",
-            bgcolor="#4a4a4a", color="#F9F9F9",
-            border_color="#BDBDBD", focused_border_color="#00C2A8",
-            label_style=ft.TextStyle(color="#BDBDBD"),
+            bgcolor="#2A2A2A", color="#F0F0F0",
+            border_color="#333333", focused_border_color="#00D2C6",
+            label_style=ft.TextStyle(color="#A0A0A0"),
         )
         def _save(_=None):
             try:
@@ -1760,7 +1844,7 @@ def build_holidays_tab(page: ft.Page, state: dict, refresh_all):
             content=ft.Column(controls=[panel],
                               alignment=ft.MainAxisAlignment.CENTER,
                               horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-            bgcolor="#88000022", expand=True, alignment=ft.Alignment(0, 0),
+            bgcolor="#CC000000", expand=True, alignment=ft.Alignment(0, 0),
         )
         ov_ref[0] = bg
         page.overlay.append(bg)
@@ -1817,7 +1901,7 @@ def build_holidays_tab(page: ft.Page, state: dict, refresh_all):
                 if e.control:
                     e.control.bgcolor = "#B45309" if _is_now_corp else "#0d1520"
                     e.control.border = (ft.Border.all(1, "#F59E0B") if _is_now_corp
-                                        else ft.Border.all(1, "#555555"))
+                                        else ft.Border.all(1, "#333333"))
                     if e.control.content:
                         e.control.content.color = ("#E8EDF2" if _is_now_corp
                                                     else ("#EF4444" if (date(view_year,_m,_d).weekday()+1)%7==0
@@ -1908,16 +1992,16 @@ def build_holidays_tab(page: ft.Page, state: dict, refresh_all):
 def build_help_tab(page: ft.Page, state: dict, refresh_all):
 
     ACCENT_LITE = "#00A896"
-    TEXT_PRIMARY = "#F9F9F9"
-    TEXT_SECONDARY = "#BDBDBD"
+    TEXT_PRIMARY = "#F0F0F0"
+    TEXT_SECONDARY = "#A0A0A0"
     TEXT_MUTED = "#94A3B8"
     BG_CARD = "#FFFFFF"
     BG_SURFACE = "#F8FAFC"
     ACCENT_DARK = "#007A6E"
-    SUCCESS = "#34D399"
-    WARNING = "#FBB940"
-    DANGER = "#F87171"
-    YEN_GOLD = "#F0C040"
+    SUCCESS = "#00D2C6"
+    WARNING = "#FFB74D"
+    DANGER = "#EF5350"
+    YEN_GOLD = "#F0F0F0"
 
     def _title(t):
         return ft.Container(
@@ -1943,10 +2027,10 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
                 ft.Column(controls=[
                     ft.Text(label, size=12, color=TEXT_PRIMARY,
                             weight=ft.FontWeight.W_600),
-                    ft.Text(desc, size=11, color=TEXT_SECONDARY),
+                    ft.Text(desc, size=11, color="#E0E0E0"),
                 ], spacing=1, tight=True, expand=True),
             ], spacing=10, vertical_alignment=ft.CrossAxisAlignment.START),
-            bgcolor="#4a4a4a", border_radius=8,
+            bgcolor="#2A2A2A", border_radius=8,
             padding=ft.Padding(left=10, right=10, top=8, bottom=8),
             margin=ft.Padding(left=0, right=0, top=2, bottom=2),
         )
@@ -1957,12 +2041,12 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
                 ft.Column(controls=[
                     ft.Text(jp, size=11, color=color,
                             weight=ft.FontWeight.W_700),
-                    ft.Text(pt, size=10, color=TEXT_SECONDARY),
+                    ft.Text(pt, size=10, color="#E0E0E0"),
                 ], spacing=1, tight=True, expand=2),
                 ft.Text(calc, size=11, color=YEN_GOLD,
                         text_align=ft.TextAlign.RIGHT, expand=1),
             ]),
-            bgcolor="#4a4a4a", border_radius=6,
+            bgcolor="#2A2A2A", border_radius=6,
             padding=ft.Padding(left=10, right=10, top=6, bottom=6),
             margin=ft.Padding(left=0, right=0, top=2, bottom=2),
         )
@@ -1971,7 +2055,7 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
         return ft.Row(controls=[
             ft.Container(width=14, height=14, bgcolor=color,
                          border_radius=3,
-                         border=ft.Border.all(1, "#555555")),
+                         border=ft.Border.all(1, "#333333")),
             ft.Column(controls=[
                 ft.Text(label, size=11, color=TEXT_PRIMARY,
                         weight=ft.FontWeight.W_600),
@@ -2113,6 +2197,30 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
             _p("💡 Use ⚙️ Config. → Apagar Dados para reset completo."),
 
             ft.Container(height=20),
+            ft.Container(
+                content=ft.Column(controls=[
+                    ft.Text("⚠️  Aviso Legal", size=12,
+                            color="#FFB74D", weight=ft.FontWeight.W_700),
+                    ft.Text(
+                        "Os valores exibidos são estimativas baseadas nas "
+                        "configurações inseridas pelo usuário. Este aplicativo "
+                        "não substitui o holerite oficial emitido pela empresa. "
+                        "Consulte o departamento de RH para esclarecimentos "
+                        "sobre sua remuneração.",
+                        size=11, color="#A0A0A0",
+                    ),
+                    ft.Text(
+                        "Estimated values. This app does not replace the official "
+                        "payslip issued by your employer.",
+                        size=10, color="#757575", italic=True,
+                    ),
+                ], spacing=6, tight=True),
+                bgcolor="#2A2A2A", border_radius=10,
+                padding=ft.Padding(left=12, right=12, top=10, bottom=10),
+                border=ft.Border.all(1, "#FFB74D"),
+                margin=ft.Padding(left=0, right=0, top=8, bottom=0),
+            ),
+            ft.Container(height=20),
         ],
         spacing=2, tight=True,
         scroll=ft.ScrollMode.AUTO,
@@ -2170,11 +2278,11 @@ def main(page: ft.Page):
 
     page.theme = ft.Theme(
         color_scheme=ft.ColorScheme(
-            primary="#00C2A8",
-            on_primary="#FFFFFF",
-            secondary="#007A6E",
-            surface="#FFFFFF",
-            on_surface="#1A2535",
+            primary="#00D2C6",
+            on_primary="#121212",
+            secondary="#009E94",
+            surface="#1E1E1E",
+            on_surface="#F0F0F0",
         ),
     )
 
@@ -2221,14 +2329,18 @@ def main(page: ft.Page):
             ft.Text("ONION PAYROLL", size=scaled(16), weight=ft.FontWeight.W_800,
                     color=TEXT_PRIMARY,
                     style=ft.TextStyle(letter_spacing=1.5)),
-            ft.Text("DESCASQUE SEU SALÁRIO", size=scaled(9), color=ACCENT_LITE,
+            ft.Text("PEEL YOUR PAYCHECK", size=scaled(9), color=ACCENT_LITE,
                     style=ft.TextStyle(letter_spacing=2.0)),
         ],
         spacing=0, tight=True,
     )
     header = ft.Container(
         content=ft.Row(controls=[ft.Row([logo, ft.Container(width=10), title_col])]),
-        bgcolor=HEADER_BG,
+        gradient=ft.LinearGradient(
+            begin=ft.Alignment(-1, 0),
+            end=ft.Alignment(1, 0),
+            colors=[HEADER_BG, "#0A1A18"],
+        ),
         padding=ft.Padding(left=16, right=16, top=10, bottom=10),
         border=ft.Border(bottom=ft.BorderSide(2, ACCENT)),
     )
@@ -2237,6 +2349,8 @@ def main(page: ft.Page):
         expand=True,
         bgcolor=BG_DEEP,
         padding=ft.Padding(left=scaled(12), right=scaled(12), top=scaled(8), bottom=scaled(8)),
+        animate_opacity=ft.Animation(180, ft.AnimationCurve.EASE_IN_OUT),
+        opacity=1.0,
     )
 
     tab_defs = [
