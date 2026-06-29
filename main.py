@@ -160,79 +160,76 @@ def compute_monthly_forecast(
     days_normal = days_holiday = days_legal = 0
 
     for day_num, cycle_status in cycle.items():
-        ov           = day_overrides.get(str(day_num), {})
-        status       = ov.get("status", "")
-        start_str    = ov.get("start", "")
-        end_str      = ov.get("end", "")
-        break_min    = int(ov.get("break_min", 65))
-        yukyu_hol    = ov.get("yukyu_on_holiday", False)
-        is_holiday   = day_num in holiday_days
-
-        # ── Determinar shift_type ─────────────────────────────────
-        #
-        # Regra domingo (法定休日): domingo é folga legal obrigatória
-        # → sempre +35% se trabalhou, independente do ciclo 4×2
-        # status="absent" → ¥0
-        # status="yukyu"  → 8h base, sem 残業/noturno
-        # domingo/cycle="off"/feriado → +35% se tem horário
-        # cycle="work" → turno normal
+        ov        = day_overrides.get(str(day_num), {})
+        status    = ov.get("status", "normal")   # "normal","absent","yukyu","holiday","legal"
+        start_str = ov.get("start", "")
+        end_str   = ov.get("end", "")
+        break_min = int(ov.get("break_min", _break) or _break)
+        yukyu_hol = ov.get("yukyu_on_holiday", False)
+        has_time  = bool(start_str)              # tem horário registrado manualmente
+        is_holiday = day_num in holiday_days
 
         try:
             weekday = date(year, month, day_num).weekday()
-            is_legal_holiday = (weekday == 6)
+            is_sunday = (weekday == 6)
         except Exception:
-            is_legal_holiday = False
+            is_sunday = False
 
-        # ── Lógica baseada no status da célula ──────────────────────
-        # A cor da célula determina o cálculo:
-        # Roxo   (absent)  → falta, ¥0
-        # Laranja (yukyu)  → 8h fixo sem OT/noturno
-        # Vermelho (holiday) → feriado +35% com horários
-        # Vermelho escuro (legal) → domingo/folga legal +35%
-        # Verde no domingo → domingo trabalhado +35% automático
-        # Verde (work)     → turno normal
-        # Azul (off)       → folga, só conta se tem horário registrado
-        # Amarelo (corp_hol) → feriado corp, só conta se tem horário
+        # ── Regras por STATUS (o que foi salvo no day_overrides) ──────
+        #
+        # "absent"  → falta → pular (¥0)
+        # "yukyu"   → férias → 8h fixo sem OT/noturno
+        # "holiday" → trabalho em feriado → +35%
+        # "legal"   → trabalho no domingo → +35%
+        # "normal"  → depende do ciclo e do dia da semana:
+        #             ciclo=work + domingo → +35% automático
+        #             ciclo=work           → turno normal
+        #             ciclo=off + horário  → +35% (trabalhou na folga)
+        #             ciclo=off + yukyu_hol→ yukyu
+        #             ciclo=off            → não trabalhou → pular
+        #             feriado + horário    → +35%
+        #             feriado              → não trabalhou → pular
 
         if status == "absent":
-            continue   # Roxo = falta = ¥0, não conta
+            continue   # falta — ¥0, não entra no cálculo
 
         elif status == "yukyu":
-            shift_type = "yukyu"   # Laranja = 8h fixo
+            shift_type = "yukyu"
 
-        elif status == "holiday":
-            # Vermelho manual = feriado +35%
-            if not start_str and not has_time:
-                continue
+        elif status in ("holiday", "legal"):
+            # Marcado manualmente como feriado/domingo
             shift_type = "holiday"
 
-        elif status == "legal":
-            # Vermelho escuro manual = domingo +35%
-            if not start_str and not has_time:
-                continue
-            shift_type = "holiday"
-
-        elif is_legal_holiday:
-            # Verde no domingo = domingo trabalhado automático
-            if cycle_status == "work" or start_str:
+        elif is_sunday:
+            # Domingo — folga legal obrigatória
+            if cycle_status == "work" or has_time:
                 shift_type = "holiday"   # +35% obrigatório
+            else:
+                continue   # domingo sem registro → não trabalhou
+
+        elif cycle_status == "off":
+            # Dia de folga no ciclo
+            if has_time:
+                shift_type = "holiday"   # trabalhou na folga → +35%
             elif yukyu_hol and is_holiday:
+                shift_type = "yukyu"     # yukyu em feriado
+            else:
+                continue   # folga sem registro → não trabalhou
+
+        elif is_holiday:
+            # Feriado nacional/corporativo
+            if has_time:
+                shift_type = "holiday"   # trabalhou no feriado → +35%
+            elif yukyu_hol:
                 shift_type = "yukyu"
             else:
-                continue   # domingo azul sem registro → folga
+                continue   # feriado sem registro → não trabalhou
 
-        elif cycle_status == "off" or is_holiday:
-            # Azul (folga) ou feriado jp/corp → só conta se tem horário
-            if not start_str:
-                if yukyu_hol and is_holiday:
-                    shift_type = "yukyu"
-                else:
-                    continue
-            else:
-                shift_type = "holiday"
+        elif status == "early":
+            shift_type = default_shift   # horário real descontado automaticamente
 
         else:
-            # Verde = dia normal de trabalho
+            # Dia normal de trabalho
             shift_type = default_shift
 
 
@@ -598,9 +595,12 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
         status_dd = ft.Dropdown(
             label="Status", value=ov.get("status", "normal"),
             options=[
-                ft.dropdown.Option("normal", "Trabalho Normal"),
-                ft.dropdown.Option("absent", "Falta 欠勤"),
-                ft.dropdown.Option("yukyu",  "有休 Yukyu — 8h sem 残業/noturno"),
+                ft.dropdown.Option("normal",  "Trabalho Normal"),
+                ft.dropdown.Option("early",   "Saiu Mais Cedo — horário real"),
+                ft.dropdown.Option("absent",  "Falta 欠勤"),
+                ft.dropdown.Option("yukyu",   "有休 Yukyu — 8h sem 残業/noturno"),
+                ft.dropdown.Option("holiday", "休出 Trabalho em Feriado (+35%)"),
+                ft.dropdown.Option("legal",   "法定休出 Domingo/Folga Legal (+35%)"),
             ],
             bgcolor="#2A2A2A", color="#F0F0F0",
             border_color="#333333", focused_border_color="#00D2C6",
@@ -864,8 +864,8 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
             bg = "#7B1FA2"       # 欠勤 Falta — roxo Google Grape
         elif status == "yukyu":
             bg = "#FF6D00"       # 有休 Yukyu — laranja Google Tangerine
-        elif has_time or yukyu_hol:
-            bg = "#00796B"       # Horário customizado — verde-azulado
+        elif status == "early" or has_time or yukyu_hol:
+            bg = "#00796B"       # Saiu mais cedo / horário customizado
         elif is_corp_hol:
             bg = C_HOL_CO        # Feriado corporativo — amarelo
         elif is_hol:
@@ -912,6 +912,9 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
         elif yukyu_hol:
             indicator = "有"
             ind_color  = "#FFE082"
+        elif status == "early":
+            indicator  = "↓"
+            ind_color  = "#FFFFFF"
         elif has_time:
             indicator  = "●"
             ind_color  = "#FFFFFF"
@@ -1036,14 +1039,14 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
     legend = ft.Row(
         controls=[
             ft.Column(controls=[
-                _leg(WORK_COLOR, "Trabalho"),
-                _leg(HOL_COLOR,  "Feriado"),
-                _leg("#FF6D00",  "有休 Yukyu"),
-                _leg("#00796B",  "Modificado"),
+                _leg(WORK_COLOR,      "Trabalho"),
+                _leg(CAL_SUNDAY_WORK, "Domingo Trabalhado"),
+                _leg("#FF6D00",       "有休 Yukyu"),
+                _leg("#00796B",       "Saiu Mais Cedo"),
             ], spacing=4, tight=True),
             ft.Column(controls=[
                 _leg(OFF_COLOR,  "Folga"),
-                _leg(CAL_CORP,   "Corp."),
+                _leg(CAL_CORP,   "Feriado"),
                 _leg("#7B1FA2",  "欠勤 Falta"),
             ], spacing=4, tight=True),
         ],
