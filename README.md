@@ -1,24 +1,45 @@
 # 🧅 Onion Payroll — Gerenciador de Turnos
 
-PWA (Progressive Web App) feito em **Python + Flet** para trabalhadores de turno em fábricas no Japão. Calcula automaticamente salário base, hora extra, adicional noturno e trabalho em feriados conforme a **Lei Trabalhista Japonesa (労働基準法)**.
+> **PEEL YOUR PAYCHECK** — PWA para gerenciamento de turnos e previsão salarial para brasileiros trabalhando em fábricas no Japão.
+
+Calcula automaticamente salário base, hora extra, adicional noturno e trabalho em feriados conforme a **Lei Trabalhista Japonesa (労働基準法)**.
 
 ---
 
 ## ✨ Funcionalidades
 
-- **100% offline e privado** — nenhum dado sai do dispositivo. Tudo salvo localmente via `localStorage`.
-- **Ciclo 4×2 automático** — projeta 4 dias de trabalho e 2 de folga indefinidamente a partir de uma data âncora.
+- **100% offline e privado** — nenhum dado sai do dispositivo
+- **Ciclo 4×2 automático** — projeta 4 dias de trabalho e 2 de folga
+- **Turno configurável** — defina entrada, saída, intervalo e início de OT
+- **Diurno/Noturno** — campo separado do grupo de equipe
 - **Cálculo conforme a lei japonesa:**
-  - 残業手当 Hora Extra → +25% (últimas 2h do turno)
+  - 残業手当 Hora Extra → +25%
   - 深夜手当 Adicional Noturno → +25% (22:00–05:00)
   - 休出手当 Trabalho em Folga/Feriado → +35%
-  - Noturno em feriado → acumulado +60%
-  - 四捨五入 Arredondamento japonês (frações ≥ 0,5 arredondam para cima)
+  - 法定休日 Domingo → +35% automático (folga legal obrigatória)
+  - 四捨五入 Arredondamento japonês
+- **Minutos extras solicitados** — campo 延長 no registro de ponto
+- **有休 Yukyu** — célula laranja, 8h fixo sem OT/noturno
+- **欠勤 Falta** — célula roxa, ¥0
 - **6 abas:** Calendário · Holerite · Histórico · Feriados · Config. · Ajuda
-- **Ponto diário** — toque em qualquer dia para registrar horário real, falta ou férias
-- **Inteligência de descontos** — aprende a taxa histórica de desconto para prever meses futuros
-- **Feriados corporativos** — calendário anual editável direto no app, sem CSV
-- **Preview ao vivo** — mostra o cálculo em tempo real ao digitar os horários
+- **Disclaimer legal** — valores estimados, não substitui holerite oficial
+
+---
+
+## 🎨 Tema Visual
+
+**Neo Petronas** — interface dark premium inspirada em fintechs modernas:
+
+| Token | Cor | Uso |
+|---|---|---|
+| Fundo | `#121212` | Background principal |
+| Card | `#1E1E1E` | Painéis elevados |
+| Accent | `#00D2C6` | Turquesa Petronas |
+| Texto | `#F0F0F0` | Texto principal |
+
+**Calendário** — paleta Google Calendar:
+- 🟢 `#0F9D58` Trabalho · 🔵 `#4285F4` Folga · 🔴 `#DB4437` Feriado
+- 🟠 `#FF6D00` Yukyu · 🟡 `#F4B400` Corp. · 🟣 `#7B1FA2` Falta
 
 ---
 
@@ -26,29 +47,28 @@ PWA (Progressive Web App) feito em **Python + Flet** para trabalhadores de turno
 
 ```
 Onion Payroll/
-├── main.py                              ← código principal (lógica + UI)
+├── main.py                              ← código principal
+├── deploy.ps1                           ← script de deploy automático
 ├── requirements.txt
+├── pyproject.toml
 ├── README.md
-├── DEPLOY_GITHUB_PAGES.md               ← guia de deploy como PWA
-└── assets/
-    ├── logo_icon.png                    ← ícone da cebola (256×256)
-    ├── logo.png                         ← logo completo
-    ├── logo.svg                         ← logo vetorial
-    ├── feriados_japoneses_2025_2026.csv ← feriados nacionais
-    └── feriados_corporativos_modelo.csv ← modelo de feriados da empresa
+├── CHANGELOG.md
+├── manutencao.html                      ← página de manutenção
+├── assets/
+│   ├── logo_icon.png                    ← cebola sem fundo (256×256)
+│   ├── logo.png                         ← logo completo
+│   ├── feriados_japoneses_2025_2026.csv
+│   └── feriados_corporativos_modelo.csv
+└── docs/                                ← build PWA (gerado pelo deploy.ps1)
 ```
 
 ---
 
 ## ⚙️ Instalação
 
-**Requisito:** Python 3.11+ e Flet 0.85.x
-
 ```bash
 pip install flet==0.85.3
 ```
-
----
 
 ## ▶️ Rodar no Desktop
 
@@ -57,113 +77,60 @@ cd "Onion Payroll"
 python main.py
 ```
 
----
+## 🚀 Deploy GitHub Pages
 
-## 🌐 Rodar como Web (rede local)
-
-```bash
-flet run --web --port 8550 main.py
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\deploy.ps1"
 ```
 
-Acesse no navegador: `http://localhost:8550`
-Ou no celular (mesma rede Wi-Fi): `http://IP-DO-PC:8550`
-
----
-
-## 📱 Deploy como PWA no GitHub Pages
-
-Consulte o guia completo em [`DEPLOY_GITHUB_PAGES.md`](./DEPLOY_GITHUB_PAGES.md).
-
-Resumo:
-```bash
-# 1. Gerar o build
-flet build web --base-url /nome-do-repositorio
-
-# 2. Copiar para docs/
-Copy-Item -Path "build\web\*" -Destination "docs\" -Recurse -Force
-
-# 3. Enviar para o GitHub
-git add docs/
-git commit -m "Deploy PWA"
-git push
-```
-
-Depois ative em: **GitHub → Settings → Pages → Branch: main / Folder: /docs**
-
-URL final: `https://seu-usuario.github.io/nome-do-repositorio`
+O script: cria pasta limpa → build → copia docs/ → push automático.
 
 ---
 
 ## 🕐 Referência de Turnos
 
-| Turno | Janela | Hora Extra | Intervalo |
+| Turno | Padrão | OT começa | Intervalo |
 |---|---|---|---|
-| Noturno 夜勤 (Grupo B) | 20:35 → 08:35 (+1 dia) | 06:35 – 08:35 | 65 min |
-| Diurno 昼勤 (Grupos A e C) | 08:35 → 20:35 | 18:35 – 20:35 | 65 min |
+| 🌙 Noturno 夜勤 | 20:35 → 08:35 | 06:35 | 65 min |
+| ☀️ Diurno 昼勤 | 08:35 → 20:35 | 18:35 | 65 min |
+
+Configurável em ⚙️ Config. → Horário do Turno.
 
 ---
 
-## 🎨 Cores do Calendário
-
-| Cor | Significado |
-|---|---|
-| 🟩 Verde escuro | Dia de trabalho (ciclo 4×2) |
-| 🟦 Azul escuro | Folga |
-| 🟥 Vermelho escuro | Feriado nacional japonês |
-| 🟧 Laranja escuro | Feriado corporativo |
-| 🟪 Roxo | Dia modificado (ponto, falta ou férias registrados) |
-| Número vermelho | Domingo |
-| Número azul | Sábado |
-
----
-
-## 📄 Formato do CSV de Feriados
+## 📄 Formato CSV de Feriados
 
 ```
 2025-05-03,jp      ← feriado nacional (vermelho)
-2025-08-13,corp    ← feriado corporativo (laranja)
-2025-01-01         ← sem tipo = jp por padrão
+2025-08-13,corp    ← feriado corporativo (amarelo)
+2025-01-01         ← sem tipo = jp
 ```
-
-Importe em: **⚙️ Config. → Importar Calendário da Fábrica (.csv)**
-
----
-
-## 🏗️ Arquitetura do Código
-
-A lógica de negócio é **totalmente separada** da interface:
-
-| Função | Descrição |
-|---|---|
-| `shisha_gofuuu()` | Arredondamento 四捨五入 (retorna inteiro) |
-| `calculate_shift_pay()` | Calcula pagamento de um único dia |
-| `generate_4x2_calendar()` | Gera o ciclo 4×2 para um mês |
-| `compute_monthly_forecast()` | Agrega todos os dias do mês |
-| `night_minutes_in_range()` | Conta minutos entre 22:00 e 05:00 |
-| `boot_load_storage()` | Carrega dados persistidos no startup |
 
 ---
 
 ## 💾 Chaves de Storage
 
-Todos os dados são salvos localmente em JSON:
-
 | Chave | Conteúdo |
 |---|---|
-| `onion_settings` | Valor hora, grupo, data âncora, modo de desconto |
-| `onion_history` | Holerites reais registrados + taxas de desconto |
-| `onion_overrides` | Pontos diários registrados por mês |
-| `onion_holidays` | Feriados nacionais importados via CSV |
-| `onion_holidays_corp` | Feriados corporativos marcados no app |
+| `onion_settings` | Valor hora, grupo, turno, horários, âncora |
+| `onion_history` | Holerites reais + taxas de desconto |
+| `onion_overrides` | Pontos diários por mês |
+| `onion_holidays` | Feriados nacionais (CSV) |
+| `onion_holidays_corp` | Feriados corporativos (app) |
+
+---
+
+## ⚠️ Aviso Legal
+
+Os valores exibidos são estimativas baseadas nas configurações inseridas pelo usuário. Este aplicativo não substitui o holerite oficial emitido pela empresa. Consulte o departamento de RH para esclarecimentos sobre sua remuneração.
 
 ---
 
 ## 🔒 Privacidade
 
 - ✅ Sem conta, sem servidor, sem nuvem
-- ✅ Dados ficam 100% no dispositivo do usuário
-- ✅ Funciona offline após o primeiro carregamento
-- ⚠️ Limpar dados do navegador apaga o histórico — use o backup via Git
+- ✅ 100% offline após primeiro carregamento
+- ✅ Dados ficam no dispositivo do usuário
 
 ---
 

@@ -172,7 +172,7 @@ def compute_monthly_forecast(
         # Regra domingo (法定休日): domingo é folga legal obrigatória
         # → sempre +35% se trabalhou, independente do ciclo 4×2
         # status="absent" → ¥0
-        # status="yukyu"  → 8h base, sem OT/noturno
+        # status="yukyu"  → 8h base, sem 残業/noturno
         # domingo/cycle="off"/feriado → +35% se tem horário
         # cycle="work" → turno normal
 
@@ -561,7 +561,7 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
             options=[
                 ft.dropdown.Option("normal", "Trabalho Normal"),
                 ft.dropdown.Option("absent", "Falta 欠勤"),
-                ft.dropdown.Option("yukyu",  "有休 Yukyu — 8h sem OT/noturno"),
+                ft.dropdown.Option("yukyu",  "有休 Yukyu — 8h sem 残業/noturno"),
             ],
             bgcolor="#2A2A2A", color="#F0F0F0",
             border_color="#333333", focused_border_color="#00D2C6",
@@ -630,19 +630,19 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
 
             elif st == "yukyu":
                 if s and e:
-                    # Yukyu parcial: horas reais, sem OT/noturno
+                    # Yukyu parcial: horas reais, sem 残業/noturno
                     pay = calculate_shift_pay(jikyuu, "yukyu",
                                               start_str=s, end_str=e,
                                               break_min=brk)
                     preview_text.value = (
                         f"有休 parcial: {pay['net_minutes']}min → "
-                        f"{yen(pay['base_pay'])} (sem OT/noturno)"
+                        f"{yen(pay['base_pay'])} (sem 残業/noturno)"
                     )
                 else:
                     pay = calculate_shift_pay(jikyuu, "yukyu")
                     preview_text.value = (
                         f"有休 dia completo: {yen(pay['base_pay'])} "
-                        f"(8h × ¥{jikyuu}/h, sem OT/noturno)"
+                        f"(8h × ¥{jikyuu}/h, sem 残業/noturno)"
                     )
 
             elif is_off_day and not s:
@@ -1584,7 +1584,7 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
     shift_start_f = _tf_shift("Entrada 出勤", "shift_start", "20:35")
     shift_end_f   = _tf_shift("Saída 退勤",   "shift_end",   "08:35")
     shift_break_f = _tf_shift("Intervalo 休憩 (min)", "shift_break", "65")
-    shift_ot_f    = _tf_shift("Início OT 残業開始", "shift_ot", "06:35")
+    shift_ot_f    = _tf_shift("残業 Início Hora Extra (fim turno normal)", "shift_ot", "06:35")
 
 
     block_dd = ft.Dropdown(
@@ -1775,9 +1775,22 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
                 section_header("HORÁRIO DO TURNO 勤務時間"),
                 ft.Row([shift_start_f, shift_end_f], spacing=8),
                 ft.Row([shift_break_f, shift_ot_f], spacing=8),
-                ft.Text("Configure os horários padrão do seu turno. "
-                        "Os dias do calendário usarão esses valores automaticamente.",
-                        size=10, color=TEXT_MUTED),
+                ft.Container(
+                    content=ft.Column(controls=[
+                        ft.Text("💡 Como funciona o cálculo:",
+                                size=10, color=ACCENT, weight=ft.FontWeight.W_700),
+                        ft.Text("• Entrada → Início 残業: horas normais (salário base)",
+                                size=10, color=TEXT_SECONDARY),
+                        ft.Text("• Início 残業 → Saída: hora extra +25%",
+                                size=10, color=TEXT_SECONDARY),
+                        ft.Text("• Ex. noturno: 20:35 normal até 06:35, hora extra até 08:35 (Saída)",
+                                size=10, color=TEXT_MUTED),
+                    ], spacing=3, tight=True),
+                    bgcolor=BG_SURFACE,
+                    border_radius=8,
+                    padding=ft.Padding(left=10, right=10, top=8, bottom=8),
+                    border=ft.Border.all(1, "#333333"),
+                ),
             ], spacing=12, tight=True)),
 
             card(ft.Column(controls=[
@@ -2160,11 +2173,19 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
             # ── Grupos de turno ──────────────────────────────────────
             _title("👥 Grupos de Turno"),
             _item("Grupo A", "Turno Diurno",
-                  "Horário padrão: 08:35 → 20:35. OT após 18:35."),
+                  "Horário padrão: 08:35 → 20:35. 残業 após 18:35."),
             _item("Grupo B", "Turno Noturno",
-                  "Horário padrão: 20:35 → 08:35 (+1 dia). OT após 06:35."),
+                  "Horário padrão: 20:35 → 08:35 (+1 dia). 残業 após 06:35."),
             _item("Grupo C", "Turno Diurno",
                   "Igual ao Grupo A. Use para equipes diferentes no mesmo turno."),
+
+                    # ── Configuração de turno ────────────────────────────────
+                    _title("⚙️ Configuração de Turno"),
+                    _item("Grupo + Turno 🌙☀️", "Configure em ⚙️ Config.",
+                          "Grupo identifica sua equipe. Turno define os horários padrão: entrada, saída, intervalo e início de hora extra. Todos os dias sem registro usam esses horários."),
+
+                    _title("📅 Domingo — 法定休日 Folga Legal"),
+                    _p("Domingo é folga legal obrigatória pela lei japonesa. Se trabalhou, o app aplica +35% automaticamente. Sem registro de horário = não trabalhado."),
 
             # ── Ciclo 4×2 ────────────────────────────────────────────
             _title("🔄 Ciclo 4×2 (四勤二休)"),
@@ -2219,13 +2240,13 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
             _item("Trabalho Normal", "Nenhuma alteração",
                   "Deixe em branco → usa o horário padrão do seu grupo."),
             _item("Saída Antecipada", "Preencha só a Saída (HH:MM)",
-                  "OT = 0 se saiu antes do limiar. Cálculo pelo tempo real."),
-            _item("有休 Férias Pagas", "Sem horário → 8h base fixo",
-                  "Com horário → paga as horas efetivas (sem OT/noturno)."),
-            _item("欠勤 Falta", "¥0 — não remunerada",
-                  "O campo horário é ignorado para faltas."),
+                  "残業 = 0 se saiu antes do limiar. Cálculo pelo tempo real."),
+                    _item("有休 Yukyu — Célula Laranja", "8h base fixo sem hora extra e noturno",
+                          "Com horário → paga as horas efetivas. Sem horário → 8h fixo."),
+                    _item("欠勤 Falta — Célula Roxa", "¥0 — não remunerada",
+                          "O campo horário é ignorado. Falta = sem pagamento."),
             _item("Trabalho em Folga/Feriado", "Preencha Entrada e Saída",
-                  "Status 'Normal' + horário → +35% automático."),
+                  "+35% automático. Vale para folga, feriado e domingo."),
             _item("有休 em Feriado Corporativo",
                   "Ative o toggle 有休 em Feriado",
                   "Injeta 8h base fixo mesmo sendo feriado da empresa."),
