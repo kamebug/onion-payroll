@@ -2386,18 +2386,18 @@ def main(page: ft.Page):
         "holidays_corp": load_json(page, "onion_holidays_corp", {}),
     }
 
-    # Logo — Flet 0.85 não suporta src_base64
-    # Usa src= com caminho direto para o arquivo na pasta assets/
+    # Logo — desktop usa caminho absoluto, web usa src relativo (assets/)
     import os as _os
     _assets_dir = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "assets")
-    _logo_file  = None
-    for _fname in ("logo_icon.png", "logo.png", "logo.svg"):
-        _candidate = _os.path.join(_assets_dir, _fname)
-        if _os.path.exists(_candidate):
-            _logo_file = _fname
-            break
-    if _logo_file:
-        logo = ft.Image(src=_logo_file,
+    _logo_abs   = _os.path.join(_assets_dir, "logo_icon.png")
+    _is_web     = hasattr(page, "web") and page.web
+
+    if _is_web:
+        # No modo web/PWA o Flet serve assets/ automaticamente
+        logo = ft.Image(src="logo_icon.png",
+                        width=scaled(48), height=scaled(48), fit="contain")
+    elif _os.path.exists(_logo_abs):
+        logo = ft.Image(src=_logo_abs,
                         width=scaled(48), height=scaled(48), fit="contain")
     else:
         logo = ft.Text("🧅", size=36)
