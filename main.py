@@ -146,9 +146,16 @@ def compute_monthly_forecast(
     year: int, month: int, jikyuu: int, anchor_date: date, group: str,
     holiday_days: list, day_overrides: dict, odd_month_bonus: int, extra_bonus: int,
     deduction_mode: str, fixed_deduction: int, history_avg_pct: float, block: int,
+    shift_type_cfg: str = "", cfg_start: str = "", cfg_end: str = "",
+    cfg_break: int = 65, cfg_ot: str = "",
 ) -> dict:
     cycle         = generate_4x2_calendar(anchor_date, year, month)
-    default_shift = "night" if group == "B" else "day"
+    _stype        = shift_type_cfg if shift_type_cfg else ("night" if group == "B" else "day")
+    default_shift = _stype
+    _start        = cfg_start if cfg_start else ("20:35" if _stype == "night" else "08:35")
+    _end          = cfg_end   if cfg_end   else ("08:35" if _stype == "night" else "20:35")
+    _break        = cfg_break if cfg_break else 65
+    _ot           = cfg_ot    if cfg_ot    else ("06:35" if _stype == "night" else "18:35")
     total_base = total_ot = total_night = total_holiday = 0
 
     for day_num, cycle_status in cycle.items():
@@ -162,44 +169,53 @@ def compute_monthly_forecast(
 
         # ── Determinar shift_type ─────────────────────────────────
         #
-        # status="absent" → falta, ¥0, independente de horário
-        # status="yukyu"  → 8h base fixo, sem OT/noturno
-        # cycle="off" ou feriado:
-        #   sem horário → não trabalhou, pular (exceto yukyu_hol)
-        #   com horário → trabalhou nesse dia → +35% holiday premium
-        #                 (horas reais inseridas; OT e noturno acumulam)
-        # cycle="work" → turno normal, usa horário padrão ou customizado
-        #   saída antecipada: end_str preenchido antes do limite →
-        #   ot_min=0 automaticamente (não ultrapassou o limiar)
+        # Regra domingo (法定休日): domingo é folga legal obrigatória
+        # → sempre +35% se trabalhou, independente do ciclo 4×2
+        # status="absent" → ¥0
+        # status="yukyu"  → 8h base, sem OT/noturno
+        # domingo/cycle="off"/feriado → +35% se tem horário
+        # cycle="work" → turno normal
+
+        weekday = date(year, month, d).weekday()   # 0=seg … 6=dom
+        is_legal_holiday = (weekday == 6)           # domingo = folga legal
 
         if status == "absent":
-            shift_type = "absent"         # falta: ¥0 sempre
+            shift_type = "absent"
 
         elif status == "yukyu":
-            shift_type = "yukyu"          # 8h base, sem OT, sem noturno
+            shift_type = "yukyu"
+
+        elif is_legal_holiday:
+            # Domingo — folga legal obrigatória (法定休日)
+            if not start_str:
+                if yukyu_hol and is_holiday:
+                    shift_type = "yukyu"
+                else:
+                    continue   # domingo sem registro → não trabalhou
+            else:
+                shift_type = "holiday"   # +35% obrigatório
 
         elif cycle_status == "off" or is_holiday:
             if not start_str:
-                # Não trabalhou nesse dia
                 if yukyu_hol and is_holiday:
-                    # Toggle 有休 em feriado → injeta 8h base
                     shift_type = "yukyu"
                 else:
-                    continue              # folga/feriado não trabalhado → pular
+                    continue
             else:
-                # Trabalhou em folga/feriado → premium +35%
-                # Horas calculadas pelos horários reais inseridos
                 shift_type = "holiday"
 
         else:
-            # Dia de trabalho normal (ciclo "work")
-            # Horário padrão do grupo OU customizado (saída antecipada etc.)
-            # OT só ocorre se end_str ultrapassar o limiar (06:35/18:35)
             shift_type = default_shift
 
+
+        # Horários: override manual > configuração do usuário > padrão
+        eff_start = start_str if start_str else _start
+        eff_end   = end_str   if end_str   else _end
+        eff_break = break_min if break_min != 65 else _break
         pay = calculate_shift_pay(
-            jikyuu=jikyuu, shift_type=shift_type, start_str=start_str,
-            end_str=end_str, break_min=break_min, block=block,
+            jikyuu=jikyuu, shift_type=shift_type,
+            start_str=eff_start, end_str=eff_end,
+            break_min=eff_break, block=block,
             is_holiday=is_holiday, yukyu_on_holiday=yukyu_hol,
         )
         total_base    += pay["base_pay"]
@@ -410,9 +426,9 @@ ACCENT_DARK    = "#009E94"   # Turquesa escuro
 WORK_COLOR     = "#0F9D58"   # Sage — verde Google (fundo célula trabalho)
 OFF_COLOR      = "#4285F4"   # Peacock — azul Google (fundo célula folga)
 HOL_COLOR      = "#DB4437"   # Tomato — vermelho Google (fundo feriado JP)
-CAL_YUKYU      = "#FF6D00"   # Tangerine — laranja Google (fundo yukyu)
+CAL_YUKYU      = "#FF6D00"   # Tangerine — laranja Google (yukyu 有休)
 CAL_CORP       = "#F4B400"   # Banana — amarelo Google (fundo feriado corp)
-CAL_MODIF      = "#7986CB"   # Lavender — lilás Google (fundo modificado)
+CAL_MODIF      = "#7B1FA2"   # Grape — roxo Google (falta 欠勤)
 
 # NÚMEROS — brancos brilhantes sobre fundo colorido
 CAL_TEXT_WORK  = "#FFFFFF"   # branco sobre verde
@@ -544,8 +560,8 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
             label="Status", value=ov.get("status", "normal"),
             options=[
                 ft.dropdown.Option("normal", "Trabalho Normal"),
-                ft.dropdown.Option("absent", "Falta (欠勤)"),
-                ft.dropdown.Option("yukyu",  "Férias/Folga (有休)"),
+                ft.dropdown.Option("absent", "Falta 欠勤"),
+                ft.dropdown.Option("yukyu",  "有休 Yukyu — 8h sem OT/noturno"),
             ],
             bgcolor="#2A2A2A", color="#F0F0F0",
             border_color="#333333", focused_border_color="#00D2C6",
@@ -801,33 +817,34 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
                        and view_month == today.month
                        and view_year  == today.year)
 
-        # ── Determinar fundo ─────────────────────────────────────────
-        # Prioridade: modificado > feriado corporativo > feriado japonês
-        #             > folga > trabalho
+        # ── Determinar fundo da célula por status ───────────────────
         is_corp_hol = day_num in month_hol_corp
         modified    = (status in ("absent", "yukyu") or has_time or yukyu_hol)
 
-        if modified:
-            bg = C_MODIF
+        if status == "absent":
+            bg = "#7B1FA2"       # 欠勤 Falta — roxo Google Grape
+        elif status == "yukyu":
+            bg = "#FF6D00"       # 有休 Yukyu — laranja Google Tangerine
+        elif has_time or yukyu_hol:
+            bg = "#00796B"       # Horário customizado — verde-azulado
         elif is_corp_hol:
-            bg = C_HOL_CO   # laranja — feriado corporativo
+            bg = C_HOL_CO        # Feriado corporativo — amarelo
         elif is_hol:
-            bg = C_HOL_JP   # vermelho — feriado japonês/nacional
+            bg = C_HOL_JP        # Feriado nacional — vermelho
         elif cycle_st == "off":
-            bg = C_OFF
+            bg = C_OFF           # Folga — azul
         else:
-            bg = C_WORK
+            bg = C_WORK          # Trabalho — verde
 
-        # ── Cor do número ────────────────────────────────────────────
+        # ── Cor do número — branco sobre fundos coloridos ───────────
         if is_today and not modified:
             num_color = ACCENT
-        elif modified:
-            if status == "absent":
-                num_color = CAL_TEXT_MODIF
-            elif status == "yukyu":
-                num_color = CAL_TEXT_YUKYU
-            else:
-                num_color = CAL_TEXT_MODIF
+        elif status == "absent":
+            num_color = "#FFFFFF"
+        elif status == "yukyu":
+            num_color = "#FFFFFF"
+        elif has_time or yukyu_hol:
+            num_color = "#FFFFFF"
         elif is_corp_hol:
             num_color = CAL_TEXT_CORP
         elif is_hol:
@@ -847,38 +864,34 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
             num_color = CAL_TEXT_WORK
 
         # ── Indicador pequeno (canto superior direito) ───────────────
-        if modified:
-            if status == "absent":   indicator = "欠"
-            elif status == "yukyu":  indicator = "有"
-            elif yukyu_hol:          indicator = "有"
-            else:                    indicator = "✎"
-            ind_color = "#00C2A8"
+        if status == "absent":
+            indicator = "欠"
+            ind_color  = "#EF9A9A"
+        elif status == "yukyu":
+            indicator = "有"
+            ind_color  = "#FFE082"
+        elif yukyu_hol:
+            indicator = "有"
+            ind_color  = "#FFE082"
+        elif has_time:
+            indicator  = "●"
+            ind_color  = "#FFFFFF"
         elif is_corp_hol:
-            indicator = "●"
-            ind_color = "#F59E0B"
+            indicator  = "🏭"
+            ind_color  = "#212121"
         elif is_hol:
-            indicator = "●"
-            ind_color = "#EF4444"
-        elif cycle_st == "work":
-            indicator = ""
-            ind_color = C_WHITE
+            indicator  = "🎌"
+            ind_color  = "#FFFFFF"
         else:
-            indicator = ""
-            ind_color = C_WHITE
+            indicator  = ""
+            ind_color  = C_WHITE
 
-        # ── Borda 2px + cor específica por tipo ─────────────────────
+
+        # ── Borda cinza claro ────────────────────────────────────────
         if is_today:
-            border = ft.Border.all(3, C_TODAY_B)
-        elif modified:
-            border = ft.Border.all(2, CAL_BORDER_MODIF)
-        elif is_corp_hol:
-            border = ft.Border.all(2, CAL_BORDER_CORP)
-        elif is_hol:
-            border = ft.Border.all(2, CAL_BORDER_HOL)
-        elif cycle_st == "off":
-            border = ft.Border.all(2, CAL_BORDER_OFF)
+            border = ft.Border.all(2, "#00D2C6")
         else:
-            border = ft.Border.all(2, CAL_BORDER_WORK)
+            border = ft.Border.all(1, "#D0D0D0")
 
         # No 0.85 o GestureDetector precisa de expand=True ou o Container
         # precisa de on_click direto. Usamos um ElevatedButton sem estilo
@@ -908,7 +921,7 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
             width=scaled(46), height=scaled(48),
             on_click=_tap_handler,
             ink=True,
-            ink_color="#ffffff66",
+            ink_color="#00D2C633",
         )
 
     # ── Grid — semana começa no DOMINGO ─────────────────────────────
@@ -973,29 +986,30 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
         return ft.Row([
             ft.Container(
                 width=scaled(14), height=scaled(14),
-                bgcolor=color, border_radius=4,
-                border=ft.Border.all(2, "#FFFFFF44"),
-                shadow=ft.BoxShadow(
-                    blur_radius=4, spread_radius=0,
-                    color="#00000055",
-                    offset=ft.Offset(0, 2),
-                ),
+                bgcolor=color, border_radius=3,
+                border=ft.Border.all(1, "#D0D0D0"),
             ),
-            ft.Text(label, size=scaled(10), color=TEXT_PRIMARY,
+            ft.Text(label, size=scaled(10), color="#F0F0F0",
                     weight=ft.FontWeight.W_600),
-        ], spacing=4)
+        ], spacing=5, tight=True)
+
 
     legend = ft.Row(
         controls=[
-            _leg(WORK_COLOR, "Trabalho"),
-            _leg(OFF_COLOR,  "Folga"),
-            _leg(HOL_COLOR,  "Feriado"),
-            _leg(CAL_CORP,   "Corp."),
-            _leg(CAL_MODIF,  "Modif."),
+            ft.Column(controls=[
+                _leg(WORK_COLOR, "Trabalho"),
+                _leg(HOL_COLOR,  "Feriado"),
+                _leg("#FF6D00",  "有休 Yukyu"),
+                _leg("#00796B",  "Modificado"),
+            ], spacing=4, tight=True),
+            ft.Column(controls=[
+                _leg(OFF_COLOR,  "Folga"),
+                _leg(CAL_CORP,   "Corp."),
+                _leg("#7B1FA2",  "欠勤 Falta"),
+            ], spacing=4, tight=True),
         ],
-        spacing=10,
+        spacing=16,
         alignment=ft.MainAxisAlignment.CENTER,
-        wrap=True,
     )
 
     return ft.Column(
@@ -1041,6 +1055,11 @@ def build_holerite_tab(page: ft.Page, state: dict, refresh_all):
         fixed_deduction=int(settings.get("fixed_deduction") or 0),
         history_avg_pct=hist_avg,
         block=int(settings.get("block") or 1),
+        shift_type_cfg=settings.get("shift_type", ""),
+        cfg_start=settings.get("shift_start", ""),
+        cfg_end=settings.get("shift_end", ""),
+        cfg_break=int(settings.get("shift_break") or 65),
+        cfg_ot=settings.get("shift_ot", ""),
     )
 
     def _go_prev(_):
@@ -1534,6 +1553,40 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
     )
     group_dd.on_change = lambda e: [settings.__setitem__("group", e.control.value), _save()]
 
+    shift_type_dd = ft.Dropdown(
+        label="Turno 勤務",
+        value=settings.get("shift_type", "night"),
+        options=[
+            ft.dropdown.Option("night", "🌙 Noturno 夜勤"),
+            ft.dropdown.Option("day",   "☀️ Diurno 昼勤"),
+        ],
+        bgcolor="#2A2A2A", color="#F0F0F0",
+        border_color="#333333", focused_border_color="#00D2C6",
+        label_style=ft.TextStyle(color="#A0A0A0"),
+    )
+    shift_type_dd.on_change = lambda e: [settings.__setitem__("shift_type", e.control.value), _save()]
+
+    def _tf_shift(lbl, key, hint="HH:MM"):
+        f = ft.TextField(
+            label=lbl, value=str(settings.get(key, "")),
+            hint_text=hint,
+            bgcolor="#2A2A2A", color="#F0F0F0",
+            border_color="#333333", focused_border_color="#00D2C6",
+            label_style=ft.TextStyle(color="#A0A0A0"),
+            expand=1,
+        )
+        def _blur(e, k=key):
+            settings[k] = e.control.value
+            _save()
+        f.on_blur = _blur
+        return f
+
+    shift_start_f = _tf_shift("Entrada 出勤", "shift_start", "20:35")
+    shift_end_f   = _tf_shift("Saída 退勤",   "shift_end",   "08:35")
+    shift_break_f = _tf_shift("Intervalo 休憩 (min)", "shift_break", "65")
+    shift_ot_f    = _tf_shift("Início OT 残業開始", "shift_ot", "06:35")
+
+
     block_dd = ft.Dropdown(
         label="Arredondamento do Ponto",
         value=str(settings.get("block", 1)),
@@ -1714,11 +1767,17 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
             card(ft.Column(controls=[
                 section_header("CONFIGURAÇÃO DE SALÁRIO"),
                 mk_field("Valor Hora 時給 (¥)",              "jikyuu"),
-                group_dd,
+                ft.Row([group_dd, shift_type_dd], spacing=8),
                 mk_field("Data Início Ciclo 4×2 (AAAA-MM-DD)", "anchor_date",
                          ft.KeyboardType.TEXT),
                 mk_field("Bônus Padrão Mês Ímpar (¥)",        "odd_bonus"),
                 block_dd,
+                section_header("HORÁRIO DO TURNO 勤務時間"),
+                ft.Row([shift_start_f, shift_end_f], spacing=8),
+                ft.Row([shift_break_f, shift_ot_f], spacing=8),
+                ft.Text("Configure os horários padrão do seu turno. "
+                        "Os dias do calendário usarão esses valores automaticamente.",
+                        size=10, color=TEXT_MUTED),
             ], spacing=12, tight=True)),
 
             card(ft.Column(controls=[
