@@ -183,31 +183,46 @@ def compute_monthly_forecast(
         except Exception:
             is_legal_holiday = False
 
+        # ── Lógica baseada no status da célula ──────────────────────
+        # A cor da célula determina o cálculo:
+        # Roxo   (absent)  → falta, ¥0
+        # Laranja (yukyu)  → 8h fixo sem OT/noturno
+        # Vermelho (holiday) → feriado +35% com horários
+        # Vermelho escuro (legal) → domingo/folga legal +35%
+        # Verde no domingo → domingo trabalhado +35% automático
+        # Verde (work)     → turno normal
+        # Azul (off)       → folga, só conta se tem horário registrado
+        # Amarelo (corp_hol) → feriado corp, só conta se tem horário
+
         if status == "absent":
-            shift_type = "absent"
+            continue   # Roxo = falta = ¥0, não conta
 
         elif status == "yukyu":
-            shift_type = "yukyu"
+            shift_type = "yukyu"   # Laranja = 8h fixo
 
         elif status == "holiday":
-            # Marcado manualmente como feriado
+            # Vermelho manual = feriado +35%
+            if not start_str and not has_time:
+                continue
             shift_type = "holiday"
 
         elif status == "legal":
-            # Marcado manualmente como domingo/folga legal
+            # Vermelho escuro manual = domingo +35%
+            if not start_str and not has_time:
+                continue
             shift_type = "holiday"
 
         elif is_legal_holiday:
-            # Domingo — folga legal obrigatória (法定休日)
-            if not start_str:
-                if yukyu_hol and is_holiday:
-                    shift_type = "yukyu"
-                else:
-                    continue   # domingo sem registro → não trabalhou
-            else:
+            # Verde no domingo = domingo trabalhado automático
+            if cycle_status == "work" or start_str:
                 shift_type = "holiday"   # +35% obrigatório
+            elif yukyu_hol and is_holiday:
+                shift_type = "yukyu"
+            else:
+                continue   # domingo azul sem registro → folga
 
         elif cycle_status == "off" or is_holiday:
+            # Azul (folga) ou feriado jp/corp → só conta se tem horário
             if not start_str:
                 if yukyu_hol and is_holiday:
                     shift_type = "yukyu"
@@ -217,6 +232,7 @@ def compute_monthly_forecast(
                 shift_type = "holiday"
 
         else:
+            # Verde = dia normal de trabalho
             shift_type = default_shift
 
 
@@ -1602,7 +1618,12 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
     def mk_field(label_str, key, kb=ft.KeyboardType.NUMBER):
         def _blur(e):
             settings[key] = e.control.value.strip()
-            _save()
+            save_json(page, KEY_SETTINGS, settings)
+            # Refresh só para campos que afetam o cálculo do holerite
+            if key in ("jikyuu", "fixed_deduction", "odd_bonus",
+                       "shift_start", "shift_end", "shift_break", "shift_ot",
+                       "anchor_date", "block"):
+                refresh_all()
         return ft.TextField(
             label=label_str, value=str(settings.get(key, "")),
             keyboard_type=kb, bgcolor="#2A2A2A", color="#F0F0F0",
@@ -1683,7 +1704,7 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
         border_color="#333333", focused_border_color="#00D2C6",
         label_style=ft.TextStyle(color="#A0A0A0"),
     )
-    ded_mode_dd.on_change = lambda e: [settings.__setitem__("deduction_mode", e.control.value), save_json(page, KEY_SETTINGS, settings)]
+    ded_mode_dd.on_change = lambda e: [settings.__setitem__("deduction_mode", e.control.value), save_json(page, KEY_SETTINGS, settings), refresh_all()]
 
     pin_switch = ft.Switch(
         label="Ativar Bloqueio PIN / Biométrico",
