@@ -136,7 +136,18 @@ def calculate_shift_pay(
 
     result["net_minutes"]      = net_min
     jikyuu_per_min             = jikyuu / 60.0
-    ot_min                     = max(0, min(minutes_between(ot_dt, end_dt), net_min))
+    # OT só existe se end_dt ultrapassou ot_dt dentro do mesmo contexto de turno
+    # Usar diferença bruta sem wrap de 1 dia: se end_dt < ot_dt = sem OT
+    _ot_raw = (end_dt - ot_dt).total_seconds() / 60
+    # Se negativo, end_dt está antes de ot_dt (turno normal) — mas pode ser dia seguinte
+    # Comparar via minutes_between do turno: ot_dt é posterior a start_dt no turno
+    _start_to_ot  = minutes_between(start_dt, ot_dt)   # minutos do start ao limite OT
+    _start_to_end = minutes_between(start_dt, end_dt)   # minutos do start ao fim real
+    # OT só existe se o fim ultrapassou o limite OT dentro do turno
+    if _start_to_end > _start_to_ot:
+        ot_min = min(_start_to_end - _start_to_ot, net_min)
+    else:
+        ot_min = 0
     result["overtime_minutes"] = ot_min
     result["regular_minutes"]  = net_min - ot_min
     night_min                  = min(night_minutes_in_range(start_dt, end_dt), net_min)
@@ -192,6 +203,7 @@ def compute_monthly_forecast(
         break_min = int(ov.get("break_min", _break) or _break)
         yukyu_hol = ov.get("yukyu_on_holiday", False)
         has_time  = bool(start_str)              # tem horário registrado manualmente
+        day_abono = int(ov.get("abono", 0) or 0)   # abono/vale do dia
         is_holiday = day_num in holiday_days
 
         try:
@@ -273,7 +285,7 @@ def compute_monthly_forecast(
         if (is_sunday and not is_holiday) or status == "legal":
             total_legal += pay["total_gross"]
             days_legal  += 1
-        elif status == "holiday" or (is_holiday and not is_legal_holiday):
+        elif status == "holiday" or (is_holiday and not is_sunday):
             total_holiday += pay["total_gross"]
             days_holiday  += 1
         else:
@@ -982,9 +994,10 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
                 num_color = C_BLUE
             else:
                 num_color = CAL_TEXT_OFF
+        elif is_sunday and cycle_st == "work":
+            num_color = "#FFFFFF"   # branco sobre vermelho escuro
         elif is_sunday:
-            num_color = C_RED
-        elif is_saturday:
+            num_color = C_RED       # domingo folga — vermelho brilhante
             num_color = C_BLUE
         else:
             num_color = CAL_TEXT_WORK
@@ -1232,7 +1245,6 @@ def build_holerite_tab(page: ft.Page, state: dict, refresh_all):
 
     modo = settings.get("deduction_mode", "historical")
     fixed_val = int(settings.get("fixed_deduction") or 0)
-    print(f"[DEBUG Holerite] modo={modo} fixed_val={fixed_val}")
     if modo == "fixed":
         if fixed_val == 0:
             deduction_note = "Fixo: ¥0 (sem desconto)"
@@ -1675,7 +1687,6 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
 
 def build_settings_tab(page: ft.Page, state: dict, refresh_all):
     settings = state["settings"]
-    print(f"[DEBUG Config] deduction_mode={settings.get('deduction_mode')} fixed={settings.get('fixed_deduction')}")
 
     def _save():
         save_json(page, KEY_SETTINGS, settings)
@@ -1773,19 +1784,49 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
     )
     block_dd.on_change = lambda e: [settings.__setitem__("block", int(e.control.value)), save_json(page, KEY_SETTINGS, settings)]
 
-    ded_mode_dd = ft.Dropdown(
-        label="Modo de Desconto",
-        value=settings.get("deduction_mode", "historical"),  # lê sempre do dict atualizado
-        options=[
-            ft.dropdown.Option("historical", "Usar Média Histórica"),
-            ft.dropdown.Option("fixed",      "Desconto Fixo Manual"),
-        ],
-        bgcolor="#2A2A2A", color="#F0F0F0",
-        border_color="#333333", focused_border_color="#00D2C6",
-        label_style=ft.TextStyle(color="#A0A0A0"),
-    )
-    ded_mode_dd.on_change = lambda e: [settings.__setitem__("deduction_mode", e.control.value), save_json(page, KEY_SETTINGS, settings), refresh_all()]
+    _ded_mode_val = [settings.get("deduction_mode", "historical")]
 
+    def _set_ded_mode(mode):
+        import sys
+        _ded_mode_val[0] = mode
+        settings["deduction_mode"] = mode
+        _mem_cache[KEY_SETTINGS] = settings
+        save_json(page, KEY_SETTINGS, settings)
+        print(f"[DED_CHANGE] modo={mode}", file=sys.stderr)
+        # Atualizar visual dos botões
+        btn_hist.style = ft.ButtonStyle(
+            bgcolor=ACCENT if mode == "historical" else BG_SURFACE,
+            color="#121212" if mode == "historical" else TEXT_PRIMARY,
+        )
+        btn_fix.style = ft.ButtonStyle(
+            bgcolor=ACCENT if mode == "fixed" else BG_SURFACE,
+            color="#121212" if mode == "fixed" else TEXT_PRIMARY,
+        )
+        btn_hist.update()
+        btn_fix.update()
+        # Não chama refresh_all() — evita scroll ao topo
+        # O holerite lerá o novo modo na próxima vez que abrir a aba
+
+    _cur = settings.get("deduction_mode", "historical")
+    btn_hist = ft.FilledButton(
+        "📊 Média Histórica",
+        on_click=lambda _: _set_ded_mode("historical"),
+        style=ft.ButtonStyle(
+            bgcolor=ACCENT if _cur == "historical" else BG_SURFACE,
+            color="#121212" if _cur == "historical" else TEXT_PRIMARY,
+        ),
+        expand=1,
+    )
+    btn_fix = ft.FilledButton(
+        "✏️ Desconto Fixo",
+        on_click=lambda _: _set_ded_mode("fixed"),
+        style=ft.ButtonStyle(
+            bgcolor=ACCENT if _cur == "fixed" else BG_SURFACE,
+            color="#121212" if _cur == "fixed" else TEXT_PRIMARY,
+        ),
+        expand=1,
+    )
+    ded_mode_dd = ft.Row(controls=[btn_hist, btn_fix], spacing=8)
     pin_switch = ft.Switch(
         label="Ativar Bloqueio PIN / Biométrico",
         value=settings.get("pin_enabled", False),
@@ -2558,7 +2599,9 @@ def main(page: ft.Page):
 
     boot_load_storage(page)
 
-    settings  = load_json(page, KEY_SETTINGS,  DEFAULT_SETTINGS)
+    _raw_s   = load_json(page, KEY_SETTINGS, {})
+    settings = {**DEFAULT_SETTINGS, **(_raw_s if isinstance(_raw_s, dict) else {})}
+    _mem_cache[KEY_SETTINGS] = settings
     history   = load_json(page, KEY_HISTORY,   [])
     overrides = load_json(page, KEY_OVERRIDES, {})
     # Mesclar feriados embutidos com os importados pelo usuário
@@ -2685,7 +2728,10 @@ def main(page: ft.Page):
 
     def refresh_all():
         tab = state["active_tab"]
-        state["settings"]  = load_json(page, KEY_SETTINGS,  DEFAULT_SETTINGS)
+        # Usar settings do _mem_cache — preserva mudanças feitas via __setitem__
+        _cached = _mem_cache.get(KEY_SETTINGS)
+        if _cached and isinstance(_cached, dict):
+            state["settings"] = _cached
         state["history"]   = load_json(page, KEY_HISTORY,   [])
         state["overrides"] = load_json(page, KEY_OVERRIDES, {})
         state["holidays"]  = load_json(page, KEY_HOLIDAYS,  {})
