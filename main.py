@@ -404,23 +404,25 @@ ACCENT         = "#00D2C6"   # Destaque principal
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
-# CALENDÁRIO — cores vibrantes com presença visual (inspirado Google Calendar dark)
-WORK_COLOR     = "#1B5E20"   # Trabalho — verde escuro rico
-OFF_COLOR      = "#0D47A1"   # Folga — azul escuro rico
-HOL_COLOR      = "#B71C1C"   # Feriado nacional — vermelho escuro rico
-CAL_YUKYU      = "#E65100"   # Yukyu — laranja profundo
-CAL_CORP       = "#F57F17"   # Feriado corp — âmbar vibrante
-CAL_MODIF      = "#4A148C"   # Modificado — roxo profundo
+# CALENDÁRIO — Paleta Google Calendar oficial
+# FUNDO das células = cor Google vibrante
+# NÚMEROS = branco brilhante (#FFFFFF) sobre fundo colorido
+WORK_COLOR     = "#0F9D58"   # Sage — verde Google (fundo célula trabalho)
+OFF_COLOR      = "#4285F4"   # Peacock — azul Google (fundo célula folga)
+HOL_COLOR      = "#DB4437"   # Tomato — vermelho Google (fundo feriado JP)
+CAL_YUKYU      = "#FF6D00"   # Tangerine — laranja Google (fundo yukyu)
+CAL_CORP       = "#F4B400"   # Banana — amarelo Google (fundo feriado corp)
+CAL_MODIF      = "#7986CB"   # Lavender — lilás Google (fundo modificado)
 
-# TEXTO DOS DIAS (branco sobre fundos vibrantes — máximo contraste)
-CAL_TEXT_WORK  = "#A5D6A7"   # Verde claro sobre verde escuro
-CAL_TEXT_OFF   = "#90CAF9"   # Azul claro sobre azul escuro
-CAL_TEXT_HOL   = "#EF9A9A"   # Vermelho claro sobre vermelho
-CAL_TEXT_CORP  = "#FFE082"   # Amarelo claro sobre âmbar
-CAL_TEXT_YUKYU = "#FFCC80"   # Laranja claro sobre laranja
-CAL_TEXT_MODIF = "#CE93D8"   # Lilás claro sobre roxo
-CAL_BORDER_WORK= "#4CAF50"   # Borda verde vibrante
-CAL_BORDER_OFF = "#2196F3"   # Borda azul vibrante
+# NÚMEROS — brancos brilhantes sobre fundo colorido
+CAL_TEXT_WORK  = "#FFFFFF"   # branco sobre verde
+CAL_TEXT_OFF   = "#FFFFFF"   # branco sobre azul
+CAL_TEXT_HOL   = "#FFFFFF"   # branco sobre vermelho
+CAL_TEXT_CORP  = "#212121"   # escuro sobre amarelo (legibilidade)
+CAL_TEXT_YUKYU = "#FFFFFF"   # branco sobre laranja
+CAL_TEXT_MODIF = "#FFFFFF"   # branco sobre lilás
+CAL_BORDER_WORK= "#34A853"   # borda verde mais clara
+CAL_BORDER_OFF = "#669DF6"   # borda azul mais clara
 
 # TEXTO
 TEXT_PRIMARY   = "#F0F0F0"   # Texto principal
@@ -778,8 +780,8 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
     C_MODIF   = CAL_MODIF     # roxo escuro — modificado
     C_TODAY_B = "#00C2A8"     # borda turquesa hoje
     C_WHITE   = "#F9F9F9"     # texto claro sobre fundo escuro
-    C_RED     = "#f87171"     # domingo — vermelho claro
-    C_BLUE    = "#60a5fa"     # sábado — azul claro
+    C_RED     = "#FF5252"     # domingo — vermelho brilhante
+    C_BLUE    = "#40C4FF"     # sábado — azul brilhante
 
     # ── Day cell ─────────────────────────────────────────────────────
     def day_cell(day_num: int):
@@ -864,13 +866,19 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
             indicator = ""
             ind_color = C_WHITE
 
-        # ── Borda ────────────────────────────────────────────────────
+        # ── Borda 2px + cor específica por tipo ─────────────────────
         if is_today:
-            border = ft.Border.all(2, YEN_GOLD)
+            border = ft.Border.all(3, C_TODAY_B)
         elif modified:
-            border = ft.Border.all(1, "#00C2A8")
+            border = ft.Border.all(2, CAL_BORDER_MODIF)
+        elif is_corp_hol:
+            border = ft.Border.all(2, CAL_BORDER_CORP)
+        elif is_hol:
+            border = ft.Border.all(2, CAL_BORDER_HOL)
+        elif cycle_st == "off":
+            border = ft.Border.all(2, CAL_BORDER_OFF)
         else:
-            border = ft.Border.all(1, "#2a1a3a")
+            border = ft.Border.all(2, CAL_BORDER_WORK)
 
         # No 0.85 o GestureDetector precisa de expand=True ou o Container
         # precisa de on_click direto. Usamos um ElevatedButton sem estilo
@@ -883,9 +891,9 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
                 controls=[
                     ft.Row(
                         controls=[
-                            ft.Text(str(day_num), size=scaled(13),
+                            ft.Text(str(day_num), size=scaled(14),
                                     color=num_color,
-                                    weight=ft.FontWeight.W_700),
+                                    weight=ft.FontWeight.W_800),
                             ft.Text(indicator, size=scaled(8),
                                     color=ind_color),
                         ],
@@ -900,7 +908,7 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
             width=scaled(46), height=scaled(48),
             on_click=_tap_handler,
             ink=True,
-            ink_color="#ffffff44",
+            ink_color="#ffffff66",
         )
 
     # ── Grid — semana começa no DOMINGO ─────────────────────────────
@@ -963,9 +971,16 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
 
     def _leg(color, label):
         return ft.Row([
-            ft.Container(width=scaled(12), height=scaled(12),
-                         bgcolor=color, border_radius=3,
-                         border=ft.Border.all(1, "#333333")),
+            ft.Container(
+                width=scaled(14), height=scaled(14),
+                bgcolor=color, border_radius=4,
+                border=ft.Border.all(2, "#FFFFFF44"),
+                shadow=ft.BoxShadow(
+                    blur_radius=4, spread_radius=0,
+                    color="#00000055",
+                    offset=ft.Offset(0, 2),
+                ),
+            ),
             ft.Text(label, size=scaled(10), color=TEXT_PRIMARY,
                     weight=ft.FontWeight.W_600),
         ], spacing=4)
@@ -1300,46 +1315,47 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
         win_w = page.window_width or 420
         win_h = page.window_height or 760
 
-        # Usar padding=16 no lado direito para reservar espaço da barra de scroll
-        # e clip_behavior para não vazar conteúdo
-        fields_col = ft.Column(
+        # Solução definitiva: padding nos campos internos + scroll na Column
+        # A barra de scroll ocupa ~12px no lado direito
+        # Adicionamos padding_right nos campos via wrapper por linha
+        def _padded_row(*fields):
+            return ft.Container(
+                content=ft.Row(list(fields), spacing=4, wrap=False),
+                padding=ft.Padding(left=0, right=14, top=0, bottom=0),
+            )
+
+        content = ft.Column(
             controls=[
-                month_f,
+                ft.Container(month_f,
+                    padding=ft.Padding(left=0, right=14, top=0, bottom=0)),
                 _sec("勤怠 FREQUÊNCIA / DIAS"),
-                _row(f_dias, f_kyujitsu, f_hokyujitsu),
-                _row(f_kekkin, f_yukyu, f_tokyu),
-                _row(f_chikoku, f_kyugyo),
+                _padded_row(f_dias, f_kyujitsu, f_hokyujitsu),
+                _padded_row(f_kekkin, f_yukyu, f_tokyu),
+                _padded_row(f_chikoku, f_kyugyo),
                 _sec("時間 HORAS TRABALHADAS"),
-                _row(f_shonai, f_shogai, f_hochgai),
-                _row(f_shinyam, f_kyushutsu, f_hokyu_h),
-                _row(f_60h, f_yukyu_h, f_jitsuro),
-                f_kojo_h,
+                _padded_row(f_shonai, f_shogai, f_hochgai),
+                _padded_row(f_shinyam, f_kyushutsu, f_hokyu_h),
+                _padded_row(f_60h, f_yukyu_h, f_jitsuro),
+                ft.Container(f_kojo_h,
+                    padding=ft.Padding(left=0, right=14, top=0, bottom=0)),
                 _sec("支給 VENCIMENTOS"),
-                _row(f_kihon, f_shonai_k, f_shogai_k),
-                _row(f_zangyo, f_yakin, f_kyushu),
-                _row(f_kanri, f_gijutsu, f_leader),
-                _row(f_seisan, f_hosho, f_tsukkin),
-                _row(f_ta_teate, f_ikkin, f_60h_teate),
+                _padded_row(f_kihon, f_shonai_k, f_shogai_k),
+                _padded_row(f_zangyo, f_yakin, f_kyushu),
+                _padded_row(f_kanri, f_gijutsu, f_leader),
+                _padded_row(f_seisan, f_hosho, f_tsukkin),
+                _padded_row(f_ta_teate, f_ikkin, f_60h_teate),
                 _sec("控除 DESCONTOS"),
-                _row(f_kenpo, f_kaigo, f_nenkin),
-                _row(f_koyo, f_shotoku, f_jumin),
-                f_ta_kojo,
+                _padded_row(f_kenpo, f_kaigo, f_nenkin),
+                _padded_row(f_koyo, f_shotoku, f_jumin),
+                ft.Container(f_ta_kojo,
+                    padding=ft.Padding(left=0, right=14, top=0, bottom=0)),
                 _sec("TOTAIS"),
-                _row(f_gross, f_ded, f_net),
+                _padded_row(f_gross, f_ded, f_net),
                 ft.Container(height=16),
             ],
             spacing=5, tight=True,
+            scroll=ft.ScrollMode.ALWAYS,
         )
-        content = ft.Container(
-            content=ft.Column(
-                controls=[fields_col],
-                scroll=ft.ScrollMode.ALWAYS,
-                spacing=0,
-            ),
-            padding=ft.Padding(left=0, right=18, top=0, bottom=0),
-            clip_behavior=ft.ClipBehavior.HARD_EDGE,
-        )
-
         panel_w = min(int(win_w * 0.95), 480)
         panel_h = min(int(win_h * 0.88), 700)
 
@@ -1354,8 +1370,10 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
                                       style=ft.ButtonStyle(color=TEXT_SECONDARY)),
                     ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
                     ft.Divider(height=1, color="#333333"),
-                    ft.Container(content=content,
-                                 expand=True, clip_behavior=ft.ClipBehavior.HARD_EDGE),
+                    ft.Container(
+                        content=content,
+                        expand=True,
+                    ),
                     ft.Divider(height=1, color="#333333"),
                     ft.Row(controls=[
                         ft.TextButton("Cancelar", on_click=_close,
