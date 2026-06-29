@@ -519,7 +519,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2606292147"        # Atualizado a cada deploy
+BUILD_ID       = "2606300714"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -2465,11 +2465,11 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
                     _item("有休 Yukyu — Célula Laranja", "8h base fixo sem hora extra e noturno",
                           "Com horário → paga as horas efetivas. Sem horário → 8h fixo."),
                     _item("欠勤 Falta — Célula Roxa", "¥0 — não remunerada",
+                          "O campo horário é ignorado. Falta = sem pagamento."),
                     _item("↓", "Saída Antecipada — Célula Verde-azulado",
                           "Selecione no dropdown e preencha o horário de saída real. Hora extra = 0 se saiu antes do limite."),
                     _item("💴", "Abono / Vale do dia (¥)",
                           "Campo no modal de ponto. Valor de abono ou vale do dia. Acumulado no holerite."),
-                          "O campo horário é ignorado. Falta = sem pagamento."),
             _item("Trabalho em Folga/Feriado", "Preencha Entrada e Saída",
                   "+35% automático. Vale para folga, feriado e domingo."),
             _item("有休 em Feriado Corporativo",
