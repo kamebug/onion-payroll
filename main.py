@@ -1617,13 +1617,16 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
 
     def mk_field(label_str, key, kb=ft.KeyboardType.NUMBER):
         def _blur(e):
-            settings[key] = e.control.value.strip()
+            v = e.control.value.strip()
+            # Converter para int se for campo numérico
+            if kb == ft.KeyboardType.NUMBER:
+                try: v = int(v or 0)
+                except: v = 0
+                e.control.value = str(v)
+                e.control.update()
+            settings[key] = v
             save_json(page, KEY_SETTINGS, settings)
-            # Refresh só para campos que afetam o cálculo do holerite
-            if key in ("jikyuu", "fixed_deduction", "odd_bonus",
-                       "shift_start", "shift_end", "shift_break", "shift_ot",
-                       "anchor_date", "block"):
-                refresh_all()
+            # Sem refresh_all() — sem scroll ao topo
         return ft.TextField(
             label=label_str, value=str(settings.get(key, "")),
             keyboard_type=kb, bgcolor="#2A2A2A", color="#F0F0F0",
@@ -1643,7 +1646,7 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
         border_color="#333333", focused_border_color="#00D2C6",
         label_style=ft.TextStyle(color="#A0A0A0"),
     )
-    group_dd.on_change = lambda e: [settings.__setitem__("group", e.control.value), save_json(page, KEY_SETTINGS, settings)]
+    group_dd.on_change = lambda e: [settings.__setitem__("group", e.control.value), save_json(page, KEY_SETTINGS, settings), refresh_all()]
 
     shift_type_dd = ft.Dropdown(
         label="Turno 勤務",
@@ -1656,7 +1659,7 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
         border_color="#333333", focused_border_color="#00D2C6",
         label_style=ft.TextStyle(color="#A0A0A0"),
     )
-    shift_type_dd.on_change = lambda e: [settings.__setitem__("shift_type", e.control.value), save_json(page, KEY_SETTINGS, settings)]
+    shift_type_dd.on_change = lambda e: [settings.__setitem__("shift_type", e.control.value), save_json(page, KEY_SETTINGS, settings), refresh_all()]
 
     def _tf_shift(lbl, key, hint="HH:MM"):
         f = ft.TextField(
@@ -1704,7 +1707,7 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
         border_color="#333333", focused_border_color="#00D2C6",
         label_style=ft.TextStyle(color="#A0A0A0"),
     )
-    ded_mode_dd.on_change = lambda e: [settings.__setitem__("deduction_mode", e.control.value), save_json(page, KEY_SETTINGS, settings), refresh_all()]
+    ded_mode_dd.on_change = lambda e: [settings.__setitem__("deduction_mode", e.control.value), save_json(page, KEY_SETTINGS, settings)]
 
     pin_switch = ft.Switch(
         label="Ativar Bloqueio PIN / Biométrico",
