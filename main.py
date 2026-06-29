@@ -1431,6 +1431,13 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
             try: return int(f.value or 0)
             except: return 0
 
+        def _vf(f):
+            """Lê campo como float — para horas (ex: 155.5)"""
+            try:
+                v = (f.value or "0").replace(",", ".")
+                return float(v)
+            except: return 0.0
+
         def _save(_=None):
             g, d = _vi(f_gross), _vi(f_ded)
             entry = {
@@ -1448,15 +1455,15 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
                 "dias_chikoku":  _vi(f_chikoku),
                 "dias_kyugyo":   _vi(f_kyugyo),
                 # Horas
-                "h_shonai":   _vi(f_shonai),
-                "h_shogai":   _vi(f_shogai),
+                "h_shonai":   _vf(f_shonai),
+                "h_shogai":   _vf(f_shogai),
                 "h_hochgai":  _vi(f_hochgai),
                 "h_shinya":   _vi(f_shinyam),
                 "h_kyushu":   _vi(f_kyushutsu),
                 "h_hokyu":    _vi(f_hokyu_h),
                 "h_60":       _vi(f_60h),
                 "h_yukyu":    _vi(f_yukyu_h),
-                "h_jitsuro":  _vi(f_jitsuro),
+                "h_jitsuro":  _vf(f_jitsuro),
                 "h_kojo":     _vi(f_kojo_h),
                 # Vencimentos
                 "kihon":      _vi(f_kihon),
