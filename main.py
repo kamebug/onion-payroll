@@ -1162,7 +1162,7 @@ def build_holerite_tab(page: ft.Page, state: dict, refresh_all):
         except: pass
         try: state["extra_bonus"] = int(extra_f.value or 0)
         except: pass
-        refresh_all()
+        # Não chama refresh_all() — evita scroll voltar ao topo
 
     odd_f.on_blur   = _upd_bonus
     extra_f.on_blur = _upd_bonus
@@ -1597,7 +1597,7 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
 
     def _save():
         save_json(page, KEY_SETTINGS, settings)
-        refresh_all()
+        # Não chama refresh_all() — evita scroll voltar ao topo
 
     def mk_field(label_str, key, kb=ft.KeyboardType.NUMBER):
         def _blur(e):
@@ -1622,7 +1622,7 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
         border_color="#333333", focused_border_color="#00D2C6",
         label_style=ft.TextStyle(color="#A0A0A0"),
     )
-    group_dd.on_change = lambda e: [settings.__setitem__("group", e.control.value), _save()]
+    group_dd.on_change = lambda e: [settings.__setitem__("group", e.control.value), save_json(page, KEY_SETTINGS, settings)]
 
     shift_type_dd = ft.Dropdown(
         label="Turno 勤務",
@@ -1635,7 +1635,7 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
         border_color="#333333", focused_border_color="#00D2C6",
         label_style=ft.TextStyle(color="#A0A0A0"),
     )
-    shift_type_dd.on_change = lambda e: [settings.__setitem__("shift_type", e.control.value), _save()]
+    shift_type_dd.on_change = lambda e: [settings.__setitem__("shift_type", e.control.value), save_json(page, KEY_SETTINGS, settings)]
 
     def _tf_shift(lbl, key, hint="HH:MM"):
         f = ft.TextField(
@@ -1670,7 +1670,7 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
         border_color="#333333", focused_border_color="#00D2C6",
         label_style=ft.TextStyle(color="#A0A0A0"),
     )
-    block_dd.on_change = lambda e: [settings.__setitem__("block", int(e.control.value)), _save()]
+    block_dd.on_change = lambda e: [settings.__setitem__("block", int(e.control.value)), save_json(page, KEY_SETTINGS, settings)]
 
     ded_mode_dd = ft.Dropdown(
         label="Modo de Desconto",
@@ -1683,7 +1683,7 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
         border_color="#333333", focused_border_color="#00D2C6",
         label_style=ft.TextStyle(color="#A0A0A0"),
     )
-    ded_mode_dd.on_change = lambda e: [settings.__setitem__("deduction_mode", e.control.value), _save()]
+    ded_mode_dd.on_change = lambda e: [settings.__setitem__("deduction_mode", e.control.value), save_json(page, KEY_SETTINGS, settings)]
 
     pin_switch = ft.Switch(
         label="Ativar Bloqueio PIN / Biométrico",
@@ -1691,7 +1691,7 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
         active_color=ACCENT,
         label_text_style=ft.TextStyle(color=TEXT_SECONDARY),
     )
-    pin_switch.on_change = lambda e: [settings.__setitem__("pin_enabled", e.control.value), _save()]
+    pin_switch.on_change = lambda e: [settings.__setitem__("pin_enabled", e.control.value), save_json(page, KEY_SETTINGS, settings)]
 
     def _import_csv(_):
         """No PWA, FilePicker não funciona — usar textarea para colar o CSV."""
