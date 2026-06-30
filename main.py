@@ -584,7 +584,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2606302140"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2606302157"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -986,12 +986,13 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
         )
         bg = ft.Container(
             content=ft.Column(
-                controls=[panel],
-                alignment=ft.MainAxisAlignment.CENTER,
+                controls=[ft.Container(height=20), panel],
+                alignment=ft.MainAxisAlignment.START,
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                scroll=ft.ScrollMode.AUTO,
             ),
             bgcolor="#CC000000", expand=True, blur=ft.Blur(4, 4),
-            alignment=ft.Alignment(0, 0),
+            alignment=ft.Alignment(0, -1),
         )
         ov_ref[0] = bg
         page.overlay.append(bg)
@@ -1627,6 +1628,29 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
             controls=[
                 ft.Container(month_f,
                     padding=ft.Padding(left=0, right=14, top=0, bottom=0)),
+
+                # ── Campos obrigatórios PRIMEIRO — sem precisar rolar ──────
+                ft.Container(
+                    content=ft.Column(controls=[
+                        ft.Text("⭐ OBRIGATÓRIOS — necessários para o cálculo",
+                                size=10, color=ACCENT, weight=ft.FontWeight.W_700),
+                        _padded_row(f_gross, f_ded, f_net),
+                    ], spacing=4, tight=True),
+                    bgcolor="#1A2E2C",
+                    border_radius=10,
+                    border=ft.Border.all(1, ACCENT),
+                    padding=ft.Padding(left=10, right=10, top=8, bottom=8),
+                    margin=ft.Padding(left=0, right=0, top=4, bottom=8),
+                ),
+
+                ft.Container(
+                    content=ft.Text(
+                        "Os campos abaixo são opcionais — apenas para seu registro pessoal.",
+                        size=10, color=TEXT_MUTED,
+                    ),
+                    padding=ft.Padding(left=0, right=0, top=0, bottom=6),
+                ),
+
                 _sec("勤怠 FREQUÊNCIA / DIAS"),
                 _padded_row(f_dias, f_kyujitsu, f_hokyujitsu),
                 _padded_row(f_kekkin, f_yukyu, f_tokyu),
@@ -1648,15 +1672,13 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
                 _padded_row(f_koyo, f_shotoku, f_jumin),
                 ft.Container(f_ta_kojo,
                     padding=ft.Padding(left=0, right=14, top=0, bottom=0)),
-                _sec("TOTAIS"),
-                _padded_row(f_gross, f_ded, f_net),
-                ft.Container(height=16),
+                ft.Container(height=40),  # espaço extra no final p/ teclado não cobrir
             ],
             spacing=5, tight=True,
             scroll=ft.ScrollMode.ALWAYS,
         )
         panel_w = min(int(win_w * 0.95), 480)
-        panel_h = min(int(win_h * 0.88), 700)
+        panel_h = min(int(win_h * 0.94), 760)  # mais alto — sobra espaço quando teclado abre
 
         panel = ft.Container(
             content=ft.Column(
