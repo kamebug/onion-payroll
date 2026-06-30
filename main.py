@@ -584,7 +584,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2606302057"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2606302140"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -1419,9 +1419,12 @@ def build_holerite_tab(page: ft.Page, state: dict, refresh_all):
 def build_history_tab(page: ft.Page, state: dict, refresh_all):
     history = state["history"]
 
-    def open_log_modal(_):
+    def open_log_modal(_, edit_entry=None):
         # Campos do holerite japonês baseados no modelo real
         # Cada campo: label JP + PT, teclado numérico
+        # edit_entry: se fornecido, pré-preenche os campos para edição
+        ee = edit_entry or {}
+
         def _tf(lbl, kb=ft.KeyboardType.NUMBER, val=""):
             return ft.TextField(
                 label=lbl, value=val, keyboard_type=kb,
@@ -1454,60 +1457,64 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
 
         # ── Mês ──────────────────────────────────────────────────────
         month_f = _tf("Mês 月 (AAAA-MM)", ft.KeyboardType.TEXT,
-                      date.today().strftime("%Y-%m"))
+                      ee.get("month", date.today().strftime("%Y-%m")))
+
+        def _v(key, default=""):
+            v = ee.get(key, default)
+            return str(v) if v else default
 
         # ── 勤怠 Frequência ──────────────────────────────────────────
-        f_dias      = _tf("平日出勤 Dias Úteis")
-        f_kyujitsu  = _tf("所休出 Trab.Folga")
-        f_hokyujitsu= _tf("法休出 Trab.Feriado")
-        f_kekkin    = _tf("欠勤 Faltas")
-        f_yukyu     = _tf("有休 Férias Pagas")
-        f_tokyu     = _tf("特休有給 Lic.Especial")
-        f_chikoku   = _tf("遅早 Atrasos/Saídas")
-        f_kyugyo    = _tf("休業 Afastamento")
+        f_dias      = _tf("平日出勤 Dias Úteis", val=_v("dias_uteis"))
+        f_kyujitsu  = _tf("所休出 Trab.Folga", val=_v("dias_kyujitsu"))
+        f_hokyujitsu= _tf("法休出 Trab.Feriado", val=_v("dias_hokyu"))
+        f_kekkin    = _tf("欠勤 Faltas", val=_v("dias_falta"))
+        f_yukyu     = _tf("有休 Férias Pagas", val=_v("dias_yukyu"))
+        f_tokyu     = _tf("特休有給 Lic.Especial", val=_v("dias_tokyu"))
+        f_chikoku   = _tf("遅早 Atrasos/Saídas", val=_v("dias_chikoku"))
+        f_kyugyo    = _tf("休業 Afastamento", val=_v("dias_kyugyo"))
 
         # ── 時間 Horas ───────────────────────────────────────────────
-        f_shonai    = _tf("所定内 Hrs Normal")
-        f_shogai    = _tf("所定外 Hrs Extra Pad.")
-        f_hochgai   = _tf("法定外 Hrs Extra Legal")
-        f_shinyam   = _tf("深夜 Hrs Noturnas")
-        f_kyushutsu = _tf("所休出 Hrs Folga Trab.")
-        f_hokyu_h   = _tf("法休出 Hrs Feriado Trab.")
-        f_60h       = _tf("60h超時間 Hrs +60h/mês")
-        f_yukyu_h   = _tf("有休時間 Hrs Férias")
-        f_jitsuro   = _tf("実働時間 Hrs Efetivas")
-        f_kojo_h    = _tf("控除時間 Hrs Desconto")
+        f_shonai    = _tf("所定内 Hrs Normal", val=_v("h_shonai"))
+        f_shogai    = _tf("所定外 Hrs Extra Pad.", val=_v("h_shogai"))
+        f_hochgai   = _tf("法定外 Hrs Extra Legal", val=_v("h_hochgai"))
+        f_shinyam   = _tf("深夜 Hrs Noturnas", val=_v("h_shinya"))
+        f_kyushutsu = _tf("所休出 Hrs Folga Trab.", val=_v("h_kyushu"))
+        f_hokyu_h   = _tf("法休出 Hrs Feriado Trab.", val=_v("h_hokyu"))
+        f_60h       = _tf("60h超時間 Hrs +60h/mês", val=_v("h_60"))
+        f_yukyu_h   = _tf("有休時間 Hrs Férias", val=_v("h_yukyu"))
+        f_jitsuro   = _tf("実働時間 Hrs Efetivas", val=_v("h_jitsuro"))
+        f_kojo_h    = _tf("控除時間 Hrs Desconto", val=_v("h_kojo"))
 
         # ── 支給 Vencimentos ─────────────────────────────────────────
-        f_kihon     = _tf("基本給 Salário Base")
-        f_shonai_k  = _tf("所定内金額 Val.Normal")
-        f_shogai_k  = _tf("所定外手当 HE Padrão")
-        f_zangyo    = _tf("残業手当 Hora Extra +25%")
-        f_yakin     = _tf("深夜手当 Ad.Noturno +25%")
-        f_kyushu    = _tf("休出手当 Trab.Feriado +35%")
-        f_kanri     = _tf("管理手当 Ad.Gestão")
-        f_gijutsu   = _tf("技術手当 Ad.Técnico")
-        f_leader    = _tf("リーダー手当 Ad.Líder")
-        f_seisan    = _tf("精算金 Acerto")
-        f_hosho     = _tf("報奨金 Bônus")
-        f_tsukkin   = _tf("通勤手当 V.Transporte")
-        f_ta_teate  = _tf("他手当 Outros Ad.")
-        f_ikkin     = _tf("一時金 Gratificação")
-        f_60h_teate = _tf("60h超手当 Ad.+60h")
+        f_kihon     = _tf("基本給 Salário Base", val=_v("kihon"))
+        f_shonai_k  = _tf("所定内金額 Val.Normal", val=_v("shonai_k"))
+        f_shogai_k  = _tf("所定外手当 HE Padrão", val=_v("shogai_k"))
+        f_zangyo    = _tf("残業手当 Hora Extra +25%", val=_v("zangyo"))
+        f_yakin     = _tf("深夜手当 Ad.Noturno +25%", val=_v("yakin"))
+        f_kyushu    = _tf("休出手当 Trab.Feriado +35%", val=_v("kyushutsu"))
+        f_kanri     = _tf("管理手当 Ad.Gestão", val=_v("kanri"))
+        f_gijutsu   = _tf("技術手当 Ad.Técnico", val=_v("gijutsu"))
+        f_leader    = _tf("リーダー手当 Ad.Líder", val=_v("leader"))
+        f_seisan    = _tf("精算金 Acerto", val=_v("seisan"))
+        f_hosho     = _tf("報奨金 Bônus", val=_v("hosho"))
+        f_tsukkin   = _tf("通勤手当 V.Transporte", val=_v("tsukkin"))
+        f_ta_teate  = _tf("他手当 Outros Ad.", val=_v("ta_teate"))
+        f_ikkin     = _tf("一時金 Gratificação", val=_v("ikkin"))
+        f_60h_teate = _tf("60h超手当 Ad.+60h", val=_v("teate_60"))
 
         # ── 控除 Descontos ───────────────────────────────────────────
-        f_kenpo     = _tf("健康保険 Plano Saúde")
-        f_kaigo     = _tf("介護保険 Seg.Enfermagem")
-        f_nenkin    = _tf("厚生年金 Previdência")
-        f_koyo      = _tf("雇用保険 Seg.Desemprego")
-        f_shotoku   = _tf("所得税 Imp.de Renda")
-        f_jumin     = _tf("住民税 Imp.Municipal")
-        f_ta_kojo   = _tf("他控除 Outros Desc.")
+        f_kenpo     = _tf("健康保険 Plano Saúde", val=_v("kenpo"))
+        f_kaigo     = _tf("介護保険 Seg.Enfermagem", val=_v("kaigo"))
+        f_nenkin    = _tf("厚生年金 Previdência", val=_v("nenkin"))
+        f_koyo      = _tf("雇用保険 Seg.Desemprego", val=_v("koyo"))
+        f_shotoku   = _tf("所得税 Imp.de Renda", val=_v("shotoku"))
+        f_jumin     = _tf("住民税 Imp.Municipal", val=_v("jumin"))
+        f_ta_kojo   = _tf("他控除 Outros Desc.", val=_v("ta_kojo"))
 
         # ── Totais ───────────────────────────────────────────────────
-        f_gross     = _tf_obrigatorio("総支給額 Total Bruto")
-        f_ded       = _tf_obrigatorio("控除合計 Total Desc.")
-        f_net       = _tf_obrigatorio("差引支給額 Salário Líq.")
+        f_gross     = _tf_obrigatorio("総支給額 Total Bruto", val=_v("gross"))
+        f_ded       = _tf_obrigatorio("控除合計 Total Desc.", val=_v("deductions"))
+        f_net       = _tf_obrigatorio("差引支給額 Salário Líq.", val=_v("net"))
 
         ov_ref = [None]
 
@@ -1526,6 +1533,14 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
                 v = (f.value or "0").replace(",", ".")
                 return float(v)
             except: return 0.0
+
+        def _remove_entry(_=None):
+            if edit_entry:
+                state["history"] = [e for e in state["history"]
+                                     if e.get("month") != edit_entry.get("month")]
+                save_json(page, KEY_HISTORY, state["history"])
+            _close()
+            refresh_all()
 
         def _save(_=None):
             g, d = _vi(f_gross), _vi(f_ded)
@@ -1579,8 +1594,13 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
                 "jumin":      _vi(f_jumin),
                 "ta_kojo":    _vi(f_ta_kojo),
             }
-            state["history"] = [e for e in history
-                                 if e.get("month") != entry["month"]]
+            # Remove tanto o mês antigo (se editando e mudou o mês) quanto
+            # qualquer registro existente com o novo mês (evita duplicar)
+            _old_month = edit_entry.get("month") if edit_entry else None
+            state["history"] = [
+                e for e in history
+                if e.get("month") != entry["month"] and e.get("month") != _old_month
+            ]
             state["history"].append(entry)
             state["history"].sort(key=lambda x: x["month"], reverse=True)
             save_json(page, KEY_HISTORY, state["history"])
@@ -1663,10 +1683,15 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
                     ),
                     ft.Divider(height=1, color="#333333"),
                     ft.Row(controls=[
-                        ft.TextButton("Cancelar", on_click=_close,
-                                      style=ft.ButtonStyle(color=TEXT_SECONDARY)),
-                        ft.FilledButton("Salvar", on_click=_save,
-                                        style=ft.ButtonStyle(bgcolor=ACCENT, color="#121212")),
+                        ft.TextButton("Remover", on_click=_remove_entry,
+                                      style=ft.ButtonStyle(color=DANGER))
+                        if edit_entry else ft.Container(),
+                        ft.Row(controls=[
+                            ft.TextButton("Cancelar", on_click=_close,
+                                          style=ft.ButtonStyle(color=TEXT_SECONDARY)),
+                            ft.FilledButton("Salvar", on_click=_save,
+                                            style=ft.ButtonStyle(bgcolor=ACCENT, color="#121212")),
+                        ], spacing=8),
                     ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
                 ],
                 spacing=8, tight=True, expand=True,
@@ -1706,12 +1731,15 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
             v = e.get(key, 0)
             if v: subs.append(f"{lbl}:{yen(v)}")
         sub_txt = "  ".join(subs) if subs else ""
-        return card(
-            ft.Column(controls=[
+        return ft.Container(
+            content=ft.Column(controls=[
                 ft.Row(controls=[
                     ft.Text(e.get("month",""), size=13,
                             color=ACCENT_LITE, weight=ft.FontWeight.W_700),
-                    ft.Text(f"Desc: {rt:.1f}%", size=11, color=TEXT_MUTED),
+                    ft.Row(controls=[
+                        ft.Text(f"Desc: {rt:.1f}%", size=11, color=TEXT_MUTED),
+                        ft.Text("✏️", size=12, color=TEXT_MUTED),
+                    ], spacing=6),
                 ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
                 ft.Row(controls=[
                     ft.Column(controls=[
@@ -1734,7 +1762,11 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
                 ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
                 ft.Text(sub_txt, size=10, color=TEXT_MUTED) if sub_txt else ft.Container(height=0),
             ], spacing=4, tight=True),
+            bgcolor=BG_CARD, border_radius=16,
             padding=12, margin=4,
+            border=ft.Border.all(1, "#333333"),
+            on_click=lambda _, entry=e: open_log_modal(None, edit_entry=entry),
+            ink=True, ink_color="#00D2C633",
         )
     history_cards = [_history_card(e) for e in history[:24]]
 
