@@ -488,87 +488,76 @@ DEFAULT_SETTINGS = {
 _mem_cache: dict = {}
 
 
-def _has_client_storage(page: ft.Page) -> bool:
-    """Verifica se page.client_storage existe (modo PWA/web WASM)."""
+def _has_shared_prefs(page: ft.Page) -> bool:
+    """Verifica se page.shared_preferences existe (Flet >= 0.80)."""
     try:
-        cs = page.client_storage
-        return cs is not None
+        sp = page.shared_preferences
+        return sp is not None
     except Exception:
         return False
 
 
 def load_json(page: ft.Page, key: str, default):
-    """Lê do cache em memória (já populado no boot)."""
+    """Lê do cache em memória (já populado no boot, de forma síncrona
+    a partir dos dados carregados via shared_preferences assíncrono)."""
     if key in _mem_cache:
         return _mem_cache[key]
     return default
 
 
 def save_json(page: ft.Page, key: str, value):
-    """Salva no cache + persiste em AMBOS client_storage e localStorage
-    como redundância dupla.
-
-    client_storage é a API nativa do Flet para PWA/WASM e é tentada
-    primeiro. localStorage via eval_js é gravado em seguida como
-    backup adicional — vinculado apenas ao domínio, sobrevive a
-    deploys e funciona mesmo se client_storage falhar silenciosamente."""
+    """Salva no cache em memória IMEDIATAMENTE (síncrono — a UI sempre
+    reflete o dado mais recente), e dispara a gravação persistente em
+    segundo plano via page.shared_preferences (API atual do Flet,
+    assíncrona). Isso é 'fire and forget': não bloqueia a UI, mas
+    garante persistência real em disco do dispositivo."""
     _mem_cache[key] = value
     serialized = json.dumps(value)
 
-    # 1) client_storage primeiro — API nativa, mais confiável em PWA
-    if _has_client_storage(page):
+    async def _persist():
         try:
-            page.client_storage.set(key, serialized)
+            if _has_shared_prefs(page):
+                await page.shared_preferences.set(key, serialized)
         except Exception:
             pass
 
-    # 2) localStorage como backup redundante
     try:
-        safe = serialized.replace("\\", "\\\\").replace("`", "\\`")
-        page.eval_js(f"localStorage.setItem(\'{key}\', `{safe}`)")
+        page.run_task(_persist)
     except Exception:
         pass
 
 
 def remove_storage(page: ft.Page, key: str):
     _mem_cache.pop(key, None)
-    if _has_client_storage(page):
+
+    async def _remove():
         try:
-            page.client_storage.remove(key)
-            return
+            if _has_shared_prefs(page):
+                await page.shared_preferences.remove(key)
         except Exception:
             pass
+
     try:
-        page.eval_js(f"localStorage.removeItem(\'{key}\')")
+        page.run_task(_remove)
     except Exception:
         pass
 
 
-def boot_load_storage(page: ft.Page):
-    """Lê todos os dados persistidos e popula o cache.
+async def boot_load_storage(page: ft.Page):
+    """Lê todos os dados persistidos via shared_preferences (API atual
+    do Flet >= 0.80, assíncrona) e popula o cache em memória.
 
-    IMPORTANTE: page.client_storage é a API NATIVA do Flet para
-    armazenamento em modo Web/PWA/WASM, e funciona de forma confiável
-    mesmo com o runtime Python rodando em Web Worker separado (Pyodide).
-    eval_js() pode ter problemas de sincronização nesse cenário, então
-    é usado apenas como FALLBACK secundário."""
+    Esta função é async e DEVE ser aguardada (await) antes de montar
+    a UI, garantindo que os dados salvos anteriormente estejam
+    disponíveis assim que o app aparecer na tela."""
+    if not _has_shared_prefs(page):
+        return
     for key in (KEY_SETTINGS, KEY_HISTORY, KEY_OVERRIDES,
                 KEY_HOLIDAYS, "onion_holidays_corp"):
-        raw = None
-
-        # 1) client_storage primeiro — API nativa, mais confiável em PWA
-        if _has_client_storage(page):
-            try:
-                raw = page.client_storage.get(key)
-            except Exception:
-                pass
-
-        # 2) Fallback: localStorage via eval_js
-        if raw in (None, "null", "undefined", ""):
-            try:
-                raw = page.eval_js(f"localStorage.getItem(\'{key}\')")
-            except Exception:
-                pass
+        try:
+            raw = await page.shared_preferences.get(key)
+        except Exception:
+            raw = None
 
         if raw and raw not in ("null", "undefined", None, ""):
             try:
@@ -600,7 +589,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2606302356"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607010013"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -1888,45 +1877,36 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
 
     def _run_diagnostic(_=None):
         import datetime as _dt
-        lines = []
         ts = _dt.datetime.now().strftime("%H:%M:%S")
 
-        try:
-            cs = page.client_storage
-            lines.append(f"1) client_storage existe: {'sim' if cs is not None else 'NAO'}")
-        except Exception as e:
-            lines.append(f"1) client_storage ERRO: {e}")
+        async def _do_diag():
+            lines = []
+            try:
+                sp = page.shared_preferences
+                lines.append(f"1) shared_preferences existe: {'sim' if sp is not None else 'NAO'}")
+            except Exception as e:
+                lines.append(f"1) shared_preferences ERRO: {e}")
 
-        try:
-            page.client_storage.set("onion_diag_test", f"teste_{ts}")
-            lines.append("2) client_storage.set(): OK")
-        except Exception as e:
-            lines.append(f"2) client_storage.set() ERRO: {e}")
+            try:
+                await page.shared_preferences.set("onion_diag_test", f"teste_{ts}")
+                lines.append("2) shared_preferences.set(): OK")
+            except Exception as e:
+                lines.append(f"2) shared_preferences.set() ERRO: {e}")
 
-        try:
-            v = page.client_storage.get("onion_diag_test")
-            lines.append(f"3) client_storage.get(): '{v}'")
-        except Exception as e:
-            lines.append(f"3) client_storage.get() ERRO: {e}")
+            try:
+                v = await page.shared_preferences.get("onion_diag_test")
+                lines.append(f"3) shared_preferences.get(): '{v}'")
+            except Exception as e:
+                lines.append(f"3) shared_preferences.get() ERRO: {e}")
 
-        try:
-            page.eval_js(f"localStorage.setItem('onion_diag_test', 'teste_{ts}')")
-            lines.append("4) eval_js setItem: OK")
-        except Exception as e:
-            lines.append(f"4) eval_js setItem ERRO: {e}")
+            lines.append("")
+            lines.append(f"Historico em memoria: {len(state.get('history', []))} registro(s)")
+            lines.append(f"Hora do teste: {ts}")
 
-        try:
-            v2 = page.eval_js("localStorage.getItem('onion_diag_test')")
-            lines.append(f"5) eval_js getItem: '{v2}'")
-        except Exception as e:
-            lines.append(f"5) eval_js getItem ERRO: {e}")
+            _diag_result.value = "\n".join(lines)
+            _diag_result.update()
 
-        lines.append("")
-        lines.append(f"Historico em memoria: {len(state.get('history', []))} registro(s)")
-        lines.append(f"Hora do teste: {ts}")
-
-        _diag_result.value = "\n".join(lines)
-        _diag_result.update()
+        page.run_task(_do_diag)
 
     def _save():
         save_json(page, KEY_SETTINGS, settings)
@@ -2246,9 +2226,7 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
         def _confirm(_=None):
             for k in (KEY_SETTINGS, KEY_HISTORY, KEY_OVERRIDES,
                       KEY_HOLIDAYS, "onion_holidays_corp"):
-                _mem_cache.pop(k, None)
-                try: page.eval_js(f"localStorage.removeItem('{k}')")
-                except: pass
+                remove_storage(page, k)
             _close()
             refresh_all()
         panel = ft.Container(
@@ -2907,7 +2885,7 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
     )
 
 
-def main(page: ft.Page):
+async def main(page: ft.Page):
     global SCALE
     page.title            = "Onion Payroll"
     page.theme_mode       = ft.ThemeMode.DARK
@@ -2948,7 +2926,7 @@ def main(page: ft.Page):
         ),
     )
 
-    boot_load_storage(page)
+    await boot_load_storage(page)
 
     _raw_s   = load_json(page, KEY_SETTINGS, {})
     settings = {**DEFAULT_SETTINGS, **(_raw_s if isinstance(_raw_s, dict) else {})}
