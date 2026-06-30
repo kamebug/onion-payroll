@@ -1,106 +1,92 @@
 # Changelog — Onion Payroll
 
+## [2.7] — 2026-06-30 — CORREÇÃO CRÍTICA
+
+### 🔴 Bug crítico corrigido — perda total de dados
+
+**Causa raiz identificada:** `page.client_storage` e `page.eval_js`, usados desde o início do projeto para persistir dados (configurações, histórico, calendário, feriados), foram **descontinuados pelo Flet desde a versão 0.80** e não existem mais no Flet 0.85.3. Todas as tentativas de salvar/carregar falhavam silenciosamente (mascaradas por blocos try/except), fazendo o app funcionar **apenas em memória RAM** — qualquer fechamento do navegador apagava tudo: configurações, calendário marcado, histórico de holerites.
+
+**Correção:** sistema de storage reescrito do zero usando `page.shared_preferences`, a API atual e correta do Flet para persistência em Web/PWA/Desktop:
+- `main()` convertida para `async def` 
+- `boot_load_storage()` agora é `async` e usa `await page.shared_preferences.get()`
+- `save_json()` salva no cache em memória instantaneamente e dispara a gravação persistente em segundo plano via `page.run_task()`, sem travar a UI
+- `remove_storage()` também usa `await page.shared_preferences.remove()`
+
+**Validado:** testado fechando o Chrome completamente entre sessões no Android — configurações, histórico e dados do calendário agora persistem corretamente.
+
+### Adicionado
+- Seção de **🔍 Diagnóstico de Armazenamento** em ⚙️ Config — permite a qualquer usuário verificar se o storage do dispositivo está funcionando corretamente, útil para suporte futuro
+
+---
+
 ## [2.6] — 2026-06-30
 
 ### Adicionado
-- **Campos obrigatórios destacados** no modal de Histórico — Total Bruto, Total Desconto e Salário Líquido agora têm borda turquesa e ícone ⭐, deixando claro que só esses 3 campos são essenciais para o cálculo da Média Histórica de desconto
-- Nota explicativa no topo do modal de Histórico esclarecendo que os demais ~25 campos são opcionais (apenas registro pessoal)
-- **test_main.py** — suite de 26 testes automatizados cobrindo cálculo de hora extra, ciclos, descontos, feriados, domingo, falta, yukyu, abono e formatação de horário
+- Campos obrigatórios destacados no modal de Histórico — Total Bruto, Total Desconto e Salário Líquido com borda turquesa e ⭐
+- Nota explicativa esclarecendo que os demais ~25 campos do Histórico são opcionais
+- **test_main.py** — suite de 28 testes automatizados
 
 ### Corrigido
-- **Bug: botões 4×2/5×2/Alternado causavam scroll ao topo** — agora alternam a visibilidade das seções diretamente em vez de reconstruir a aba inteira com `refresh_all()`
-- Ordem de criação dos campos de turno corrigida (estavam sendo referenciados antes de existir)
+- **Bug: histórico perdendo registros ao salvar múltiplos meses seguidos** — funções usavam variável local desatualizada em vez de `state["history"]`
+- **Bug: feriado corporativo não afetava o cálculo** — só mudava a cor da célula, não era enviado ao motor de cálculo do holerite
+- **Bug: botões 4×2/5×2/Alternado causavam scroll ao topo**
+- Validação obrigatória do campo Mês no registro de histórico
+- Modal de Histórico reorganizado — campos obrigatórios primeiro, mais espaço para teclado no celular
 
 ### Alterado
-- Campo **Abono** no modal de ponto renomeado para **"Abono / Vale / Bico extra"** — esclarecido que serve também para registrar ganhos de arubaito (バイト), gorjetas ou qualquer valor extra do dia
+- Campo Abono renomeado para **"Abono / Vale / Bico extra"** — esclarecido que serve também para arubaito (バイト)
 
 ---
 
 ## [2.5] — 2026-06-30
 
 ### Adicionado
-- **Tipo de Ciclo de Trabalho configurável** — botões em ⚙️ Config:
-  - **4×2** (padrão) — 4 dias trabalho + 2 folga
-  - **5×2** — segunda a sexta, fim de semana livre (turno comercial)
-  - **Alternado Semanal** — 1 semana inteira diurno + 1 semana inteira noturno, alternando automaticamente
+- **Tipo de Ciclo de Trabalho configurável** — 4×2, 5×2 e Alternado Semanal (dia/noite)
 - Funções `generate_weekly_calendar()` e `generate_alternating_calendar()`
-- Campos de horário separados para turno Dia/Noite no modo Alternado
-
-### Corrigido
-- Validação cruzada confirmou que não há regressão nos fluxos: preenchimento de campos, scroll, formatação automática de horário e cálculo
 
 ---
 
 ## [2.4] — 2026-06-30
 
 ### Adicionado
-- **Feriados japoneses 2025-2026 embutidos** — aparecem automaticamente sem importar CSV
-- **Abono / Vale do dia** — campo no modal de ponto, acumulado no holerite
-- **Build ID** no header — número único a cada deploy (gerado pelo `deploy.ps1`)
-- **Google Analytics G-2Z4173R5NS** — acompanhamento de acessos
-- **Saída Antecipada** como opção no dropdown do modal de ponto
-- **Domingo Trabalhado** — célula vermelha escura automática quando ciclo=work
-- Campos de horas no histórico aceitam decimal (ex: 155.5)
+- Feriados japoneses 2025-2026 embutidos
+- Abono / Vale do dia no modal de ponto
+- Build ID no header
+- Google Analytics
+- Saída Antecipada como opção no dropdown
+- Domingo Trabalhado com cor própria
 
 ### Corrigido
-- **Bug crítico: OT na saída antecipada** — `minutes_between` retornava positivo incorreto causando hora extra falsa quando o funcionário saía antes do horário normal
-- **Bug crítico: desconto fixo não persistia** — `refresh_all` recriava settings perdendo mudanças do usuário
-- **Bug crítico: `is_legal_holiday` não definido** — causava erro silencioso zerando todo o cálculo do holerite
-- `day_abono` não definido no loop do forecast
-- Dropdown de desconto substituído por botões (Flet 0.85 não dispara `on_change` em Dropdown de forma confiável)
-- Settings agora fazem merge com DEFAULT_SETTINGS no boot
-- Contraste do número do domingo trabalhado — branco sobre vermelho escuro
-
-### Alterado
-- Desconto configurável via botões **Média Histórica / Desconto Fixo**
-- Campos de bônus centralizados em ⚙️ Config (removidos da aba Holerite)
-- Holerite discrimina **Feriado** e **Domingo** separadamente, com contagem de dias
-- `refresh_all` usa cache em memória em vez de recarregar do storage a cada chamada
+- Bug crítico de cálculo de hora extra na saída antecipada
+- Bug de desconto fixo não persistindo na sessão
+- `is_legal_holiday` não definido causando erro silencioso
 
 ---
 
 ## [2.3] — 2026-06-29
 
 ### Adicionado
-- Campo **延長 Minutos extras solicitados** no modal de ponto
-- **Turno configurável** — entrada, saída, intervalo e início de hora extra
-- Campo **Turno** (🌙 Noturno / ☀️ Diurno) separado do Grupo
-- **Domingo como 法定休日** — adicional de +35% automático
-- **Disclaimer legal** no Holerite e na aba Ajuda
-- Efeitos visuais: sombra nos cards, gradiente no header, fade na troca de abas, blur nos modais
-
-### Alterado
-- Paleta **Neo Petronas** — fundo `#121212`, cards `#1E1E1E`, destaque turquesa `#00D2C6`
-- Calendário com paleta inspirada no Google Calendar
-- Subtítulo do app: **"PEEL YOUR PAYCHECK"**
-- Células do calendário mudam de cor conforme o status do dia
-
-### Corrigido
-- Scroll do modal de histórico cobria os campos
-- Variável de borda do calendário não definida, causando erro ao abrir o app
+- Minutos extras solicitados (延長)
+- Turno configurável (entrada, saída, intervalo, início de hora extra)
+- Domingo como 法定休日 com +35% automático
+- Disclaimer legal
+- Paleta visual Neo Petronas
 
 ---
 
 ## [2.2] — 2026-06-27
 
 ### Adicionado
-- Aba ❓ Ajuda com manual completo de uso
-- Aba 🏭 Feriados Corporativos com calendário anual editável
-- Script `deploy.ps1` para automatizar build e publicação
-- Preview ao vivo dos valores no modal de ponto
-- Sistema de storage universal funcionando em desktop, web e PWA
-
-### Corrigido
-- Modais migrados para `page.overlay`, resolvendo problemas de sobreposição
-- Cálculo de yukyu parcial com horário registrado
+- Aba de Ajuda com manual completo
+- Aba de Feriados Corporativos
+- Script de deploy automatizado
 
 ---
 
 ## [2.1] — 2026-06-26
 
 ### Adicionado
-- Importação de feriados via CSV colado em campo de texto
-- Suporte a feriados nacionais e corporativos
+- Importação de feriados via CSV
 - Calendário com semana iniciando no domingo
 
 ---
@@ -110,4 +96,3 @@
 ### Lançamento inicial
 - Calendário com ciclo 4×2 automático
 - Cálculo de hora extra, adicional noturno e trabalho em feriado
-- Quatro abas: Calendário, Holerite, Histórico e Configurações

@@ -11,12 +11,14 @@ Calcula automaticamente salário base, hora extra, adicional noturno e trabalho 
 ## ✨ Funcionalidades
 
 - **100% offline e privado** — nenhum dado sai do dispositivo
+- **Persistência confiável** — dados sobrevivem ao fechar o navegador (via `shared_preferences`)
 - **Três tipos de ciclo de trabalho:**
   - 🔄 **4×2** — 4 dias trabalho + 2 folga (padrão fábricas com turno fixo)
   - 📅 **5×2** — segunda a sexta (turno comercial)
   - 🔁 **Alternado Semanal** — 1 semana diurno + 1 semana noturno, automaticamente
 - **Turno configurável** — defina entrada, saída, intervalo e início de hora extra
 - **Feriados japoneses 2025-2026 embutidos** — aparecem automaticamente
+- **Feriados corporativos** afetam o cálculo, não só a cor do calendário
 - **Cálculo conforme a lei japonesa:**
   - 残業手当 Hora Extra → +25%
   - 深夜手当 Adicional Noturno → +25% (22:00–05:00)
@@ -29,33 +31,12 @@ Calcula automaticamente salário base, hora extra, adicional noturno e trabalho 
   - Saída Antecipada — verde-azulado, calcula pelo horário real
   - 延長 Minutos extras solicitados
   - Abono / Vale / Bico extra — também serve para registrar arubaito (バイト)
+- **Histórico editável** — toque em qualquer registro para editar ou remover
 - **Holerite discriminado** — dias normais, feriado e domingo mostrados separadamente
 - **Desconto configurável** — Média Histórica (automática) ou Fixo em ¥
-- **Registro de holerite real simplificado** — apenas 3 campos são obrigatórios (Total Bruto, Total Desconto, Líquido); o restante é opcional para registro pessoal
+- **Diagnóstico de armazenamento** integrado em ⚙️ Config para suporte
 - **Build ID** no header — confirma se a versão está atualizada
 - **Google Analytics** — acompanhamento de acessos
-
----
-
-## 🎨 Tema Visual — Neo Petronas
-
-| Token | Cor | Uso |
-|---|---|---|
-| Fundo | `#121212` | Background principal |
-| Card | `#1E1E1E` | Painéis elevados |
-| Accent | `#00D2C6` | Turquesa Petronas |
-| Texto | `#F0F0F0` | Texto principal |
-
-**Calendário — Paleta Google Calendar:**
-| Cor | Tipo |
-|---|---|
-| 🟢 `#0F9D58` | Trabalho |
-| 🔵 `#4285F4` | Folga |
-| 🔴 `#C62828` | Domingo Trabalhado |
-| 🟡 `#F4B400` | Feriado |
-| 🟠 `#FF6D00` | 有休 Yukyu |
-| 🟣 `#7B1FA2` | 欠勤 Falta |
-| 🩵 `#00796B` | Saída Antecipada |
 
 ---
 
@@ -72,7 +53,7 @@ python main.py
 python test_main.py
 ```
 
-Roda 26 testes cobrindo cálculo de hora extra, ciclos de trabalho, descontos, feriados, domingo, falta, yukyu, abono e formatação de horário — sem precisar abrir o app. Recomendado antes de cada deploy.
+28 testes cobrindo cálculo de hora extra, ciclos de trabalho, descontos, feriados (nacionais e corporativos), domingo, falta, yukyu, abono e formatação de horário. Recomendado antes de cada deploy.
 
 ### Deploy GitHub Pages
 
@@ -80,7 +61,20 @@ Roda 26 testes cobrindo cálculo de hora extra, ciclos de trabalho, descontos, f
 powershell -ExecutionPolicy Bypass -File ".\deploy.ps1"
 ```
 
-O script gera um novo Build ID, faz o build limpo, copia para `docs/`, mantém o Google Analytics configurado e faz o push automaticamente.
+---
+
+## 🔧 Detalhes Técnicos — Persistência de Dados
+
+O app usa **`page.shared_preferences`** (API assíncrona atual do Flet ≥ 0.80) para salvar dados localmente no dispositivo do usuário:
+
+```python
+await page.shared_preferences.set(key, value)
+value = await page.shared_preferences.get(key)
+```
+
+`main()` é uma função `async`, e o boot do app aguarda (`await`) o carregamento completo dos dados salvos antes de montar a interface, garantindo que nada seja perdido.
+
+**Atenção para desenvolvedores:** as APIs antigas `page.client_storage` e `page.eval_js` foram descontinuadas e **não devem ser usadas** — causam falha silenciosa de persistência no Flet 0.85+.
 
 ---
 
@@ -99,7 +93,7 @@ Configure os dois horários (dia e noite) em ⚙️ Config. — o app alterna au
 
 ## 📋 Registro de Holerite Real
 
-Para que o cálculo de **Média Histórica** de desconto funcione, apenas três campos são obrigatórios:
+Apenas três campos são obrigatórios para o cálculo de Média Histórica:
 
 | Campo | Uso |
 |---|---|
@@ -107,7 +101,7 @@ Para que o cálculo de **Média Histórica** de desconto funcione, apenas três 
 | ⭐ 控除合計 Total Desconto | Base do cálculo |
 | ⭐ 差引支給額 Salário Líquido | Conferência |
 
-Os demais ~25 campos (dias de frequência, horas detalhadas, valores por categoria) são **opcionais** — servem apenas como registro pessoal de referência e não influenciam nenhum cálculo do app.
+Os demais ~25 campos são opcionais — apenas registro pessoal.
 
 ---
 
@@ -115,17 +109,15 @@ Os demais ~25 campos (dias de frequência, horas detalhadas, valores por categor
 
 ```
 Onion Payroll/
-├── main.py                  ← código principal
-├── test_main.py              ← suite de testes automatizados
-├── deploy.ps1                ← script de deploy automático
+├── main.py
+├── test_main.py
+├── deploy.ps1
 ├── requirements.txt
 ├── pyproject.toml
 ├── README.md
 ├── CHANGELOG.md
 ├── manutencao.html
 ├── assets/
-│   ├── logo_icon.png
-│   └── feriados_corporativos_modelo.csv
 └── docs/                     ← build PWA (gerado pelo deploy.ps1)
 ```
 
@@ -141,10 +133,10 @@ Os valores exibidos são estimativas baseadas nas configurações inseridas pelo
 
 - ✅ Sem conta, sem servidor, sem nuvem
 - ✅ 100% offline após primeiro carregamento
-- ✅ Dados ficam no dispositivo do usuário
+- ✅ Dados ficam no dispositivo do usuário, persistidos via `shared_preferences`
 
 ---
 
 ## 🧪 Qualidade
 
-O motor de cálculo é coberto por 26 testes automatizados (`test_main.py`), validando ciclos de trabalho, descontos, feriados, domingos e casos extremos (saída antecipada, falta, yukyu, abono). Rode antes de cada deploy para garantir que nenhuma regra de negócio foi quebrada.
+O motor de cálculo é coberto por 28 testes automatizados (`test_main.py`).
