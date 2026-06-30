@@ -1,5 +1,55 @@
 # Changelog — Onion Payroll
 
+## [2.8] — 2026-07-01 — VALIDAÇÃO E CORREÇÃO COM HOLERITES REAIS
+
+### 🔴 Bug crítico corrigido — domingo/feriado pagava ~13% a mais
+
+**Descoberto através de comparação direta com 2 holerites reais** (fevereiro e
+março de 2026, mesmo funcionário, 2 e 4 domingos trabalhados respectivamente).
+
+**Causa raiz:** o cálculo de domingo/feriado trabalhado somava três adicionais
+de forma independente — `holiday_pay (+35%)` + `night_pay (+25%)` +
+`overtime_pay (+25%)` — sobre o mesmo período de horas. O holerite real da
+empresa aplica **apenas o adicional de +35%** sobre o total de horas
+trabalhadas no domingo, sem empilhar noturno ou hora extra por cima.
+
+**Evidência matemática:** o valor de `公出手当` (trabalho em domingo) dobrou
+exatamente de ¥47.784 (2 domingos) para ¥95.568 (4 domingos) — confirmando
+¥23.892 por domingo em ambos os holerites. Isolando a fórmula:
+`11h × ¥1.590/h × 1,35 = ¥23.612` (precisão de 98,8% contra o valor real).
+O app antes calculava ¥27.011 por domingo — 13% acima do correto.
+
+**Correção:** quando `is_holiday=True`, `calculate_shift_pay()` agora zera
+`overtime_pay` e `night_pay`, aplicando o adicional de 35% uma única vez
+sobre `base_pay`. Validado com precisão de 98% contra dois holerites reais
+de meses diferentes.
+
+### 🔴 Bug crítico corrigido (relacionado) — turno errado em feriado noturno
+
+Quando o status do dia era `"holiday"`, o sistema sempre assumia **turno
+diurno** (08:35-20:35, OT após 18:35) para calcular os horários, mesmo
+quando o funcionário trabalha no **turno noturno**. Isso causava cálculo
+incorreto de minutos trabalhados em domingos no turno noturno.
+
+**Correção:** novo parâmetro `base_shift` em `calculate_shift_pay()` informa
+o turno real do funcionário (`night`/`day`), usado para determinar os
+horários corretos independente do dia ser feriado ou não.
+
+### Adicionado
+- 9 novos testes automatizados (`TestBugTurnoNoturnoEmFeriado`) validando
+  ambos os bugs e a precisão contra holerites reais — total agora 35 testes
+
+### Metodologia de validação (referência futura)
+1. Comparar dois holerites reais do mesmo funcionário em meses diferentes
+2. Identificar categorias que variam (ex: domingos trabalhados) vs que
+   permanecem idênticas (ex: horas normais, hora extra padrão)
+3. Isolar o valor por unidade (ex: ¥/domingo) dividindo o total pela
+   quantidade, e confirmar que bate entre os dois meses
+4. Comparar a fórmula isolada com o que o motor de cálculo produz
+5. Ajustar a fórmula no código, não os dados — manter o app genérico
+
+---
+
 ## [2.7] — 2026-06-30 — CORREÇÃO CRÍTICA
 
 ### 🔴 Bug crítico corrigido — perda total de dados
@@ -18,7 +68,6 @@
 - Seção de **🔍 Diagnóstico de Armazenamento** em ⚙️ Config — permite a qualquer usuário verificar se o storage do dispositivo está funcionando corretamente, útil para suporte futuro
 
 ---
-
 ## [2.6] — 2026-06-30
 
 ### Adicionado

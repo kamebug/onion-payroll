@@ -621,7 +621,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607010323"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "0000000000"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -2823,12 +2823,10 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
                   "+25% sobre base"),
             _rule("深夜手当 Adicional Noturno", "Minutos entre 22:00 e 05:00",
                   "+25% sobre base"),
-            _rule("休出手当 Trabalho em Folga/Feriado",
-                  "Trabalhou em dia de folga ou feriado",
-                  "+35% sobre base"),
-            _rule("深夜 + 休出 Noturno em Feriado",
-                  "Acumulam sobre a hora base",
-                  "+60% total"),
+            _rule("休出手当・法定休出 Folga/Feriado/Domingo",
+                  "Trabalhou em dia de folga, feriado ou domingo",
+                  "+35% sobre base (único adicional)"),
+            _p("⚠️ Domingo e feriado trabalhado recebem APENAS +35% sobre a base — não soma noturno nem hora extra por cima, mesmo que o horário caia na madrugada. Validado com holerites reais da empresa."),
             _p("Arredondamento: 四捨五入 — frações < 0.5 descartadas, ≥ 0.5 arredondadas para cima. Todos os valores em ¥ inteiro."),
 
             # ── Ponto diário ─────────────────────────────────────────
