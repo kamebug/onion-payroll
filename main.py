@@ -178,14 +178,66 @@ def generate_4x2_calendar(anchor_date: date, year: int, month: int) -> dict:
     return result
 
 
+def generate_weekly_calendar(year: int, month: int) -> dict:
+    """5x2 fixo: segunda a sexta = work, sábado/domingo = off."""
+    result, first_day, last_day = {}, date(year, month, 1), date(year, month, 28)
+    for d in range(28, 32):
+        try:    last_day = date(year, month, d)
+        except ValueError: break
+    cursor = first_day
+    while cursor <= last_day:
+        # weekday(): 0=segunda ... 5=sábado, 6=domingo
+        result[cursor.day] = "off" if cursor.weekday() >= 5 else "work"
+        cursor += timedelta(days=1)
+    return result
+
+
+def generate_alternating_calendar(anchor_date: date, year: int, month: int) -> dict:
+    """Alternado semanal: 1 semana inteira em um turno, próxima semana no outro.
+    Retorna dict {day: ("work"|"off", "day"|"night")} indicando status e turno.
+    Semanas contam a partir da segunda-feira da anchor_date.
+    """
+    result, first_day, last_day = {}, date(year, month, 1), date(year, month, 28)
+    for d in range(28, 32):
+        try:    last_day = date(year, month, d)
+        except ValueError: break
+
+    # Segunda-feira da semana da âncora
+    anchor_monday = anchor_date - timedelta(days=anchor_date.weekday())
+
+    cursor = first_day
+    while cursor <= last_day:
+        cursor_monday = cursor - timedelta(days=cursor.weekday())
+        weeks_diff = (cursor_monday - anchor_monday).days // 7
+        # Semana par = turno A (dia), semana ímpar = turno B (noite)
+        shift = "day" if weeks_diff % 2 == 0 else "night"
+        status = "off" if cursor.weekday() >= 5 else "work"
+        result[cursor.day] = (status, shift)
+        cursor += timedelta(days=1)
+    return result
+
+
 def compute_monthly_forecast(
     year: int, month: int, jikyuu: int, anchor_date: date, group: str,
     holiday_days: list, day_overrides: dict, odd_month_bonus: int, extra_bonus: int,
     deduction_mode: str, fixed_deduction: int, history_avg_pct: float, block: int,
     shift_type_cfg: str = "", cfg_start: str = "", cfg_end: str = "",
     cfg_break: int = 65, cfg_ot: str = "",
+    cycle_type: str = "4x2",
+    alt_start_day: str = "08:35", alt_end_day: str = "20:35",
+    alt_start_night: str = "20:35", alt_end_night: str = "08:35",
 ) -> dict:
-    cycle         = generate_4x2_calendar(anchor_date, year, month)
+    # ── Seleção do tipo de ciclo ──────────────────────────────────
+    _alt_shift_map = {}  # dia -> "day"/"night" (só usado se cycle_type=alternating)
+    if cycle_type == "5x2":
+        cycle = generate_weekly_calendar(year, month)
+    elif cycle_type == "alternating":
+        _alt_raw = generate_alternating_calendar(anchor_date, year, month)
+        cycle = {d: status for d, (status, shift) in _alt_raw.items()}
+        _alt_shift_map = {d: shift for d, (status, shift) in _alt_raw.items()}
+    else:
+        cycle = generate_4x2_calendar(anchor_date, year, month)
+
     _stype        = shift_type_cfg if shift_type_cfg else ("night" if group == "B" else "day")
     default_shift = _stype
     _start        = cfg_start if cfg_start else ("20:35" if _stype == "night" else "08:35")
@@ -196,6 +248,14 @@ def compute_monthly_forecast(
     days_normal = days_holiday = days_legal = 0
 
     for day_num, cycle_status in cycle.items():
+        # No modo alternado, o turno do dia muda conforme a semana
+        if cycle_type == "alternating" and day_num in _alt_shift_map:
+            _day_shift = _alt_shift_map[day_num]
+            default_shift = _day_shift
+            if _day_shift == "day":
+                _start, _end, _ot = alt_start_day, alt_end_day, "18:35"
+            else:
+                _start, _end, _ot = alt_start_night, alt_end_night, "06:35"
         ov        = day_overrides.get(str(day_num), {})
         status    = ov.get("status", "normal")   # "normal","absent","yukyu","holiday","legal"
         start_str = ov.get("start", "")
@@ -416,6 +476,11 @@ DEFAULT_SETTINGS = {
     "jikyuu": 1500, "group": "B", "anchor_date": date.today().isoformat(),
     "odd_bonus": 50000, "deduction_mode": "historical", "fixed_deduction": 45000,
     "block": 1, "pin_enabled": False,
+    "shift_type": "night", "shift_start": "20:35", "shift_end": "08:35",
+    "shift_break": 65, "shift_ot": "06:35", "extra_bonus": 0,
+    "cycle_type": "4x2",  # "4x2" | "5x2" | "alternating"
+    "shift_start_day": "08:35", "shift_end_day": "20:35",
+    "shift_start_night": "20:35", "shift_end_night": "08:35",
 }
 
 
@@ -519,7 +584,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2606300714"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "0000000000"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -648,7 +713,14 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
     except Exception:
         anchor = today
 
-    cycle           = generate_4x2_calendar(anchor, view_year, view_month)
+    _cycle_type = settings.get("cycle_type", "4x2")
+    if _cycle_type == "5x2":
+        cycle = generate_weekly_calendar(view_year, view_month)
+    elif _cycle_type == "alternating":
+        _alt_raw = generate_alternating_calendar(anchor, view_year, view_month)
+        cycle = {d: status for d, (status, shift) in _alt_raw.items()}
+    else:
+        cycle = generate_4x2_calendar(anchor, view_year, view_month)
     month_key       = f"{view_year}-{view_month:02d}"
     month_overrides = overrides.get(month_key, {})
     month_holidays  = holidays.get(month_key, [])
@@ -711,8 +783,8 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
             label_style=ft.TextStyle(color=TEXT_SECONDARY, size=11),
         )
         abono_f = ft.TextField(
-            label="Abono / Vale do dia (¥)",
-            hint_text="ex: 500",
+            label="Abono / Vale / Bico extra (¥)",
+            hint_text="ex: arubaito, gorjeta, vale-transporte extra",
             value=str(ov.get("abono", 0)),
             keyboard_type=ft.KeyboardType.NUMBER,
             bgcolor=BG_SURFACE, color=TEXT_PRIMARY,
@@ -1204,6 +1276,11 @@ def build_holerite_tab(page: ft.Page, state: dict, refresh_all):
             cfg_end=settings.get("shift_end", ""),
             cfg_break=int(settings.get("shift_break") or 65),
             cfg_ot=settings.get("shift_ot", ""),
+            cycle_type=settings.get("cycle_type", "4x2"),
+            alt_start_day=settings.get("shift_start_day", "08:35"),
+            alt_end_day=settings.get("shift_end_day", "20:35"),
+            alt_start_night=settings.get("shift_start_night", "20:35"),
+            alt_end_night=settings.get("shift_end_night", "08:35"),
         )
     except Exception:
         data = {"gross": 0, "deductions": 0, "net": 0,
@@ -1354,6 +1431,17 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
                 text_size=13, dense=True, expand=1,
             )
 
+        def _tf_obrigatorio(lbl, kb=ft.KeyboardType.NUMBER, val=""):
+            """Campo destacado — essencial para o cálculo de desconto histórico."""
+            return ft.TextField(
+                label=f"⭐ {lbl}", value=val, keyboard_type=kb,
+                bgcolor="#1A2E2C", color="#F0F0F0",
+                border_color=ACCENT, focused_border_color=ACCENT,
+                border_width=2,
+                label_style=ft.TextStyle(color=ACCENT, size=9, weight=ft.FontWeight.W_700),
+                text_size=13, dense=True, expand=1,
+            )
+
         def _sec(t, color=ACCENT_LITE):
             return ft.Container(
                 content=ft.Text(t, size=11, color=color,
@@ -1417,9 +1505,9 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
         f_ta_kojo   = _tf("他控除 Outros Desc.")
 
         # ── Totais ───────────────────────────────────────────────────
-        f_gross     = _tf("総支給額 Total Bruto")
-        f_ded       = _tf("控除合計 Total Desc.")
-        f_net       = _tf("差引支給額 Salário Líq.")
+        f_gross     = _tf_obrigatorio("総支給額 Total Bruto")
+        f_ded       = _tf_obrigatorio("控除合計 Total Desc.")
+        f_net       = _tf_obrigatorio("差引支給額 Salário Líq.")
 
         ov_ref = [None]
 
@@ -1560,6 +1648,14 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
                         ft.TextButton("✕", on_click=_close,
                                       style=ft.ButtonStyle(color=TEXT_SECONDARY)),
                     ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                    ft.Container(
+                        content=ft.Text(
+                            "⭐ Campos com estrela são obrigatórios para calcular o desconto histórico. "
+                            "Os demais são opcionais — apenas para seu registro pessoal.",
+                            size=10, color=TEXT_MUTED,
+                        ),
+                        padding=ft.Padding(left=0, right=0, top=2, bottom=4),
+                    ),
                     ft.Divider(height=1, color="#333333"),
                     ft.Container(
                         content=content,
@@ -1772,10 +1868,80 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
         return f
 
 
+    # ── Tipo de Ciclo de Trabalho ─────────────────────────────────
+    def _set_cycle_type(mode):
+        settings["cycle_type"] = mode
+        _mem_cache[KEY_SETTINGS] = settings
+        save_json(page, KEY_SETTINGS, settings)
+        btn_4x2.style = ft.ButtonStyle(
+            bgcolor=ACCENT if mode == "4x2" else BG_SURFACE,
+            color="#121212" if mode == "4x2" else TEXT_PRIMARY)
+        btn_5x2.style = ft.ButtonStyle(
+            bgcolor=ACCENT if mode == "5x2" else BG_SURFACE,
+            color="#121212" if mode == "5x2" else TEXT_PRIMARY)
+        btn_alt.style = ft.ButtonStyle(
+            bgcolor=ACCENT if mode == "alternating" else BG_SURFACE,
+            color="#121212" if mode == "alternating" else TEXT_PRIMARY)
+        btn_4x2.update(); btn_5x2.update(); btn_alt.update()
+        # Alternar visibilidade direto, sem refresh_all() — sem scroll ao topo
+        section_4x2_container.visible = (mode != "alternating")
+        section_alt_container.visible = (mode == "alternating")
+        section_4x2_container.update()
+        section_alt_container.update()
+
+    _cur_cycle = settings.get("cycle_type", "4x2")
+    btn_4x2 = ft.FilledButton(
+        "4×2", on_click=lambda _: _set_cycle_type("4x2"),
+        style=ft.ButtonStyle(
+            bgcolor=ACCENT if _cur_cycle == "4x2" else BG_SURFACE,
+            color="#121212" if _cur_cycle == "4x2" else TEXT_PRIMARY),
+        expand=1,
+    )
+    btn_5x2 = ft.FilledButton(
+        "5×2", on_click=lambda _: _set_cycle_type("5x2"),
+        style=ft.ButtonStyle(
+            bgcolor=ACCENT if _cur_cycle == "5x2" else BG_SURFACE,
+            color="#121212" if _cur_cycle == "5x2" else TEXT_PRIMARY),
+        expand=1,
+    )
+    btn_alt = ft.FilledButton(
+        "Alternado", on_click=lambda _: _set_cycle_type("alternating"),
+        style=ft.ButtonStyle(
+            bgcolor=ACCENT if _cur_cycle == "alternating" else BG_SURFACE,
+            color="#121212" if _cur_cycle == "alternating" else TEXT_PRIMARY),
+        expand=1,
+    )
+    cycle_type_row = ft.Row([btn_4x2, btn_5x2, btn_alt], spacing=6)
+
+
+    # Campos do turno alternado (dia/noite)
+    alt_day_start_f = _tf_shift("☀️ Dia — Entrada", "shift_start_day", "08:35", is_time=True)
+    alt_day_end_f   = _tf_shift("☀️ Dia — Saída",   "shift_end_day",   "20:35", is_time=True)
+    alt_night_start_f = _tf_shift("🌙 Noite — Entrada", "shift_start_night", "20:35", is_time=True)
+    alt_night_end_f   = _tf_shift("🌙 Noite — Saída",   "shift_end_night",   "08:35", is_time=True)
+
     shift_start_f = _tf_shift("Entrada 出勤", "shift_start", "20:35", is_time=True)
     shift_end_f   = _tf_shift("Saída 退勤",   "shift_end",   "08:35", is_time=True)
     shift_break_f = _tf_shift("Intervalo 休憩 (min)", "shift_break", "65", is_time=False)
     shift_ot_f    = _tf_shift("残業 Início Hora Extra (fim turno normal)", "shift_ot", "06:35", is_time=True)
+
+    section_4x2_container = ft.Container(
+        content=ft.Column(controls=[
+            section_header("HORÁRIO DO TURNO 勤務時間"),
+            ft.Row([shift_start_f, shift_end_f], spacing=8),
+            ft.Row([shift_break_f, shift_ot_f], spacing=8),
+        ], spacing=8, tight=True),
+        visible=(settings.get("cycle_type", "4x2") != "alternating"),
+    )
+    section_alt_container = ft.Container(
+        content=ft.Column(controls=[
+            section_header("HORÁRIOS — TURNO ALTERNADO"),
+            ft.Row([alt_day_start_f, alt_day_end_f], spacing=8),
+            ft.Row([alt_night_start_f, alt_night_end_f], spacing=8),
+            shift_break_f,
+        ], spacing=8, tight=True),
+        visible=(settings.get("cycle_type", "4x2") == "alternating"),
+    )
 
 
     block_dd = ft.Dropdown(
@@ -1993,9 +2159,16 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
                          ft.KeyboardType.TEXT),
                 mk_field("Bônus Padrão Mês Ímpar (¥)",        "odd_bonus"),
                 block_dd,
-                section_header("HORÁRIO DO TURNO 勤務時間"),
-                ft.Row([shift_start_f, shift_end_f], spacing=8),
-                ft.Row([shift_break_f, shift_ot_f], spacing=8),
+                section_header("TIPO DE CICLO DE TRABALHO"),
+                cycle_type_row,
+                ft.Text(
+                    "4×2: 4 dias trabalho + 2 folga (fábricas turno fixo)  |  "
+                    "5×2: segunda a sexta (turno comercial)  |  "
+                    "Alternado: 1 semana dia + 1 semana noite",
+                    size=9, color=TEXT_MUTED,
+                ),
+                section_4x2_container,
+                section_alt_container,
                 ft.Container(
                     content=ft.Column(controls=[
                         ft.Text("💡 Como funciona o cálculo:",
@@ -2004,7 +2177,7 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
                                 size=10, color=TEXT_SECONDARY),
                         ft.Text("• Início 残業 → Saída: hora extra +25%",
                                 size=10, color=TEXT_SECONDARY),
-                        ft.Text("• Ex. noturno: 20:35 normal até 06:35, hora extra até 08:35 (Saída)",
+                        ft.Text("• No modo Alternado, a semana define automaticamente dia ou noite",
                                 size=10, color=TEXT_MUTED),
                     ], spacing=3, tight=True),
                     bgcolor=BG_SURFACE,
@@ -2408,9 +2581,15 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
                     _title("📅 Domingo — 法定休日 Folga Legal"),
                     _p("Domingo é folga legal obrigatória pela lei japonesa. Se trabalhou, o app aplica +35% automaticamente. Sem registro de horário = não trabalhado."),
 
-            # ── Ciclo 4×2 ────────────────────────────────────────────
-            _title("🔄 Ciclo 4×2 (四勤二休)"),
-            _p("O sistema projeta automaticamente 4 dias de trabalho seguidos de 2 dias de folga, ciclando indefinidamente a partir da Data Início configurada."),
+            # ── Tipos de Ciclo ─────────────────────────────────────────
+            _title("🔄 Tipos de Ciclo de Trabalho"),
+            _p("Escolha em ⚙️ Config. o padrão que sua empresa usa:"),
+            _item("4×2 (四勤二休)", "4 dias de trabalho + 2 dias de folga",
+                  "Padrao de fabricas com turno fixo. Cicla automaticamente a partir da Data Inicio."),
+            _item("5×2", "Segunda a sexta-feira, fim de semana livre",
+                  "Padrao de turno comercial. Sabado e domingo sao sempre folga."),
+            _item("Alternado Semanal", "1 semana inteira diurno, proxima semana inteira noturno",
+                  "Configure os dois horarios (dia e noite) - o app alterna automaticamente a cada semana."),
             ft.Container(
                 content=ft.Row(controls=[
                     ft.Container(content=ft.Text("T", size=11,
@@ -2468,8 +2647,8 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
                           "O campo horário é ignorado. Falta = sem pagamento."),
                     _item("↓", "Saída Antecipada — Célula Verde-azulado",
                           "Selecione no dropdown e preencha o horário de saída real. Hora extra = 0 se saiu antes do limite."),
-                    _item("💴", "Abono / Vale do dia (¥)",
-                          "Campo no modal de ponto. Valor de abono ou vale do dia. Acumulado no holerite."),
+                    _item("💴", "Abono / Vale / Bico extra (¥)",
+                          "Qualquer ganho extra do dia: vale, arubaito (バイト), gorjeta, ajuda de custo. Acumulado no holerite separadamente."),
             _item("Trabalho em Folga/Feriado", "Preencha Entrada e Saída",
                   "+35% automático. Vale para folga, feriado e domingo."),
             _item("有休 em Feriado Corporativo",
