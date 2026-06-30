@@ -600,7 +600,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2606302329"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2606302344"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -1879,29 +1879,54 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
 #  TAB 4 — SETTINGS
 # ─────────────────────────────────────────────
 
-def _test_storage_write(page: ft.Page):
-    """Função de diagnóstico: grava um valor de teste com timestamp
-    e mostra um snackbar confirmando o resultado da gravação."""
-    import datetime as _dt
-    test_value = {"timestamp": _dt.datetime.now().isoformat(),
-                  "test": "storage_diagnostic"}
-    try:
-        save_json(page, "onion_storage_test", test_value)
-        page.snack_bar = ft.SnackBar(
-            content=ft.Text(f"✅ Gravado: {test_value['timestamp']}"),
-            bgcolor=SUCCESS,
-        )
-    except Exception as e:
-        page.snack_bar = ft.SnackBar(
-            content=ft.Text(f"❌ Erro ao gravar: {e}"),
-            bgcolor=DANGER,
-        )
-    page.snack_bar.open = True
-    page.update()
-
-
 def build_settings_tab(page: ft.Page, state: dict, refresh_all):
     settings = state["settings"]
+
+    # ── Diagnóstico de Storage ──────────────────────────────────────
+    _diag_result = ft.Text("Toque em 'Testar Agora' para diagnosticar.",
+                            size=11, color=TEXT_MUTED, selectable=True)
+
+    def _run_diagnostic(_=None):
+        import datetime as _dt
+        lines = []
+        ts = _dt.datetime.now().strftime("%H:%M:%S")
+
+        try:
+            cs = page.client_storage
+            lines.append(f"1) client_storage existe: {'sim' if cs is not None else 'NAO'}")
+        except Exception as e:
+            lines.append(f"1) client_storage ERRO: {e}")
+
+        try:
+            page.client_storage.set("onion_diag_test", f"teste_{ts}")
+            lines.append("2) client_storage.set(): OK")
+        except Exception as e:
+            lines.append(f"2) client_storage.set() ERRO: {e}")
+
+        try:
+            v = page.client_storage.get("onion_diag_test")
+            lines.append(f"3) client_storage.get(): '{v}'")
+        except Exception as e:
+            lines.append(f"3) client_storage.get() ERRO: {e}")
+
+        try:
+            page.eval_js(f"localStorage.setItem('onion_diag_test', 'teste_{ts}')")
+            lines.append("4) eval_js setItem: OK")
+        except Exception as e:
+            lines.append(f"4) eval_js setItem ERRO: {e}")
+
+        try:
+            v2 = page.eval_js("localStorage.getItem('onion_diag_test')")
+            lines.append(f"5) eval_js getItem: '{v2}'")
+        except Exception as e:
+            lines.append(f"5) eval_js getItem ERRO: {e}")
+
+        lines.append("")
+        lines.append(f"Historico em memoria: {len(state.get('history', []))} registro(s)")
+        lines.append(f"Hora do teste: {ts}")
+
+        _diag_result.value = "\n".join(lines)
+        _diag_result.update()
 
     def _save():
         save_json(page, KEY_SETTINGS, settings)
@@ -2334,26 +2359,22 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
             # ── Diagnóstico de Storage (temporário, para debug) ────────
             card(ft.Column(controls=[
                 section_header("🔍 DIAGNÓSTICO DE ARMAZENAMENTO"),
-                ft.Text(
-                    f"client_storage disponível: {'✅ Sim' if _has_client_storage(page) else '❌ Não'}",
-                    size=11, color=TEXT_SECONDARY,
-                ),
-                ft.Text(
-                    f"Histórico em memória: {len(state.get('history', []))} registro(s)",
-                    size=11, color=TEXT_SECONDARY,
-                ),
-                ft.Text(
-                    f"Settings em memória: {'✅ OK' if state.get('settings') else '❌ Vazio'}",
-                    size=11, color=TEXT_SECONDARY,
-                ),
                 ft.FilledButton(
-                    "Testar Gravação Agora",
-                    on_click=lambda _: _test_storage_write(page),
+                    "Testar Agora",
+                    on_click=_run_diagnostic,
                     style=ft.ButtonStyle(bgcolor="#444444"),
                 ),
+                ft.Container(
+                    content=_diag_result,
+                    bgcolor="#1a1a1a", border_radius=8,
+                    padding=10,
+                ),
                 ft.Text(
-                    "Toque no botão acima, fecho o app/Chrome completamente, "
-                    "reabra e veja se 'Histórico em memória' continua igual.",
+                    "1) Toque em Testar Agora e leia o resultado.\n"
+                    "2) Feche o app/Chrome completamente.\n"
+                    "3) Reabra e toque em Testar Agora de novo.\n"
+                    "4) Se o teste 3 ou 5 mostrar valor vazio/None na "
+                    "segunda vez, identificamos qual storage falha.",
                     size=9, color=TEXT_MUTED,
                 ),
             ], spacing=8, tight=True)),
