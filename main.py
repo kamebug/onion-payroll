@@ -80,8 +80,18 @@ def night_minutes_in_range(shift_start: datetime, shift_end: datetime) -> int:
 def calculate_shift_pay(
     jikyuu: int, shift_type: str, start_str: str = "", end_str: str = "",
     break_min: int = 65, block: int = 1, is_holiday: bool = False,
-    yukyu_on_holiday: bool = False,
+    yukyu_on_holiday: bool = False, base_shift: str = "",
 ) -> dict:
+    """
+    shift_type: "night"|"day"|"holiday"|"yukyu"|"absent" — determina o
+        PREMIUM aplicado (+35% se holiday).
+    base_shift: "night"|"day" — determina os HORÁRIOS PADRÃO e o limiar
+        de hora extra. Quando shift_type="holiday" (trabalho em feriado/
+        domingo), o turno real do funcionário (noturno ou diurno) deve
+        ser passado aqui, pois o feriado pode cair em QUALQUER turno.
+        Se não informado, assume o mesmo valor de shift_type (compatível
+        com chamadas antigas que não differenciavam).
+    """
     result = {
         "base_pay": 0, "overtime_pay": 0, "night_pay": 0, "holiday_pay": 0,
         "total_gross": 0, "net_minutes": 0, "overtime_minutes": 0,
@@ -114,9 +124,14 @@ def calculate_shift_pay(
         result["total_gross"] = result["base_pay"]
         return result
 
-    if shift_type == "night":
+    # Determinar o turno EFETIVO para horários/limiar de OT:
+    # usa base_shift se informado (caso de feriado/domingo no turno real
+    # do funcionário), senão cai no comportamento antigo (shift_type)
+    _effective_shift = base_shift if base_shift else shift_type
+
+    if _effective_shift == "night":
         default_start, default_end, ot_start_str = "20:35", "08:35", "06:35"
-    elif shift_type in ("day", "holiday"):
+    elif _effective_shift in ("day", "holiday"):
         default_start, default_end, ot_start_str = "08:35", "20:35", "18:35"
     else:
         return result
@@ -154,10 +169,20 @@ def calculate_shift_pay(
     result["night_minutes"]    = night_min
     holiday_premium            = 0.35 if is_holiday else 0.0
 
-    result["base_pay"]     = shisha_gofuuu(jikyuu_per_min * net_min)
-    result["overtime_pay"] = shisha_gofuuu(jikyuu_per_min * ot_min * 0.25)
-    result["night_pay"]    = shisha_gofuuu(jikyuu_per_min * night_min * 0.25)
-    result["holiday_pay"]  = shisha_gofuuu(jikyuu_per_min * net_min * holiday_premium) if is_holiday else 0
+    result["base_pay"] = shisha_gofuuu(jikyuu_per_min * net_min)
+
+    if is_holiday:
+        # Validado com holerites reais (fev/2026 e mar/2026): trabalho em
+        # domingo/feriado (法定休出) usa SOMENTE +35% sobre o total de
+        # horas trabalhadas — NÃO acumula adicional noturno nem hora
+        # extra por cima. O holiday_pay já representa o adicional completo.
+        result["overtime_pay"] = 0
+        result["night_pay"]    = 0
+        result["holiday_pay"]  = shisha_gofuuu(jikyuu_per_min * net_min * holiday_premium)
+    else:
+        result["overtime_pay"] = shisha_gofuuu(jikyuu_per_min * ot_min * 0.25)
+        result["night_pay"]    = shisha_gofuuu(jikyuu_per_min * night_min * 0.25)
+        result["holiday_pay"]  = 0
     result["total_gross"]  = (result["base_pay"] + result["overtime_pay"]
                                + result["night_pay"] + result["holiday_pay"])
     return result
@@ -342,6 +367,9 @@ def compute_monthly_forecast(
             start_str=eff_start, end_str=eff_end,
             break_min=eff_break, block=block,
             is_holiday=is_pay_holiday, yukyu_on_holiday=yukyu_hol,
+            base_shift=default_shift,  # turno real do funcionário (night/day),
+                                        # usado para horários/limiar de OT mesmo
+                                        # quando shift_type="holiday"
         )
         if (is_sunday and not is_holiday) or status == "legal":
             total_legal += pay["total_gross"]
@@ -593,7 +621,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607010158"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "0000000000"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -852,9 +880,12 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
 
             elif is_off_day and s:
                 # Trabalhou em folga/feriado → +35% holiday premium
+                # base_shift = turno real do funcionário (night/day),
+                # necessário para o limiar de OT correto mesmo em feriado
                 pay = calculate_shift_pay(jikyuu, "holiday",
                                           start_str=s, end_str=e,
-                                          break_min=brk, is_holiday=True)
+                                          break_min=brk, is_holiday=True,
+                                          base_shift=stype)
                 nm = pay["net_minutes"]
                 parts = [f"base {yen(pay['base_pay'])}",
                          f"休出 +{yen(pay['holiday_pay'])}"]

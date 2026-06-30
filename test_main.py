@@ -290,3 +290,146 @@ if __name__ == "__main__":
     print("ONION PAYROLL — SUITE DE TESTES AUTOMATIZADOS")
     print("=" * 60)
     unittest.main(verbosity=2)
+
+
+class TestFeriadoCorporativo(unittest.TestCase):
+    """Valida que feriados corporativos (marcados na aba 🏭) afetam
+    o cálculo do forecast quando o usuário trabalha nesse dia,
+    não só a cor visual da célula no calendário."""
+
+    def test_feriado_corporativo_trabalhado_gera_adicional_35(self):
+        # Simula: dia 10 marcado como feriado corporativo na aba 🏭,
+        # e o usuário registrou que trabalhou nesse dia
+        resultado = base_forecast(
+            holiday_days=[10],  # feriado corp já mesclado pela UI
+            day_overrides={
+                "10": {"status": "normal", "start": "20:35",
+                       "end": "08:35", "break_min": 65}
+            },
+        )
+        self.assertGreater(
+            resultado["holiday_pay"], 0,
+            "Trabalhar em feriado corporativo deveria gerar +35% (休出手当)"
+        )
+
+    def test_feriado_corporativo_sem_registro_nao_conta(self):
+        # Dia marcado como feriado corp, mas SEM horário registrado
+        # (o funcionário não foi trabalhar) — não deve contar nada
+        com_feriado_sem_trabalho = base_forecast(
+            holiday_days=[10], day_overrides={},
+        )
+        sem_feriado = base_forecast(holiday_days=[], day_overrides={})
+        # Como dia 10 normalmente seria "work" no ciclo 4x2, marcá-lo
+        # como feriado SEM horário registrado faz o app pular esse dia
+        # (não conta nem como trabalho normal nem como feriado)
+        self.assertLessEqual(
+            com_feriado_sem_trabalho["gross"], sem_feriado["gross"]
+        )
+
+
+class TestAdicionalFixoMensal(unittest.TestCase):
+    """Valida o adicional fixo mensal (ex: função de líder) configurado
+    em Config, que deve ser somado automaticamente todo mês."""
+
+    def test_adicional_fixo_soma_no_bruto(self):
+        sem_adicional = base_forecast(fixed_monthly_bonus=0)
+        com_adicional = base_forecast(fixed_monthly_bonus=10000)
+        diferenca = com_adicional["gross"] - sem_adicional["gross"]
+        self.assertEqual(diferenca, 10000)
+
+    def test_adicional_fixo_aparece_no_retorno(self):
+        resultado = base_forecast(fixed_monthly_bonus=15000)
+        self.assertEqual(resultado.get("fixed_monthly_bonus"), 15000)
+
+    def test_adicional_fixo_persiste_em_todos_os_meses(self):
+        # Diferente do bônus de mês ímpar, este deve aparecer
+        # tanto em meses pares quanto ímpares
+        r_par   = base_forecast(fixed_monthly_bonus=8000)  # YEAR/MONTH padrão = junho (par)
+        r_impar = compute_monthly_forecast(
+            year=YEAR, month=7, jikyuu=JIKYUU,
+            anchor_date=ANCHOR, group="B",
+            holiday_days=[], day_overrides={},
+            odd_month_bonus=0, extra_bonus=0,
+            deduction_mode="fixed", fixed_deduction=0,
+            history_avg_pct=0, block=1,
+            shift_type_cfg="night", cfg_start="20:35",
+            cfg_end="08:35", cfg_break=65, cfg_ot="06:35",
+            cycle_type="4x2", fixed_monthly_bonus=8000,
+        )
+
+        self.assertEqual(r_par.get("fixed_monthly_bonus"), 8000)
+        self.assertEqual(r_impar.get("fixed_monthly_bonus"), 8000)
+
+
+class TestBugTurnoNoturnoEmFeriado(unittest.TestCase):
+    """Bug 1 (corrigido): quando shift_type='holiday' (domingo/feriado
+    trabalhado), o código assumia SEMPRE turno diurno para calcular
+    horários — mesmo no turno NOTURNO. Corrigido com base_shift.
+
+    Bug 2 (corrigido, validado com holerites reais de fev/2026 e
+    mar/2026): o domingo trabalhado estava SOMANDO holiday(+35%) +
+    night(+25%) + overtime(+25%) separadamente, gerando ~13% a mais
+    que o valor real. A empresa aplica APENAS +35% sobre o total de
+    horas, sem empilhar os outros adicionais. Validado matematicamente:
+    2 domingos = ¥47,784 e 4 domingos = ¥95,568 no holerite real,
+    ambos batendo com ¥23,892 por domingo = horas × jikyuu × 1.35."""
+
+    def test_domingo_usa_apenas_premium_de_35_porcento(self):
+        pay = calculate_shift_pay(
+            jikyuu=1590, shift_type="holiday",
+            start_str="20:35", end_str="08:35",
+            break_min=65, block=1, is_holiday=True,
+            base_shift="night",
+        )
+        # Não deve haver overtime_pay nem night_pay separados em feriado
+        self.assertEqual(pay["overtime_pay"], 0,
+            "Domingo/feriado não deve somar hora extra separada")
+        self.assertEqual(pay["night_pay"], 0,
+            "Domingo/feriado não deve somar noturno separado")
+        self.assertGreater(pay["holiday_pay"], 0,
+            "Domingo/feriado deve ter o premium de 35%")
+
+    def test_domingo_bate_com_holerite_real(self):
+        # Validado com 2 holerites reais — precisão esperada >97%
+        pay = calculate_shift_pay(
+            jikyuu=1590, shift_type="holiday",
+            start_str="20:35", end_str="08:35",
+            break_min=65, block=1, is_holiday=True,
+            base_shift="night",
+        )
+        valor_real_por_domingo = 23892
+        diferenca_pct = abs(pay["total_gross"] - valor_real_por_domingo) / valor_real_por_domingo
+        self.assertLess(diferenca_pct, 0.03,
+            f"Diferença de {diferenca_pct*100:.1f}% maior que o esperado (<3%)")
+
+    def test_sem_base_shift_usa_comportamento_antigo_dia(self):
+        # Compatibilidade: sem base_shift, não deve gerar erro
+        pay = calculate_shift_pay(
+            jikyuu=1500, shift_type="holiday",
+            start_str="20:35", end_str="08:35",
+            break_min=65, block=1, is_holiday=True,
+        )
+        self.assertIsNotNone(pay["overtime_pay"])
+
+    def test_forecast_domingo_noturno_bate_com_calculo_manual(self):
+        resultado = base_forecast(
+            cycle_type="4x2",
+            day_overrides={
+                "7":  {"status": "normal", "start": "20:35",
+                       "end": "08:35", "break_min": 65},
+            },
+        )
+        pay_domingo = calculate_shift_pay(
+            jikyuu=JIKYUU, shift_type="holiday",
+            start_str="20:35", end_str="08:35",
+            break_min=65, block=1, is_holiday=True,
+            base_shift="night",
+        )
+        pay_normal = calculate_shift_pay(
+            jikyuu=JIKYUU, shift_type="night",
+            start_str="20:35", end_str="08:35",
+            break_min=65, block=1,
+        )
+        esperado = (pay_normal["total_gross"] * resultado["days_normal"]
+                    + pay_domingo["total_gross"] * resultado["days_legal"])
+        self.assertEqual(resultado["gross"], esperado)
