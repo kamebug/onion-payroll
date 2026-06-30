@@ -226,6 +226,7 @@ def compute_monthly_forecast(
     cycle_type: str = "4x2",
     alt_start_day: str = "08:35", alt_end_day: str = "20:35",
     alt_start_night: str = "20:35", alt_end_night: str = "08:35",
+    fixed_monthly_bonus: int = 0,  # adicional fixo todo mês (liderança, etc.)
 ) -> dict:
     # ── Seleção do tipo de ciclo ──────────────────────────────────
     _alt_shift_map = {}  # dia -> "day"/"night" (só usado se cycle_type=alternating)
@@ -357,7 +358,8 @@ def compute_monthly_forecast(
         total_abono += day_abono
 
     applied_odd = odd_month_bonus if month % 2 == 1 else 0
-    gross       = total_base + total_ot + total_night + total_holiday + total_legal + applied_odd + extra_bonus + total_abono
+    gross       = (total_base + total_ot + total_night + total_holiday + total_legal
+                   + applied_odd + extra_bonus + total_abono + fixed_monthly_bonus)
     deductions  = (fixed_deduction if deduction_mode == "fixed"
                    else shisha_gofuuu(gross * history_avg_pct / 100))
 
@@ -368,6 +370,7 @@ def compute_monthly_forecast(
         "gross": gross, "deductions": deductions, "net": gross - deductions,
         "days_normal": days_normal, "days_holiday": days_holiday, "days_legal": days_legal,
         "abono_total": total_abono,
+        "fixed_monthly_bonus": fixed_monthly_bonus,
     }
 
 # ─────────────────────────────────────────────
@@ -478,6 +481,7 @@ DEFAULT_SETTINGS = {
     "block": 1, "pin_enabled": False,
     "shift_type": "night", "shift_start": "20:35", "shift_end": "08:35",
     "shift_break": 65, "shift_ot": "06:35", "extra_bonus": 0,
+    "fixed_monthly_bonus": 0,  # adicional fixo todo mês (ex: liderança)
     "cycle_type": "4x2",  # "4x2" | "5x2" | "alternating"
     "shift_start_day": "08:35", "shift_end_day": "20:35",
     "shift_start_night": "20:35", "shift_end_night": "08:35",
@@ -589,7 +593,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607010122"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "0000000000"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -1293,6 +1297,7 @@ def build_holerite_tab(page: ft.Page, state: dict, refresh_all):
             alt_end_day=settings.get("shift_end_day", "20:35"),
             alt_start_night=settings.get("shift_start_night", "20:35"),
             alt_end_night=settings.get("shift_end_night", "08:35"),
+            fixed_monthly_bonus=int(settings.get("fixed_monthly_bonus") or 0),
         )
     except Exception:
         data = {"gross": 0, "deductions": 0, "net": 0,
@@ -1375,6 +1380,8 @@ def build_holerite_tab(page: ft.Page, state: dict, refresh_all):
                         data.get("legal_holiday_pay", 0), color="#EF9A9A", small=True),
                 pay_row("Bônus Mês Ímpar 奇数月",
                         data["odd_bonus"],           color=SUCCESS,     small=True),
+                pay_row("Adicional Fixo Mensal",
+                        data.get("fixed_monthly_bonus", 0), color=SUCCESS, small=True),
                 pay_row("Abono Extra",
                         data["extra_bonus"],         color=SUCCESS,     small=True),
                 pay_row("Abono/Vale do Dia",
@@ -2290,6 +2297,12 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
                 mk_field("Data Início Ciclo 4×2 (AAAA-MM-DD)", "anchor_date",
                          ft.KeyboardType.TEXT),
                 mk_field("Bônus Padrão Mês Ímpar (¥)",        "odd_bonus"),
+                mk_field("Adicional Fixo Mensal — Líder, etc. (¥)", "fixed_monthly_bonus"),
+                ft.Text(
+                    "Valor somado automaticamente TODO mês na previsão "
+                    "(ex: adicional de liderança, função técnica fixa).",
+                    size=9, color=TEXT_MUTED,
+                ),
                 block_dd,
                 section_header("TIPO DE CICLO DE TRABALHO"),
                 cycle_type_row,
@@ -2824,6 +2837,17 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
             _color_legend("#00796B", "Verde-azulado — Saída Antecipada",
                           "Horário customizado registrado manualmente"),
 
+            # ── Bônus e Adicionais ────────────────────────────────────
+            _title("💰 Bônus e Adicionais Mensais"),
+            _item("Adicional Fixo Mensal", "Configure em ⚙️ Config.",
+                  "Valor somado AUTOMATICAMENTE todo mês — ideal para função de líder, técnico ou qualquer adicional fixo recorrente. Configure uma vez e esqueça."),
+            _item("Bônus Mês Ímpar 奇数月", "Configure em ⚙️ Config.",
+                  "Valor somado apenas em meses ímpares (jan, mar, mai, jul, set, nov)."),
+            _item("Abono Extra", "Configure em ⚙️ Config.",
+                  "Valor pontual — edite manualmente quando precisar adicionar algo fora do padrão."),
+            _item("Abono / Vale / Bico extra", "Campo no modal de ponto, por dia",
+                  "Para valores específicos de UM dia — arubaito, gorjeta, vale-transporte extra."),
+
             # ── Descontos ────────────────────────────────────────────
             _title("🔢 Previsão de Descontos"),
             _item("📊 Média Histórica", "Botão em ⚙️ Config.",
@@ -2832,6 +2856,10 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
                   "Usa o valor fixo em ¥ que você configurar, ignorando o histórico."),
             _item("⭐ Campos obrigatórios no Histórico", "Apenas 3 campos",
                   "Total Bruto, Total Desconto e Salário Líquido são essenciais. Os demais campos do modal são opcionais — só para seu registro pessoal."),
+            _item("📅 Mês do Histórico", "Use o mês do TRABALHO",
+                  "Se você recebeu o holerite em julho referente ao trabalho de junho, registre como '2026-06', não '2026-07'."),
+            _item("✏️ Editar ou remover registro", "Toque em qualquer card do Histórico",
+                  "Abre o registro para edição. Um botão Remover aparece quando estiver editando."),
 
             # ── CSV de feriados ──────────────────────────────────────
             _title("📄 Formato do CSV de Feriados"),
