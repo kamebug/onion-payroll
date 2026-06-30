@@ -589,7 +589,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607010113"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "0000000000"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -1322,6 +1322,15 @@ def build_holerite_tab(page: ft.Page, state: dict, refresh_all):
         ],
     )
 
+    month_hint = ft.Container(
+        content=ft.Text(
+            "📅 Previsão do trabalho realizado neste mês. "
+            "Você costuma receber este valor no holerite do mês seguinte.",
+            size=10, color=TEXT_MUTED, text_align=ft.TextAlign.CENTER,
+        ),
+        padding=ft.Padding(left=8, right=8, top=2, bottom=6),
+    )
+
     def pay_row(lbl, amt, color=TEXT_PRIMARY, small=False):
         return ft.Row(
             controls=[
@@ -1351,7 +1360,7 @@ def build_holerite_tab(page: ft.Page, state: dict, refresh_all):
 
     return ft.Column(
         controls=[
-            nav_row, ft.Container(height=4),
+            nav_row, month_hint,
             card(ft.Column(controls=[
                 section_header("支給 VENCIMENTOS"),
                 pay_row(f"Salário Base 基本給 ({data.get('days_normal',0)}d)",
@@ -1855,6 +1864,15 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
                                     style=ft.ButtonStyle(bgcolor=ACCENT, color="#121212")),
                 ],
                 alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            ),
+            ft.Container(
+                content=ft.Text(
+                    "💡 Use o mês a que se refere o trabalho (ex: o holerite "
+                    "que você recebe em julho normalmente é do trabalho de junho — "
+                    "registre como '2026-06').",
+                    size=10, color=TEXT_MUTED,
+                ),
+                padding=ft.Padding(left=0, right=0, top=2, bottom=6),
             ),
             avg_widget,
             section_header("MESES ANTERIORES"),
@@ -2697,9 +2715,11 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
             _item("3️⃣", "Acompanhe no Calendário",
                   "A aba 📅 gera automaticamente o ciclo escolhido. Toque em qualquer dia para registrar horários, faltas ou férias."),
             _item("4️⃣", "Consulte o Holerite",
-                  "A aba 📋 mostra a previsão do mês com todos os adicionais calculados automaticamente."),
+                  "A aba 📋 mostra a previsão do mês selecionado — referente ao trabalho realizado naquele mês."),
             _item("5️⃣", "Registre o holerite real",
-                  "Na aba 🕐 Histórico, toque em 'Registrar Holerite Real'. Apenas 3 campos são obrigatórios — os demais são opcionais."),
+                  "Na aba 🕐 Histórico, registre com o mês do TRABALHO, não o mês em que você recebeu o pagamento. Apenas 3 campos são obrigatórios."),
+            _item("⚠️", "Atenção ao mês",
+                  "No Japão o holerite geralmente chega no mês seguinte ao trabalho. Se você trabalhou em junho e recebeu o pagamento em julho, registre como '2026-06' no Histórico."),
 
             # ── Grupos de turno ──────────────────────────────────────
             _title("👥 Grupo (identificação da equipe)"),
