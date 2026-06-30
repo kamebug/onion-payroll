@@ -593,7 +593,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2606302228"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2606302245"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -1553,9 +1553,18 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
             refresh_all()
 
         def _save(_=None):
+            # Validação: mês é obrigatório, sem ele o registro fica
+            # invisível/inconsistente na lista do histórico
+            _month_val = month_f.value.strip()
+            if not _month_val:
+                month_f.border_color = DANGER
+                month_f.helper_text = "Campo obrigatório — formato AAAA-MM"
+                month_f.update()
+                return
+
             g, d = _vi(f_gross), _vi(f_ded)
             entry = {
-                "month":        month_f.value.strip(),
+                "month":        _month_val,
                 "gross": g, "deductions": d,
                 "net":   _vi(f_net),
                 "ratio": round(d/g*100, 2) if g else 0.0,
@@ -1606,9 +1615,12 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
             }
             # Remove tanto o mês antigo (se editando e mudou o mês) quanto
             # qualquer registro existente com o novo mês (evita duplicar)
+            # Usa state["history"] (não a variável local "history") para
+            # garantir que pegamos a lista mais atual, inclusive se o
+            # usuário salvar múltiplos registros na mesma sessão.
             _old_month = edit_entry.get("month") if edit_entry else None
             state["history"] = [
-                e for e in history
+                e for e in state["history"]
                 if e.get("month") != entry["month"] and e.get("month") != _old_month
             ]
             state["history"].append(entry)
@@ -1748,7 +1760,7 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
         page.overlay.append(bg)
         page.update()
 
-    ratios    = [e.get("ratio", 0) for e in history if e.get("ratio", 0) > 0]
+    ratios    = [e.get("ratio", 0) for e in state["history"] if e.get("ratio", 0) > 0]
     avg_ratio = sum(ratios) / len(ratios) if ratios else None
 
     def _history_card(e):
@@ -1799,7 +1811,9 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
             on_click=lambda _, entry=e: open_log_modal(None, edit_entry=entry),
             ink=True, ink_color="#00D2C633",
         )
-    history_cards = [_history_card(e) for e in history[:24]]
+    # Usar state["history"] (não a variável local "history") para
+    # garantir que a lista renderizada é sempre a mais atual
+    history_cards = [_history_card(e) for e in state["history"][:24]]
 
     avg_widget = ft.Container(
         content=ft.Column(
@@ -2991,9 +3005,11 @@ def main(page: ft.Page):
         _cached = _mem_cache.get(KEY_SETTINGS)
         if _cached and isinstance(_cached, dict):
             state["settings"] = _cached
-        state["history"]   = load_json(page, KEY_HISTORY,   [])
-        state["overrides"] = load_json(page, KEY_OVERRIDES, {})
-        state["holidays"]  = load_json(page, KEY_HOLIDAYS,  {})
+        # Sempre ler diretamente do _mem_cache para garantir o dado mais
+        # recente, evitando qualquer inconsistência de closures antigas
+        state["history"]   = _mem_cache.get(KEY_HISTORY,   [])
+        state["overrides"] = _mem_cache.get(KEY_OVERRIDES, {})
+        state["holidays"]  = _mem_cache.get(KEY_HOLIDAYS,  {})
 
         builders = [build_calendar_tab, build_holerite_tab,
                     build_history_tab,  build_holidays_tab,
