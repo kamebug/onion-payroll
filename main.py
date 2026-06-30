@@ -505,22 +505,26 @@ def load_json(page: ft.Page, key: str, default):
 
 
 def save_json(page: ft.Page, key: str, value):
-    """Salva no cache + persiste no storage disponível."""
+    """Salva no cache + persiste em AMBOS client_storage e localStorage
+    como redundância. Isso evita perda de dados entre deploys, já que
+    o client_storage do Flet pode ser invalidado quando o build muda,
+    enquanto localStorage é vinculado apenas ao domínio."""
     _mem_cache[key] = value
     serialized = json.dumps(value)
-    # Modo PWA/WASM: usa client_storage nativo
-    if _has_client_storage(page):
-        try:
-            page.client_storage.set(key, serialized)
-            return
-        except Exception:
-            pass
-    # Modo servidor web: usa localStorage via eval_js
+
+    # Sempre tenta gravar em localStorage primeiro (mais estável entre builds)
     try:
         safe = serialized.replace("\\", "\\\\").replace("`", "\\`")
         page.eval_js(f"localStorage.setItem(\'{key}\', `{safe}`)")
     except Exception:
-        pass  # modo desktop — só memória
+        pass
+
+    # Também grava em client_storage (PWA/WASM nativo) como redundância
+    if _has_client_storage(page):
+        try:
+            page.client_storage.set(key, serialized)
+        except Exception:
+            pass
 
 
 def remove_storage(page: ft.Page, key: str):
@@ -538,22 +542,27 @@ def remove_storage(page: ft.Page, key: str):
 
 
 def boot_load_storage(page: ft.Page):
-    """Lê todos os dados persistidos e popula o cache."""
+    """Lê todos os dados persistidos e popula o cache.
+    Tenta localStorage PRIMEIRO (mais estável entre builds/deploys),
+    e usa client_storage só como fallback se localStorage estiver vazio."""
     for key in (KEY_SETTINGS, KEY_HISTORY, KEY_OVERRIDES,
                 KEY_HOLIDAYS, "onion_holidays_corp"):
         raw = None
-        # Tentar client_storage (PWA/WASM)
-        if _has_client_storage(page):
-            try:
-                raw = page.client_storage.get(key)
-            except Exception:
-                pass
-        # Tentar eval_js localStorage (servidor web)
-        if raw is None:
-            try:
-                raw = page.eval_js(f"localStorage.getItem(\'{key}\')")
-            except Exception:
-                pass
+
+        # 1) Tentar localStorage primeiro — sobrevive a deploys/novos builds
+        try:
+            raw = page.eval_js(f"localStorage.getItem(\'{key}\')")
+        except Exception:
+            pass
+
+        # 2) Fallback: client_storage (PWA/WASM nativo)
+        if raw in (None, "null", "undefined", ""):
+            if _has_client_storage(page):
+                try:
+                    raw = page.client_storage.get(key)
+                except Exception:
+                    pass
+
         if raw and raw not in ("null", "undefined", None, ""):
             try:
                 _mem_cache[key] = json.loads(raw)
@@ -584,7 +593,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2606302157"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2606302209"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
