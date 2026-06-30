@@ -506,25 +506,28 @@ def load_json(page: ft.Page, key: str, default):
 
 def save_json(page: ft.Page, key: str, value):
     """Salva no cache + persiste em AMBOS client_storage e localStorage
-    como redundância. Isso evita perda de dados entre deploys, já que
-    o client_storage do Flet pode ser invalidado quando o build muda,
-    enquanto localStorage é vinculado apenas ao domínio."""
+    como redundância dupla.
+
+    client_storage é a API nativa do Flet para PWA/WASM e é tentada
+    primeiro. localStorage via eval_js é gravado em seguida como
+    backup adicional — vinculado apenas ao domínio, sobrevive a
+    deploys e funciona mesmo se client_storage falhar silenciosamente."""
     _mem_cache[key] = value
     serialized = json.dumps(value)
 
-    # Sempre tenta gravar em localStorage primeiro (mais estável entre builds)
-    try:
-        safe = serialized.replace("\\", "\\\\").replace("`", "\\`")
-        page.eval_js(f"localStorage.setItem(\'{key}\', `{safe}`)")
-    except Exception:
-        pass
-
-    # Também grava em client_storage (PWA/WASM nativo) como redundância
+    # 1) client_storage primeiro — API nativa, mais confiável em PWA
     if _has_client_storage(page):
         try:
             page.client_storage.set(key, serialized)
         except Exception:
             pass
+
+    # 2) localStorage como backup redundante
+    try:
+        safe = serialized.replace("\\", "\\\\").replace("`", "\\`")
+        page.eval_js(f"localStorage.setItem(\'{key}\', `{safe}`)")
+    except Exception:
+        pass
 
 
 def remove_storage(page: ft.Page, key: str):
@@ -543,25 +546,29 @@ def remove_storage(page: ft.Page, key: str):
 
 def boot_load_storage(page: ft.Page):
     """Lê todos os dados persistidos e popula o cache.
-    Tenta localStorage PRIMEIRO (mais estável entre builds/deploys),
-    e usa client_storage só como fallback se localStorage estiver vazio."""
+
+    IMPORTANTE: page.client_storage é a API NATIVA do Flet para
+    armazenamento em modo Web/PWA/WASM, e funciona de forma confiável
+    mesmo com o runtime Python rodando em Web Worker separado (Pyodide).
+    eval_js() pode ter problemas de sincronização nesse cenário, então
+    é usado apenas como FALLBACK secundário."""
     for key in (KEY_SETTINGS, KEY_HISTORY, KEY_OVERRIDES,
                 KEY_HOLIDAYS, "onion_holidays_corp"):
         raw = None
 
-        # 1) Tentar localStorage primeiro — sobrevive a deploys/novos builds
-        try:
-            raw = page.eval_js(f"localStorage.getItem(\'{key}\')")
-        except Exception:
-            pass
+        # 1) client_storage primeiro — API nativa, mais confiável em PWA
+        if _has_client_storage(page):
+            try:
+                raw = page.client_storage.get(key)
+            except Exception:
+                pass
 
-        # 2) Fallback: client_storage (PWA/WASM nativo)
+        # 2) Fallback: localStorage via eval_js
         if raw in (None, "null", "undefined", ""):
-            if _has_client_storage(page):
-                try:
-                    raw = page.client_storage.get(key)
-                except Exception:
-                    pass
+            try:
+                raw = page.eval_js(f"localStorage.getItem(\'{key}\')")
+            except Exception:
+                pass
 
         if raw and raw not in ("null", "undefined", None, ""):
             try:
@@ -593,7 +600,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2606302313"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2606302329"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -1250,11 +1257,12 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
 # ─────────────────────────────────────────────
 
 def build_holerite_tab(page: ft.Page, state: dict, refresh_all):
-    settings  = state["settings"]
-    overrides = state["overrides"]
-    holidays  = state["holidays"]
-    history   = state["history"]
-    today     = date.today()
+    settings     = state["settings"]
+    overrides    = state["overrides"]
+    holidays     = state["holidays"]
+    holidays_corp = state.get("holidays_corp", {})
+    history      = state["history"]
+    today        = date.today()
     view_year  = state.get("hol_year",  today.year)
     view_month = state.get("hol_month", today.month)
 
@@ -1268,12 +1276,17 @@ def build_holerite_tab(page: ft.Page, state: dict, refresh_all):
         anchor = today
 
     month_key = f"{view_year}-{view_month:02d}"
+    # Mesclar feriados nacionais (embutidos/CSV) + corporativos da aba 🏭
+    # para que ambos afetem o cálculo do holerite, não só a cor da célula
+    _nat_hols  = holidays.get(month_key, [])
+    _corp_hols = holidays_corp.get(month_key, [])
+    _all_holidays_month = sorted(set(_nat_hols) | set(_corp_hols))
     try:
         data = compute_monthly_forecast(
             year=view_year, month=view_month,
             jikyuu=int(settings.get("jikyuu") or 1500),
             anchor_date=anchor, group=settings.get("group", "B"),
-            holiday_days=holidays.get(month_key, []),
+            holiday_days=_all_holidays_month,
             day_overrides=overrides.get(month_key, {}),
             odd_month_bonus=int(settings.get("odd_bonus") or 50000),
             extra_bonus=int(settings.get("extra_bonus") or 0),
@@ -1866,6 +1879,27 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
 #  TAB 4 — SETTINGS
 # ─────────────────────────────────────────────
 
+def _test_storage_write(page: ft.Page):
+    """Função de diagnóstico: grava um valor de teste com timestamp
+    e mostra um snackbar confirmando o resultado da gravação."""
+    import datetime as _dt
+    test_value = {"timestamp": _dt.datetime.now().isoformat(),
+                  "test": "storage_diagnostic"}
+    try:
+        save_json(page, "onion_storage_test", test_value)
+        page.snack_bar = ft.SnackBar(
+            content=ft.Text(f"✅ Gravado: {test_value['timestamp']}"),
+            bgcolor=SUCCESS,
+        )
+    except Exception as e:
+        page.snack_bar = ft.SnackBar(
+            content=ft.Text(f"❌ Erro ao gravar: {e}"),
+            bgcolor=DANGER,
+        )
+    page.snack_bar.open = True
+    page.update()
+
+
 def build_settings_tab(page: ft.Page, state: dict, refresh_all):
     settings = state["settings"]
 
@@ -2296,6 +2330,33 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
                     ),
                 ),
             ], spacing=10, tight=True)),
+
+            # ── Diagnóstico de Storage (temporário, para debug) ────────
+            card(ft.Column(controls=[
+                section_header("🔍 DIAGNÓSTICO DE ARMAZENAMENTO"),
+                ft.Text(
+                    f"client_storage disponível: {'✅ Sim' if _has_client_storage(page) else '❌ Não'}",
+                    size=11, color=TEXT_SECONDARY,
+                ),
+                ft.Text(
+                    f"Histórico em memória: {len(state.get('history', []))} registro(s)",
+                    size=11, color=TEXT_SECONDARY,
+                ),
+                ft.Text(
+                    f"Settings em memória: {'✅ OK' if state.get('settings') else '❌ Vazio'}",
+                    size=11, color=TEXT_SECONDARY,
+                ),
+                ft.FilledButton(
+                    "Testar Gravação Agora",
+                    on_click=lambda _: _test_storage_write(page),
+                    style=ft.ButtonStyle(bgcolor="#444444"),
+                ),
+                ft.Text(
+                    "Toque no botão acima, fecho o app/Chrome completamente, "
+                    "reabra e veja se 'Histórico em memória' continua igual.",
+                    size=9, color=TEXT_MUTED,
+                ),
+            ], spacing=8, tight=True)),
         ],
         spacing=0, scroll=ft.ScrollMode.AUTO,
     )
