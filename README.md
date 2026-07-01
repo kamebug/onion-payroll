@@ -25,7 +25,7 @@ Calcula automaticamente salário base, hora extra, adicional noturno e trabalho 
   - 休出手当 Trabalho em Folga/Feriado → +35%
   - 法定休日 Domingo → +35% automático
   - 四捨五入 Arredondamento japonês — aplicado à taxa por hora, antes de multiplicar pelas horas
-- **Taxa de referência configurável** — para empresas que incluem adicionais fixos mensais (ex: adicional de líder) no cálculo de hora extra/noturno/domingo, com calibração guiada contra um holerite real
+- **Taxa de referência configurável** — para empresas que incluem adicionais fixos mensais (ex: adicional de líder) no cálculo de hora extra/noturno/domingo, com calibração guiada contra um holerite real. Escondida atrás de um switch desligado por padrão — não polui a tela de quem não precisa
 - **Modal de ponto completo:**
   - 有休 Yukyu — laranja, 8h fixo sem hora extra/noturno
   - 欠勤 Falta — roxo, ¥0
@@ -92,6 +92,29 @@ Configure os dois horários (dia e noite) em ⚙️ Config. — o app alterna au
 
 ---
 
+## 🔢 Arredondamento
+
+Dois mecanismos diferentes, independentes entre si:
+
+**1. Arredondamento do Ponto** (⚙️ Config, opcional) — arredonda os
+minutos trabalhados em blocos de 15 ou 30 min, com regra "Truncar"
+(sempre pra baixo) ou "Mais Próximo". Só importa perto da borda entre
+blocos: 22min em blocos de 15 vira 15min nos dois modos; 23min vira
+15min truncando mas 30min no modo "mais próximo".
+
+**2. Arredondamento da Taxa por Hora** (sempre ativo, não configurável) —
+a taxa (時給 × multiplicador) é arredondada para o yen mais próximo
+**antes** de multiplicar pelas horas, não depois. Exemplo real (時給=¥1.430,
+30h de hora extra):
+
+```
+Taxa bruta = 1.430 × 1,25 = 1.787,50 ¥/hora
+Arredondada = 1.788 ¥/hora  (0,5 sempre sobe)
+Total = 1.788 × 30 = ¥53.640
+```
+
+---
+
 ## 📈 Taxa de Referência para Hora Extra/Noturno/Domingo
 
 Algumas empresas calculam hora extra, noturno e domingo usando uma taxa por
@@ -99,17 +122,36 @@ hora **maior** que o 時給 puro — a legislação exige incluir certos
 adicionais fixos mensais (ex: adicional de líder) nessa taxa de referência,
 mesmo que eles não entrem no cálculo de horas normais.
 
-Em ⚙️ Config → **"Taxa de Hora Extra/Noturno/Domingo"**, é possível
-configurar esse acréscimo. **Importante:** o valor a preencher não é
-necessariamente o mesmo que aparece impresso na rubrica de adicional do
-holerite — precisa ser calibrado comparando com um holerite real:
+Em ⚙️ Config → **"Taxa de Hora Extra/Noturno/Domingo"** (switch desligado
+por padrão — a maioria não precisa mexer aqui), é possível configurar esse
+acréscimo. **Importante:** o valor a preencher não é necessariamente o
+mesmo que aparece impresso na rubrica de adicional do holerite — precisa
+ser calibrado comparando com um holerite real.
+
+### Exemplo completo de calibração (dados reais)
+
+Holerite com 時給=¥1.590, `公出手当` (domingo) = ¥47.784, 22h de domingo:
 
 ```
-acréscimo/hora = (公出手当 ÷ horas de domingo ÷ 1,35) − 時給
+1) Taxa real:        47.784 ÷ 22 ÷ 1,35        = ¥1.608,89/h
+2) Acréscimo/hora:    1.608,89 − 1.590           = ¥18,89/h
+3) Valor mensal:      18,89 × 144 (Horas Padrão) = ¥2.720
+   → digitar 2720 no campo "Acréscimo p/ Taxa de Extra/Domingo"
 ```
 
-Deixe os campos em `0` (padrão) se sua empresa não usa esse tipo de taxa
-elevada — o cálculo permanece idêntico ao padrão (時給 puro).
+Se sua empresa também paga adicional noturno (`深夜手当`) numa taxa
+ligeiramente diferente, calcule o ajuste fino da mesma forma e subtraia o
+acréscimo já encontrado no passo 2:
+
+```
+4) Taxa noturno real: 45.338 ÷ 112,5 ÷ 0,25      = ¥1.612,00/h
+   Ajuste fino:        1.612,00 − 1.590 − 18,89   = ¥3,11/h
+   → digitar 3.11 no campo "Ajuste Fino do Noturno"
+```
+
+Deixe o switch desligado (campos em `0`) se sua empresa não usa esse tipo
+de taxa elevada — o cálculo permanece idêntico ao padrão (時給 puro).
+
 
 ---
 

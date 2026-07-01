@@ -688,7 +688,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607010904"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607010336"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -2187,58 +2187,99 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
     )
 
 
-    block_dd = ft.Dropdown(
-        label="Arredondamento do Ponto",
-        value=str(settings.get("block", 1)),
-        options=[
-            ft.dropdown.Option("1",  "Minuto a minuto"),
-            ft.dropdown.Option("15", "Blocos de 15 minutos"),
-            ft.dropdown.Option("30", "Blocos de 30 minutos"),
-        ],
-        bgcolor="#2A2A2A", color="#F0F0F0",
-        border_color="#333333", focused_border_color="#00D2C6",
-        label_style=ft.TextStyle(color="#A0A0A0"),
-    )
-    block_dd.on_change = lambda e: [settings.__setitem__("block", int(e.control.value)), save_json(page, KEY_SETTINGS, settings)]
 
-    round_mode_dd = ft.Dropdown(
-        label="Regra de Arredondamento",
-        value=str(settings.get("round_mode", "truncate")),
-        options=[
-            ft.dropdown.Option("truncate", "Sempre para baixo (truncar)"),
-            ft.dropdown.Option("nearest",  "Mais próximo (padrão japonês comum)"),
-        ],
-        bgcolor="#2A2A2A", color="#F0F0F0",
-        border_color="#333333", focused_border_color="#00D2C6",
-        label_style=ft.TextStyle(color="#A0A0A0"),
-        visible=(int(settings.get("block", 1)) > 1),
-    )
-    round_mode_dd.on_change = lambda e: [settings.__setitem__("round_mode", e.control.value), save_json(page, KEY_SETTINGS, settings)]
-    def _on_block_change(e):
-        settings.__setitem__("block", int(e.control.value))
+
+
+
+
+
+    # Dropdown causava o mesmo bug que o seletor de desconto tinha antes
+    # de virar botão: a seleção não fixava e a página voltava ao topo.
+    # Corrigido usando o mesmo padrão de botões (sem refresh_all()).
+    _block_val = [int(settings.get("block", 1))]
+
+    def _set_block(value):
+        _block_val[0] = value
+        settings["block"] = value
         save_json(page, KEY_SETTINGS, settings)
-        round_mode_dd.visible = (int(e.control.value) > 1)
-        round_mode_dd.update()
-    block_dd.on_change = _on_block_change
+        for v, btn in ((1, btn_block_1), (15, btn_block_15), (30, btn_block_30)):
+            btn.style = ft.ButtonStyle(
+                bgcolor=ACCENT if value == v else BG_SURFACE,
+                color="#121212" if value == v else TEXT_PRIMARY,
+            )
+            btn.update()
+        round_mode_label.visible = value > 1
+        round_mode_row.visible = value > 1
+        round_mode_label.update()
+        round_mode_row.update()
+
+    _cur_block = int(settings.get("block", 1))
+    btn_block_1 = ft.FilledButton(
+        "1 min", on_click=lambda _: _set_block(1),
+        style=ft.ButtonStyle(
+            bgcolor=ACCENT if _cur_block == 1 else BG_SURFACE,
+            color="#121212" if _cur_block == 1 else TEXT_PRIMARY,
+        ), expand=1,
+    )
+    btn_block_15 = ft.FilledButton(
+        "15 min", on_click=lambda _: _set_block(15),
+        style=ft.ButtonStyle(
+            bgcolor=ACCENT if _cur_block == 15 else BG_SURFACE,
+            color="#121212" if _cur_block == 15 else TEXT_PRIMARY,
+        ), expand=1,
+    )
+    btn_block_30 = ft.FilledButton(
+        "30 min", on_click=lambda _: _set_block(30),
+        style=ft.ButtonStyle(
+            bgcolor=ACCENT if _cur_block == 30 else BG_SURFACE,
+            color="#121212" if _cur_block == 30 else TEXT_PRIMARY,
+        ), expand=1,
+    )
+    block_label = ft.Text("Arredondamento do Ponto", size=12, color="#A0A0A0")
+    block_row = ft.Row(controls=[btn_block_1, btn_block_15, btn_block_30], spacing=6)
+
+    # ── Regra de arredondamento (truncar/mais próximo) — também botões ──
+    def _set_round_mode(mode):
+        settings["round_mode"] = mode
+        save_json(page, KEY_SETTINGS, settings)
+        for m, btn in (("truncate", btn_round_trunc), ("nearest", btn_round_nearest)):
+            btn.style = ft.ButtonStyle(
+                bgcolor=ACCENT if mode == m else BG_SURFACE,
+                color="#121212" if mode == m else TEXT_PRIMARY,
+            )
+            btn.update()
+
+    _cur_round = settings.get("round_mode", "truncate")
+    btn_round_trunc = ft.FilledButton(
+        "Truncar (p/ baixo)", on_click=lambda _: _set_round_mode("truncate"),
+        style=ft.ButtonStyle(
+            bgcolor=ACCENT if _cur_round == "truncate" else BG_SURFACE,
+            color="#121212" if _cur_round == "truncate" else TEXT_PRIMARY,
+        ), expand=1,
+    )
+    btn_round_nearest = ft.FilledButton(
+        "Mais Próximo", on_click=lambda _: _set_round_mode("nearest"),
+        style=ft.ButtonStyle(
+            bgcolor=ACCENT if _cur_round == "nearest" else BG_SURFACE,
+            color="#121212" if _cur_round == "nearest" else TEXT_PRIMARY,
+        ), expand=1,
+    )
+    round_mode_label = ft.Text("Regra de Arredondamento", size=12, color="#A0A0A0",
+                                visible=(_cur_block > 1))
+    round_mode_row = ft.Row(
+        controls=[btn_round_trunc, btn_round_nearest], spacing=6,
+        visible=(_cur_block > 1),
+    )
 
     # ── Adicionais fixos que entram no cálculo de extra/noturno/domingo ──
-    # Algumas empresas usam uma taxa por hora MAIOR que o jikyuu puro para
-    # calcular hora extra, noturno e domingo — porque a lei exige incluir
-    # certos adicionais fixos mensais (ex: adicional de líder) na "taxa de
-    # referência" desses cálculos. Validado contra holerites reais.
+    # Algumas empresas usam uma taxa por hora MAIOR que o jikyuu puro nesses
+    # 3 cálculos. Por padrão FICA ESCONDIDO (switch desligado) — a maioria
+    # dos usuários não precisa disso, e não vale poluir a tela de todo
+    # mundo por uma situação específica. Ver aba Ajuda para a explicação
+    # completa e a fórmula de calibração.
     premium_help = ft.Text(
-        "Diferente do 'Adicional Fixo Mensal — Líder, etc.' acima (que soma "
-        "direto no salário bruto): este aqui NÃO soma nada sozinho — só "
-        "eleva a taxa usada para calcular hora extra/noturno/domingo, caso "
-        "sua empresa use uma taxa maior que o jikyuu puro nesses cálculos.\n\n"
-        "⚠️ Não copie o valor do adicional direto do holerite — ele raramente "
-        "bate exato. O jeito certo de descobrir o valor: pegue um holerite "
-        "real, e na rubrica de domingo (公出手当) faça:\n"
-        "  acréscimo/hora = (公出手当 ÷ horas de domingo ÷ 1,35) − jikyuu\n"
-        "Multiplique o resultado pelas \"Horas Padrão\" abaixo (144 por "
-        "padrão) para preencher o campo abaixo. Deixe tudo em 0 se você não "
-        "sabe ou não tem esse tipo de adicional — o cálculo fica idêntico "
-        "ao de hoje.",
+        "⚠️ Não copie o valor do adicional impresso no holerite — raramente "
+        "bate exato. Veja como calibrar certinho na aba ❓ Ajuda.",
         size=11, color="#A0A0A0", italic=True,
     )
     premium_allowances_f = ft.TextField(
@@ -2272,6 +2313,25 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
     premium_allowances_f.on_change = lambda e: _save_premium_field("premium_allowances_monthly", premium_allowances_f)
     premium_hours_f.on_change      = lambda e: _save_premium_field("premium_standard_hours", premium_hours_f)
     night_addon_f.on_change        = lambda e: _save_premium_field("night_addon_extra", night_addon_f)
+
+    # Campos empilhados verticalmente (não lado a lado) — em telas
+    # estreitas de celular, dois campos numa Row cortavam o segundo campo.
+    premium_fields_col = ft.Column(
+        controls=[premium_help, premium_allowances_f, premium_hours_f, night_addon_f],
+        spacing=8,
+        visible=(float(settings.get("premium_allowances_monthly", 0)) != 0
+                 or float(settings.get("night_addon_extra", 0)) != 0),
+    )
+    def _toggle_premium(e):
+        premium_fields_col.visible = e.control.value
+        premium_fields_col.update()
+    premium_switch = ft.Switch(
+        label="Minha empresa usa taxa diferente para hora extra/noturno/domingo",
+        value=premium_fields_col.visible,
+        active_color=ACCENT,
+        label_text_style=ft.TextStyle(color=TEXT_SECONDARY, size=12),
+        on_change=_toggle_premium,
+    )
 
     _ded_mode_val = [settings.get("deduction_mode", "historical")]
 
@@ -2477,12 +2537,13 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
                     "(ex: adicional de liderança, função técnica fixa).",
                     size=9, color=TEXT_MUTED,
                 ),
-                block_dd,
-                round_mode_dd,
+                block_label,
+                block_row,
+                round_mode_label,
+                round_mode_row,
                 section_header("TAXA DE HORA EXTRA/NOTURNO/DOMINGO"),
-                premium_help,
-                premium_allowances_f,
-                ft.Row([premium_hours_f, night_addon_f], spacing=8),
+                premium_switch,
+                premium_fields_col,
                 section_header("TIPO DE CICLO DE TRABALHO"),
                 cycle_type_row,
                 ft.Text(
@@ -2866,6 +2927,18 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
             margin=ft.Padding(left=0, right=0, top=2, bottom=2),
         )
 
+    def _example(titulo, linhas):
+        return ft.Container(
+            content=ft.Column(controls=[
+                ft.Text(titulo, size=11, color=ACCENT_LITE, weight=ft.FontWeight.W_700),
+                ft.Text("\n".join(linhas), size=11, color="#D0D0D0",
+                        font_family="monospace", selectable=True),
+            ], spacing=4, tight=True),
+            bgcolor="#1C1C1C", border_radius=6,
+            padding=ft.Padding(left=10, right=10, top=8, bottom=8),
+            margin=ft.Padding(left=0, right=0, top=2, bottom=6),
+        )
+
     def _rule(jp, pt, calc, color=TEXT_PRIMARY):
         return ft.Container(
             content=ft.Row(controls=[
@@ -2977,14 +3050,61 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
             _p("⚠️ Domingo e feriado trabalhado recebem APENAS +35% sobre a base — não soma noturno nem hora extra por cima, mesmo que o horário caia na madrugada. Validado com holerites reais da empresa."),
             _p("Arredondamento: 四捨五入 — frações < 0.5 descartadas, ≥ 0.5 arredondadas para cima. Todos os valores em ¥ inteiro."),
 
+            # ── Exemplo: arredondamento do ponto (bloco de 15/30 min) ──
+            _title("🔢 Arredondamento do Ponto (⚙️ Config.)"),
+            _p("Configurável em ⚙️ Config. — 'Minuto a minuto' (sem arredondar), '15 min' ou '30 min', combinado com 'Truncar' (sempre pra baixo) ou 'Mais Próximo'. Só afeta os MINUTOS trabalhados, antes de calcular qualquer valor em ¥."),
+            _example("Exemplo — 22 minutos brutos de hora extra, bloco 15min:", [
+                "Truncar:      22 → 15 min",
+                "Mais Próximo: 22 está a 7min de 15 e a 8min de 30 → 15 min",
+            ]),
+            _example("Exemplo — 23 minutos brutos, mesmo bloco 15min:", [
+                "Truncar:      23 → 15 min  (sempre descarta o excedente)",
+                "Mais Próximo: 23 está a 8min de 15 e a 7min de 30 → 30 min",
+            ]),
+            _p("É na borda entre um bloco e outro que 'Truncar' e 'Mais Próximo' dão resultados diferentes."),
+
+            # ── Exemplo: arredondamento da taxa por hora ────────────────
+            _title("🔢 Arredondamento da Taxa por Hora (sempre ativo)"),
+            _p("Diferente do arredondamento do ponto: aqui não se mexe nos minutos, mexe-se no ¥/hora usado para multiplicar. A taxa (時給 × multiplicador) é arredondada para o yen mais próximo ANTES de multiplicar pelas horas — não depois. Sempre ativo, não é configurável."),
+            _example("Exemplo — hora extra, 時給=¥1.430, 30h trabalhadas:", [
+                "Taxa bruta = 1.430 × 1,25 = 1.787,50 ¥/hora",
+                "Arredondada (0,5 sempre sobe) = 1.788 ¥/hora",
+                "Total = 1.788 × 30 = ¥53.640",
+            ]),
+            _example("Exemplo — noturno, 時給=¥1.430, 118,75h trabalhadas:", [
+                "Taxa bruta = 1.430 × 0,25 = 357,50 ¥/hora",
+                "Arredondada = 358 ¥/hora",
+                "Total = 358 × 118,75 = ¥42.512,50 → ¥42.513",
+            ]),
+            _p("Os dois exemplos acima batem exatos com holerites reais analisados — essa é a diferença entre 'quase certo' e 100% preciso."),
+
             # ── Taxa elevada de extra/noturno/domingo ─────────────────
-            _title("📈 Taxa de Hora Extra/Noturno/Domingo"),
+            _title("📈 Taxa de Hora Extra/Noturno/Domingo (acréscimo)"),
             _p("Algumas empresas calculam hora extra, noturno e domingo usando uma taxa por hora MAIOR que o 時給 puro — porque a lei exige incluir certos adicionais fixos mensais (ex: adicional de líder) nessa taxa. Isso NÃO afeta as horas normais, só os adicionais."),
             _item("Como saber se isso te afeta", "Compare com um holerite real",
                   "Pegue a rubrica de domingo (公出手当) do seu holerite: (公出手当 ÷ horas de domingo ÷ 1,35) − 時給. Se der ~0, não precisa mexer em nada."),
             _item("Onde configurar", "⚙️ Config. → Taxa de Hora Extra/Noturno/Domingo",
-                  "Preencha o 'Acréscimo' calibrado (não o valor impresso no holerite — eles raramente coincidem). Deixe 0 se não sabe."),
-            _p("⚠️ Validado com 5 holerites reais (2 salários-hora diferentes, 2021-2026): esse acréscimo bateu exato quando calibrado, mas não tem uma fórmula simples de 'somar os adicionais visíveis' — precisa comparar com um holerite seu."),
+                  "Ligue o switch, preencha o 'Acréscimo' calibrado (não o valor impresso no holerite — eles raramente coincidem). Deixe desligado se não sabe."),
+            _p("Passo a passo completo pra calcular o acréscimo, usando dados reais (時給=¥1.590, 公出手当=¥47.784, 22h de domingo):"),
+            _example("1) Taxa real usada pela empresa:", [
+                "taxa = 公出手当 ÷ horas ÷ 1,35",
+                "taxa = 47.784 ÷ 22 ÷ 1,35 = ¥1.608,89/h",
+            ]),
+            _example("2) Acréscimo por hora (taxa real − 時給):", [
+                "acréscimo/h = 1.608,89 − 1.590 = ¥18,89/h",
+            ]),
+            _example("3) Converter para o valor MENSAL que o campo pede:", [
+                "acréscimo mensal = acréscimo/h × Horas Padrão",
+                "acréscimo mensal = 18,89 × 144 = ¥2.720",
+                "→ Esse ¥2.720 vai no campo 'Acréscimo p/ Taxa de Extra/Domingo'",
+            ]),
+            _example("4) Ajuste fino do noturno (rubrica 深夜手当 separada):", [
+                "taxa noturno = 深夜手当 ÷ horas noturnas ÷ 0,25",
+                "taxa noturno = 45.338 ÷ 112,5 ÷ 0,25 = ¥1.612,00/h",
+                "ajuste fino = 1.612,00 − 1.590 − 18,89 = ¥3,11/h",
+                "→ Esse ¥3,11 vai no campo 'Ajuste Fino do Noturno'",
+            ]),
+            _p("⚠️ Validado com 5 holerites reais (2 salários-hora diferentes, 2021-2026): esse acréscimo bateu exato quando calibrado, mas não tem uma fórmula simples de 'somar os adicionais visíveis' — precisa comparar com um holerite seu. Se um holerite futuro der acréscimo ~0, é sinal de que o adicional que gerava a diferença parou de ser pago — zere os campos de volta."),
 
             # ── Ponto diário ─────────────────────────────────────────
             _title("📅 Registrando o Ponto"),

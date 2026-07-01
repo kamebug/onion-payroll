@@ -41,6 +41,8 @@ isso, pois testa só funções Python puras, sem o Flutter/DOM por trás.
 | Histórico perdia registros ao salvar 3+ vezes | Variável local desatualizada (closure) em vez de `state["history"]` | 2.6 | Registrar 3-4 meses seguidos, conferir se todos aparecem |
 | **Dados perdidos ao fechar o navegador** | `page.client_storage`/`page.eval_js` descontinuados no Flet 0.85, todo storage falhava silenciosamente | **2.7 (crítico)** | Inserir dado, fechar o navegador completamente, reabrir |
 | Botões 4×2/5×2/Alternado causavam scroll ao topo | Mesma causa do item 1, isolada nesses botões específicos | 2.6 | Trocar tipo de ciclo em Config, observar scroll |
+| **Dropdown de arredondamento do ponto resetava seleção e voltava ao topo** | `ft.Dropdown` — mesmo padrão de bug já visto no seletor de Desconto (item acima), mas reintroduzido ao criar um Dropdown novo na v2.9 sem replicar o fix de botões | 2.10 | Mudar "Arredondamento do Ponto" em Config, observar se a seleção fixa e se a página rola |
+| Campo "Ajuste Fino do Noturno" cortado em tela de celular | `ft.Row` com 2 campos lado a lado, sem `expand`, na v2.9 | 2.10 | Abrir ⚙️ Config no celular, ligar o switch de taxa de referência, ver se os 2 campos aparecem inteiros |
 | Teclado do celular cobria campos no modal | Modal centralizado verticalmente, sem espaço reservado | 2.6 | Abrir modal de Histórico no celular, tocar em campo perto do fim |
 
 ---
@@ -79,6 +81,12 @@ bate com o esperado.
 5. **Depois de adicionar testes**, rodar `python test_main.py` e conferir
    se a contagem total de testes bate com o esperado — não confiar só no
    "OK" final (ver categoria "infraestrutura de teste" acima)
+6. **Nunca usar `ft.Dropdown` na aba Config** — tem histórico recorrente
+   de resetar a seleção e voltar o scroll ao topo (v2.4, v2.6, v2.10).
+   Usar sempre o padrão de botões (`ft.FilledButton` com `.update()`
+   individual, sem `refresh_all()`), como no seletor de Desconto
+7. **Campos lado a lado em `ft.Row`** só se houver certeza de que cabem
+   em tela de celular estreita — na dúvida, empilhar em `ft.Column`
 
 ---
 

@@ -1,5 +1,58 @@
 # Changelog — Onion Payroll
 
+## [2.10] — 2026-07-01 — UX DA ABA CONFIG (RECORRÊNCIA DE BUGS DE UI)
+
+### 🟡 Bug recorrente corrigido — Dropdown de arredondamento resetava a seleção
+
+**Reportado pelo usuário em uso real no celular:** o Dropdown "Arredondamento
+do Ponto" (adicionado na v2.9) tinha o mesmo bug que o seletor de Desconto
+já teve antes de virar botão (v2.4/2.6): a seleção não fixava e a página
+voltava ao topo ao escolher uma opção.
+
+**Causa raiz:** `ft.Dropdown` nesta versão do Flet parece disparar
+recomposição/scroll da página ao abrir o menu suspenso — o mesmo problema
+que já tinha sido isolado e contornado no seletor de Desconto, mas não foi
+replicado quando o Dropdown de arredondamento foi criado na v2.9.
+
+**Correção:** `block_dd` e `round_mode_dd` (dropdowns) substituídos por
+botões (`ft.FilledButton`), seguindo exatamente o padrão já usado no
+seletor de Desconto — sem `refresh_all()`, atualizando só os próprios
+botões via `.update()`.
+
+**Lição para o processo:** ao introduzir um novo `ft.Dropdown` na aba
+Config, replicar o padrão de botões desde o início, já que o Dropdown
+tem histórico recorrente desse bug nesta base de código.
+
+### 🟡 Bug corrigido — campo cortado em tela de celular
+
+Os campos "Horas Padrão para o Cálculo" e "Ajuste Fino do Noturno"
+(adicionados na v2.9) estavam lado a lado numa `ft.Row` sem `expand`,
+cortando o segundo campo em telas estreitas de celular.
+
+**Correção:** campos empilhados verticalmente (`ft.Column`) em vez de
+lado a lado.
+
+### 🟡 UX — aba Config estava poluída
+
+Feedback do usuário: a seção "Taxa de Hora Extra/Noturno/Domingo"
+(v2.9) tornou a aba Config confusa para quem não precisa dela — a
+grande maioria dos usuários não tem esse tipo de adicional na empresa.
+
+**Correção:** os 3 campos de calibração ficam escondidos atrás de um
+`ft.Switch` ("Minha empresa usa taxa diferente...") desligado por
+padrão. O texto de ajuda longo saiu da Config (que agora só tem uma
+linha apontando para a aba Ajuda) — a explicação completa com fórmula
+de calibração passo a passo ficou só na aba ❓ Ajuda.
+
+### Adicionado
+- Exemplos numéricos completos na aba ❓ Ajuda para os dois mecanismos de
+  arredondamento (do ponto e da taxa por hora) e para o passo a passo de
+  calibração da taxa de referência — usando os holerites reais já
+  validados
+- Mesma seção de exemplos replicada no `README.md`
+
+---
+
 ## [2.9] — 2026-07-01 — TAXA DE REFERÊNCIA E ARREDONDAMENTO POR CATEGORIA
 
 ### 🟡 Precisão — resíduo de 1,2%-1,4% em extra/noturno/domingo corrigido
