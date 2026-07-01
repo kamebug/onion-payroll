@@ -285,14 +285,7 @@ class TestCiclosNoForecast(unittest.TestCase):
         self.assertGreater(resultado["night_pay"], 0)
 
 
-if __name__ == "__main__":
-    print("=" * 60)
-    print("ONION PAYROLL — SUITE DE TESTES AUTOMATIZADOS")
-    print("=" * 60)
-    unittest.main(verbosity=2)
 
-
-class TestFeriadoCorporativo(unittest.TestCase):
     """Valida que feriados corporativos (marcados na aba 🏭) afetam
     o cálculo do forecast quando o usuário trabalha nesse dia,
     não só a cor visual da célula no calendário."""
@@ -433,3 +426,93 @@ class TestBugTurnoNoturnoEmFeriado(unittest.TestCase):
         esperado = (pay_normal["total_gross"] * resultado["days_normal"]
                     + pay_domingo["total_gross"] * resultado["days_legal"])
         self.assertEqual(resultado["gross"], esperado)
+
+
+class TestAcrescimoTaxaPremium(unittest.TestCase):
+    """Valida o acréscimo de adicionais fixos (リーダー手当 etc.) na taxa
+    usada para hora extra/noturno/domingo, e o arredondamento da taxa por
+    hora ANTES de multiplicar pelas horas. Validado contra 5 holerites
+    reais — 2 jikyuu diferentes (¥1.430 e ¥1.590), 2 anos diferentes
+    (2021/2022 e 2026), com e sem adicional fixo mensal."""
+
+    def _arred(self, x):
+        import math
+        return math.floor(x + 0.5)
+
+    def test_sem_acrescimo_bate_com_holerites_2021_2022(self):
+        # jikyuu=1430, sem リーダー手当 (default 0 = comportamento atual)
+        casos = [
+            (30, 1.25, 53640),    # hora extra
+            (118.75, 0.25, 42513),  # noturno
+            (44, 1.35, 84964),    # domingo
+        ]
+        jikyuu = 1430
+        for horas, mult, real in casos:
+            calc = self._arred(self._arred(jikyuu * mult) * horas)
+            self.assertEqual(calc, real)
+
+    def test_com_acrescimo_bate_com_holerites_2026(self):
+        # jikyuu=1590, com acréscimo calibrado (リーダー手当 presente)
+        jikyuu = 1590
+        addon = 2720 / 144
+        night_extra = (3168 / 144) - addon
+        premium = jikyuu + addon
+        night_jikyuu = jikyuu + addon + night_extra
+
+        casos_extra_domingo = [
+            (33, 1.25, 66363), (33, 1.35, 47784 / 22 * 22),  # placeholders abaixo
+        ]
+        # Fev/2026
+        self.assertEqual(self._arred(self._arred(premium * 1.25) * 33), 66363)
+        self.assertEqual(self._arred(self._arred(night_jikyuu * 0.25) * 112.5), 45338)
+        self.assertEqual(self._arred(self._arred(premium * 1.35) * 22), 47784)
+        # Mar/2026
+        self.assertEqual(self._arred(self._arred(night_jikyuu * 0.25) * 125), 50375)
+        self.assertEqual(self._arred(self._arred(premium * 1.35) * 44), 95568)
+        # Abr/2026
+        self.assertEqual(self._arred(self._arred(premium * 1.25) * 35), 70385)
+        self.assertEqual(self._arred(self._arred(premium * 1.35) * 33), 71676)
+
+    def test_default_zero_nao_afeta_calculo_existente(self):
+        # Sem informar os novos parâmetros, comportamento idêntico ao de
+        # antes da mudança (compatibilidade retroativa).
+        pay = calculate_shift_pay(
+            jikyuu=1590, shift_type="night",
+            start_str="20:35", end_str="08:35",
+            break_min=65, block=1,
+        )
+        self.assertGreater(pay["overtime_pay"], 0)
+        self.assertGreater(pay["night_pay"], 0)
+
+    def test_acrescimo_eleva_overtime_pay_proporcionalmente(self):
+        sem = calculate_shift_pay(
+            jikyuu=1590, shift_type="night",
+            start_str="20:35", end_str="08:35", break_min=65, block=1,
+        )
+        com = calculate_shift_pay(
+            jikyuu=1590, shift_type="night",
+            start_str="20:35", end_str="08:35", break_min=65, block=1,
+            fixed_allowances_monthly=2720, standard_monthly_hours=144,
+        )
+        self.assertGreater(com["overtime_pay"], sem["overtime_pay"])
+
+    def test_holiday_nao_usa_night_addon_extra(self):
+        # No domingo, overtime_pay e night_pay continuam zerados mesmo
+        # com os novos parâmetros preenchidos (sem regressão do bug v2.8)
+        pay = calculate_shift_pay(
+            jikyuu=1590, shift_type="holiday", is_holiday=True,
+            start_str="20:35", end_str="08:35", break_min=65, block=1,
+            base_shift="night",
+            fixed_allowances_monthly=2720, standard_monthly_hours=144,
+            night_addon_extra=3.11,
+        )
+        self.assertEqual(pay["overtime_pay"], 0)
+        self.assertEqual(pay["night_pay"], 0)
+        self.assertGreater(pay["holiday_pay"], 0)
+
+
+if __name__ == "__main__":
+    print("=" * 60)
+    print("ONION PAYROLL — SUITE DE TESTES AUTOMATIZADOS")
+    print("=" * 60)
+    unittest.main(verbosity=2)

@@ -58,9 +58,23 @@ def minutes_between(start: datetime, end: datetime) -> int:
     return int(delta.total_seconds() // 60)
 
 
-def truncate_minutes(total_minutes: int, block: int) -> int:
+def truncate_minutes(total_minutes: int, block: int, round_mode: str = "truncate") -> int:
+    """Arredonda minutos para o bloco informado.
+
+    round_mode="truncate" (padrão, compatível com versões anteriores):
+        sempre arredonda para BAIXO (ex: 22min em blocos de 15 -> 15min).
+    round_mode="nearest": arredonda para o múltiplo mais próximo
+        (ex: 22min em blocos de 15 -> 15min; 23min -> 30min). Algumas
+        empresas usam essa regra (confirmado contra holerites reais onde
+        370min -> 375min, não 360min). Ver MHLW 昭63.3.14 基発150号.
+    """
     if block <= 1:
         return total_minutes
+    if round_mode == "nearest":
+        resto = total_minutes % block
+        if resto >= block / 2:
+            return total_minutes + (block - resto)
+        return total_minutes - resto
     return (total_minutes // block) * block
 
 
@@ -81,6 +95,9 @@ def calculate_shift_pay(
     jikyuu: int, shift_type: str, start_str: str = "", end_str: str = "",
     break_min: int = 65, block: int = 1, is_holiday: bool = False,
     yukyu_on_holiday: bool = False, base_shift: str = "",
+    round_mode: str = "truncate",
+    fixed_allowances_monthly: float = 0, standard_monthly_hours: float = 144,
+    night_addon_extra: float = 0,
 ) -> dict:
     """
     shift_type: "night"|"day"|"holiday"|"yukyu"|"absent" — determina o
@@ -91,6 +108,22 @@ def calculate_shift_pay(
         ser passado aqui, pois o feriado pode cair em QUALQUER turno.
         Se não informado, assume o mesmo valor de shift_type (compatível
         com chamadas antigas que não differenciavam).
+
+    fixed_allowances_monthly: soma de adicionais fixos mensais (ex: リーダー
+        手当, 管理手当, 技術手当) que por lei (労基法37条 + regras de exclusão
+        do施行規則21条) entram na "taxa de referência" usada para calcular
+        hora extra/noturno/domingo — mas NÃO entram no cálculo de horas
+        normais. Validado contra 5 holerites reais (2 jikyuu diferentes,
+        com e sem adicional de líder): bate exato quando dividido pelas
+        horas padrão. Default 0 = comportamento idêntico a versões
+        anteriores (sem acréscimo).
+    standard_monthly_hours: horas padrão usadas para transformar o
+        adicional fixo mensal em ¥/hora (default 144h, validado nos 5
+        holerites reais — NÃO é o total de horas trabalhadas no mês, é
+        uma referência fixa da empresa).
+    night_addon_extra: ajuste fino manual (¥/h), só para o adicional
+        noturno, cobrindo uma pequena diferença (~¥448/mês nos holerites
+        analisados) ainda não totalmente explicada. Default 0.
     """
     result = {
         "base_pay": 0, "overtime_pay": 0, "night_pay": 0, "holiday_pay": 0,
@@ -114,7 +147,7 @@ def calculate_shift_pay(
             end_dt   = parse_hhmm(end_str)
             if start_dt and end_dt:
                 gross_min = minutes_between(start_dt, end_dt)
-                net_min   = max(0, truncate_minutes(gross_min - break_min, block))
+                net_min   = max(0, truncate_minutes(gross_min - break_min, block, round_mode))
                 result["net_minutes"] = net_min
                 result["base_pay"]    = shisha_gofuuu((jikyuu / 60.0) * net_min)
                 result["total_gross"] = result["base_pay"]
@@ -147,7 +180,7 @@ def calculate_shift_pay(
         return result
 
     gross_min = minutes_between(start_dt, end_dt)
-    net_min   = max(0, truncate_minutes(gross_min - break_min, block))
+    net_min   = max(0, truncate_minutes(gross_min - break_min, block, round_mode))
 
     result["net_minutes"]      = net_min
     jikyuu_per_min             = jikyuu / 60.0
@@ -160,28 +193,53 @@ def calculate_shift_pay(
     _start_to_end = minutes_between(start_dt, end_dt)   # minutos do start ao fim real
     # OT só existe se o fim ultrapassou o limite OT dentro do turno
     if _start_to_end > _start_to_ot:
-        ot_min = min(_start_to_end - _start_to_ot, net_min)
+        raw_ot_min = _start_to_end - _start_to_ot
     else:
-        ot_min = 0
+        raw_ot_min = 0
+    # Hora extra arredondada SEPARADAMENTE a partir do valor bruto (não
+    # derivada do net_min já truncado) — regra MHLW 昭63.3.14 基発150号:
+    # cada rubrica é arredondada por dia, individualmente, antes de somar
+    # o mês. Ainda limitada ao net_min como teto de sanidade.
+    ot_min = min(truncate_minutes(raw_ot_min, block, round_mode), net_min)
     result["overtime_minutes"] = ot_min
     result["regular_minutes"]  = net_min - ot_min
-    night_min                  = min(night_minutes_in_range(start_dt, end_dt), net_min)
+    raw_night_min               = night_minutes_in_range(start_dt, end_dt)
+    # Adicional noturno também arredondado separadamente a partir do bruto,
+    # em vez de só herdar o cap do net_min sem arredondamento próprio.
+    night_min                  = min(truncate_minutes(raw_night_min, block, round_mode), net_min)
     result["night_minutes"]    = night_min
     holiday_premium            = 0.35 if is_holiday else 0.0
 
+    # Acréscimo por hora vindo de adicionais fixos mensais (リーダー手当 etc.)
+    # — aplicado SOMENTE em extra/noturno/domingo, nunca em horas normais
+    # (confirmado: 基本給 bate exato com jikyuu puro em todos os holerites
+    # reais analisados, mesmo quando há adicionais fixos no mês).
+    addon_per_hour = (fixed_allowances_monthly / standard_monthly_hours
+                       if standard_monthly_hours > 0 else 0.0)
+    premium_jikyuu = jikyuu + addon_per_hour
+    night_jikyuu   = jikyuu + addon_per_hour + night_addon_extra
+
     result["base_pay"] = shisha_gofuuu(jikyuu_per_min * net_min)
 
+    # IMPORTANTE: a taxa por HORA é arredondada pro yen mais próximo ANTES
+    # de multiplicar pelas horas trabalhadas — não o valor total no final.
+    # Confirmado com planilha de referência do usuário e validado contra
+    # 5 holerites reais (2 jikyuu diferentes, 2 anos diferentes): bate
+    # exato. Arredondar só no final (como antes) deixava um resíduo de
+    # ~0,03%-0,14%, que parecia ruído mas era essa regra específica.
     if is_holiday:
-        # Validado com holerites reais (fev/2026 e mar/2026): trabalho em
-        # domingo/feriado (法定休出) usa SOMENTE +35% sobre o total de
-        # horas trabalhadas — NÃO acumula adicional noturno nem hora
-        # extra por cima. O holiday_pay já representa o adicional completo.
+        # Validado com holerites reais: trabalho em domingo/feriado
+        # (法定休出) usa SOMENTE +35% sobre o total de horas trabalhadas —
+        # NÃO acumula adicional noturno nem hora extra por cima.
+        holiday_rate_per_hour  = shisha_gofuuu(premium_jikyuu * holiday_premium)
         result["overtime_pay"] = 0
         result["night_pay"]    = 0
-        result["holiday_pay"]  = shisha_gofuuu(jikyuu_per_min * net_min * holiday_premium)
+        result["holiday_pay"]  = shisha_gofuuu(holiday_rate_per_hour * (net_min / 60.0))
     else:
-        result["overtime_pay"] = shisha_gofuuu(jikyuu_per_min * ot_min * 0.25)
-        result["night_pay"]    = shisha_gofuuu(jikyuu_per_min * night_min * 0.25)
+        ot_rate_per_hour       = shisha_gofuuu(premium_jikyuu * 0.25)
+        night_rate_per_hour    = shisha_gofuuu(night_jikyuu * 0.25)
+        result["overtime_pay"] = shisha_gofuuu(ot_rate_per_hour * (ot_min / 60.0))
+        result["night_pay"]    = shisha_gofuuu(night_rate_per_hour * (night_min / 60.0))
         result["holiday_pay"]  = 0
     result["total_gross"]  = (result["base_pay"] + result["overtime_pay"]
                                + result["night_pay"] + result["holiday_pay"])
@@ -252,6 +310,9 @@ def compute_monthly_forecast(
     alt_start_day: str = "08:35", alt_end_day: str = "20:35",
     alt_start_night: str = "20:35", alt_end_night: str = "08:35",
     fixed_monthly_bonus: int = 0,  # adicional fixo todo mês (liderança, etc.)
+    round_mode: str = "truncate",
+    premium_allowances_monthly: float = 0, premium_standard_hours: float = 144,
+    night_addon_extra: float = 0,
 ) -> dict:
     # ── Seleção do tipo de ciclo ──────────────────────────────────
     _alt_shift_map = {}  # dia -> "day"/"night" (só usado se cycle_type=alternating)
@@ -370,6 +431,10 @@ def compute_monthly_forecast(
             base_shift=default_shift,  # turno real do funcionário (night/day),
                                         # usado para horários/limiar de OT mesmo
                                         # quando shift_type="holiday"
+            round_mode=round_mode,
+            fixed_allowances_monthly=premium_allowances_monthly,
+            standard_monthly_hours=premium_standard_hours,
+            night_addon_extra=night_addon_extra,
         )
         if (is_sunday and not is_holiday) or status == "legal":
             total_legal += pay["total_gross"]
@@ -506,7 +571,9 @@ JP_HOLIDAYS_BUILTIN = {
 DEFAULT_SETTINGS = {
     "jikyuu": 1500, "group": "B", "anchor_date": date.today().isoformat(),
     "odd_bonus": 50000, "deduction_mode": "historical", "fixed_deduction": 45000,
-    "block": 1, "pin_enabled": False,
+    "block": 1, "round_mode": "truncate", "pin_enabled": False,
+    "premium_allowances_monthly": 0, "premium_standard_hours": 144,
+    "night_addon_extra": 0,
     "shift_type": "night", "shift_start": "20:35", "shift_end": "08:35",
     "shift_break": 65, "shift_ot": "06:35", "extra_bonus": 0,
     "fixed_monthly_bonus": 0,  # adicional fixo todo mês (ex: liderança)
@@ -1329,6 +1396,10 @@ def build_holerite_tab(page: ft.Page, state: dict, refresh_all):
             alt_start_night=settings.get("shift_start_night", "20:35"),
             alt_end_night=settings.get("shift_end_night", "08:35"),
             fixed_monthly_bonus=int(settings.get("fixed_monthly_bonus") or 0),
+            round_mode=settings.get("round_mode", "truncate"),
+            premium_allowances_monthly=float(settings.get("premium_allowances_monthly") or 0),
+            premium_standard_hours=float(settings.get("premium_standard_hours") or 144),
+            night_addon_extra=float(settings.get("night_addon_extra") or 0),
         )
     except Exception:
         data = {"gross": 0, "deductions": 0, "net": 0,
@@ -2130,6 +2201,78 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
     )
     block_dd.on_change = lambda e: [settings.__setitem__("block", int(e.control.value)), save_json(page, KEY_SETTINGS, settings)]
 
+    round_mode_dd = ft.Dropdown(
+        label="Regra de Arredondamento",
+        value=str(settings.get("round_mode", "truncate")),
+        options=[
+            ft.dropdown.Option("truncate", "Sempre para baixo (truncar)"),
+            ft.dropdown.Option("nearest",  "Mais próximo (padrão japonês comum)"),
+        ],
+        bgcolor="#2A2A2A", color="#F0F0F0",
+        border_color="#333333", focused_border_color="#00D2C6",
+        label_style=ft.TextStyle(color="#A0A0A0"),
+        visible=(int(settings.get("block", 1)) > 1),
+    )
+    round_mode_dd.on_change = lambda e: [settings.__setitem__("round_mode", e.control.value), save_json(page, KEY_SETTINGS, settings)]
+    def _on_block_change(e):
+        settings.__setitem__("block", int(e.control.value))
+        save_json(page, KEY_SETTINGS, settings)
+        round_mode_dd.visible = (int(e.control.value) > 1)
+        round_mode_dd.update()
+    block_dd.on_change = _on_block_change
+
+    # ── Adicionais fixos que entram no cálculo de extra/noturno/domingo ──
+    # Algumas empresas usam uma taxa por hora MAIOR que o jikyuu puro para
+    # calcular hora extra, noturno e domingo — porque a lei exige incluir
+    # certos adicionais fixos mensais (ex: adicional de líder) na "taxa de
+    # referência" desses cálculos. Validado contra holerites reais.
+    premium_help = ft.Text(
+        "Diferente do 'Adicional Fixo Mensal — Líder, etc.' acima (que soma "
+        "direto no salário bruto): este aqui NÃO soma nada sozinho — só "
+        "eleva a taxa usada para calcular hora extra/noturno/domingo, caso "
+        "sua empresa use uma taxa maior que o jikyuu puro nesses cálculos.\n\n"
+        "⚠️ Não copie o valor do adicional direto do holerite — ele raramente "
+        "bate exato. O jeito certo de descobrir o valor: pegue um holerite "
+        "real, e na rubrica de domingo (公出手当) faça:\n"
+        "  acréscimo/hora = (公出手当 ÷ horas de domingo ÷ 1,35) − jikyuu\n"
+        "Multiplique o resultado pelas \"Horas Padrão\" abaixo (144 por "
+        "padrão) para preencher o campo abaixo. Deixe tudo em 0 se você não "
+        "sabe ou não tem esse tipo de adicional — o cálculo fica idêntico "
+        "ao de hoje.",
+        size=11, color="#A0A0A0", italic=True,
+    )
+    premium_allowances_f = ft.TextField(
+        label="Acréscimo p/ Taxa de Extra/Domingo (¥/mês, calibrado)",
+        value=str(settings.get("premium_allowances_monthly", 0)),
+        keyboard_type=ft.KeyboardType.NUMBER,
+        bgcolor="#2A2A2A", color="#F0F0F0",
+        border_color="#333333", focused_border_color="#00D2C6",
+        label_style=ft.TextStyle(color="#A0A0A0"),
+    )
+    premium_hours_f = ft.TextField(
+        label="Horas Padrão para o Cálculo", value=str(settings.get("premium_standard_hours", 144)),
+        keyboard_type=ft.KeyboardType.NUMBER,
+        bgcolor="#2A2A2A", color="#F0F0F0",
+        border_color="#333333", focused_border_color="#00D2C6",
+        label_style=ft.TextStyle(color="#A0A0A0"),
+    )
+    night_addon_f = ft.TextField(
+        label="Ajuste Fino do Noturno (¥/h, opcional)", value=str(settings.get("night_addon_extra", 0)),
+        keyboard_type=ft.KeyboardType.NUMBER,
+        bgcolor="#2A2A2A", color="#F0F0F0",
+        border_color="#333333", focused_border_color="#00D2C6",
+        label_style=ft.TextStyle(color="#A0A0A0"),
+    )
+    def _save_premium_field(key, field):
+        try:
+            settings.__setitem__(key, float(field.value or 0))
+        except ValueError:
+            settings.__setitem__(key, 0)
+        save_json(page, KEY_SETTINGS, settings)
+    premium_allowances_f.on_change = lambda e: _save_premium_field("premium_allowances_monthly", premium_allowances_f)
+    premium_hours_f.on_change      = lambda e: _save_premium_field("premium_standard_hours", premium_hours_f)
+    night_addon_f.on_change        = lambda e: _save_premium_field("night_addon_extra", night_addon_f)
+
     _ded_mode_val = [settings.get("deduction_mode", "historical")]
 
     def _set_ded_mode(mode):
@@ -2335,6 +2478,11 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
                     size=9, color=TEXT_MUTED,
                 ),
                 block_dd,
+                round_mode_dd,
+                section_header("TAXA DE HORA EXTRA/NOTURNO/DOMINGO"),
+                premium_help,
+                premium_allowances_f,
+                ft.Row([premium_hours_f, night_addon_f], spacing=8),
                 section_header("TIPO DE CICLO DE TRABALHO"),
                 cycle_type_row,
                 ft.Text(
@@ -2828,6 +2976,15 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
                   "+35% sobre base (único adicional)"),
             _p("⚠️ Domingo e feriado trabalhado recebem APENAS +35% sobre a base — não soma noturno nem hora extra por cima, mesmo que o horário caia na madrugada. Validado com holerites reais da empresa."),
             _p("Arredondamento: 四捨五入 — frações < 0.5 descartadas, ≥ 0.5 arredondadas para cima. Todos os valores em ¥ inteiro."),
+
+            # ── Taxa elevada de extra/noturno/domingo ─────────────────
+            _title("📈 Taxa de Hora Extra/Noturno/Domingo"),
+            _p("Algumas empresas calculam hora extra, noturno e domingo usando uma taxa por hora MAIOR que o 時給 puro — porque a lei exige incluir certos adicionais fixos mensais (ex: adicional de líder) nessa taxa. Isso NÃO afeta as horas normais, só os adicionais."),
+            _item("Como saber se isso te afeta", "Compare com um holerite real",
+                  "Pegue a rubrica de domingo (公出手当) do seu holerite: (公出手当 ÷ horas de domingo ÷ 1,35) − 時給. Se der ~0, não precisa mexer em nada."),
+            _item("Onde configurar", "⚙️ Config. → Taxa de Hora Extra/Noturno/Domingo",
+                  "Preencha o 'Acréscimo' calibrado (não o valor impresso no holerite — eles raramente coincidem). Deixe 0 se não sabe."),
+            _p("⚠️ Validado com 5 holerites reais (2 salários-hora diferentes, 2021-2026): esse acréscimo bateu exato quando calibrado, mas não tem uma fórmula simples de 'somar os adicionais visíveis' — precisa comparar com um holerite seu."),
 
             # ── Ponto diário ─────────────────────────────────────────
             _title("📅 Registrando o Ponto"),

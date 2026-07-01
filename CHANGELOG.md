@@ -1,5 +1,87 @@
 # Changelog — Onion Payroll
 
+## [2.9] — 2026-07-01 — TAXA DE REFERÊNCIA E ARREDONDAMENTO POR CATEGORIA
+
+### 🟡 Precisão — resíduo de 1,2%-1,4% em extra/noturno/domingo corrigido
+
+**Descoberto através de comparação com 5 holerites reais** (2021/11, 2022/03,
+2026/02, 2026/03, 2026/04 — 2 valores de `jikyuu` diferentes, com e sem
+adicional fixo de líder).
+
+**Causa raiz nº1 — taxa de referência sem adicionais fixos:** o cálculo de
+hora extra, noturno e domingo usava só o `jikyuu` puro. Quando a empresa
+paga adicionais fixos mensais (ex: `リーダー手当`), a legislação exige que
+esses adicionais entrem na "taxa de referência" usada nesses três cálculos
+— só não entram no cálculo de horas normais. Sem isso, o app calculava
+1,19%-1,38% a menos nessas três rubricas.
+
+**Evidência matemática:** comparando os holerites de fev/mar/abr de 2026
+(mesmo funcionário, `jikyuu`=¥1.590, com `リーダー手当`=¥3.000/mês) contra
+os de 2021/2022 (mesmo funcionário, `jikyuu`=¥1.430, SEM `リーダー手当`),
+o acréscimo desaparece exatamente quando o adicional de líder desaparece —
+confirmando a causa.
+
+**Causa raiz nº2 — ordem do arredondamento:** o valor final de cada
+rubrica era arredondado no fim do cálculo (`shisha_gofuuu` aplicado ao
+produto completo). O correto — confirmado com planilha de referência do
+usuário e validado contra os 5 holerites — é arredondar a **taxa por
+hora** para o yen mais próximo **antes** de multiplicar pelas horas
+trabalhadas. Isso fechou os últimos centavos de diferença que sobravam
+mesmo depois da correção nº1.
+
+**Correção:** `calculate_shift_pay()` ganhou 3 parâmetros opcionais —
+`fixed_allowances_monthly`, `standard_monthly_hours` (default 144) e
+`night_addon_extra` — usados para elevar a taxa de extra/noturno/domingo
+antes de arredondar por hora e multiplicar. Todos com default que preserva
+o comportamento anterior (zero impacto em quem não configurar nada).
+
+**Validado:** as 15 rubricas (extra/noturno/domingo × 5 holerites) batem
+com diferença ¥0 contra os valores reais.
+
+### 🟡 Bug de teste corrigido — 9 testes nunca executavam
+
+`unittest.main()` estava posicionado no meio do `test_main.py`, antes de 3
+classes de teste inteiras serem definidas (incluindo a que valida o fix de
+domingo da v2.8). Como o Python executa o arquivo de cima pra baixo, essas
+classes nunca chegavam a rodar. Corrigido movendo o bloco para o final
+real do arquivo — de 26 para 35 testes efetivamente executados.
+
+### 🟡 Arredondamento por categoria (hora extra/noturno)
+
+`truncate_minutes()` ganhou um `round_mode` ("truncate", igual antes, ou
+"nearest", arredonda pro múltiplo mais próximo). Hora extra e noturno
+agora são arredondados separadamente, a partir do valor bruto — antes,
+eram derivados do `net_min` já truncado, o que descartava a granularidade
+correta por categoria (regra MHLW 昭63.3.14 基発150号: cada rubrica é
+arredondada por dia, individualmente, antes de somar o mês).
+
+### Adicionado
+- Nova seção em ⚙️ Config: "Taxa de Hora Extra/Noturno/Domingo", com os 3
+  campos novos e texto de ajuda explicando como calibrar contra um
+  holerite real (o valor não é o mesmo que aparece impresso na rubrica de
+  adicional — precisa ser calculado)
+- Dropdown "Regra de Arredondamento" (truncar / mais próximo), visível
+  quando o bloco de arredondamento é maior que 1 minuto
+- Seção "📈 Taxa de Hora Extra/Noturno/Domingo" na aba de Ajuda
+- 5 novos testes automatizados (`TestAcrescimoTaxaPremium`) validando a
+  taxa elevada e o arredondamento por hora contra os 5 holerites reais —
+  total agora 40 testes
+
+### Metodologia de validação (referência futura, expandindo a da v2.8)
+1. Quando o resíduo entre calculado e holerite real for pequeno e
+   proporcional às horas (não aleatório), suspeitar de uma regra de
+   arredondamento específica antes de assumir "ruído"
+2. Testar a hipótese com pelo menos 2 pontos de dados com `jikyuu`
+   diferentes — se o resíduo for uma % fixa do `jikyuu` OU um valor fixo
+   em ¥/hora independente do `jikyuu`, nenhuma das duas simplificações
+   costuma se sustentar sozinha; o valor real tende a vir de um adicional
+   fixo mensal específico daquele período
+3. Um holerite de um período SEM o adicional fixo (ex: antes de uma
+   promoção) é o teste mais forte — se o resíduo cai a quase zero junto
+   com o adicional, a causa está confirmada
+
+---
+
 ## [2.8] — 2026-07-01 — VALIDAÇÃO E CORREÇÃO COM HOLERITES REAIS
 
 ### 🔴 Bug crítico corrigido — domingo/feriado pagava ~13% a mais

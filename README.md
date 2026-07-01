@@ -24,7 +24,8 @@ Calcula automaticamente salário base, hora extra, adicional noturno e trabalho 
   - 深夜手当 Adicional Noturno → +25% (22:00–05:00)
   - 休出手当 Trabalho em Folga/Feriado → +35%
   - 法定休日 Domingo → +35% automático
-  - 四捨五入 Arredondamento japonês
+  - 四捨五入 Arredondamento japonês — aplicado à taxa por hora, antes de multiplicar pelas horas
+- **Taxa de referência configurável** — para empresas que incluem adicionais fixos mensais (ex: adicional de líder) no cálculo de hora extra/noturno/domingo, com calibração guiada contra um holerite real
 - **Modal de ponto completo:**
   - 有休 Yukyu — laranja, 8h fixo sem hora extra/noturno
   - 欠勤 Falta — roxo, ¥0
@@ -53,7 +54,7 @@ python main.py
 python test_main.py
 ```
 
-28 testes cobrindo cálculo de hora extra, ciclos de trabalho, descontos, feriados (nacionais e corporativos), domingo, falta, yukyu, abono e formatação de horário. Recomendado antes de cada deploy.
+40 testes cobrindo cálculo de hora extra, ciclos de trabalho, descontos, feriados (nacionais e corporativos), domingo, falta, yukyu, abono, formatação de horário, arredondamento por categoria e taxa de referência elevada — validados contra 5 holerites reais. Recomendado antes de cada deploy.
 
 ### Deploy GitHub Pages
 
@@ -88,6 +89,27 @@ value = await page.shared_preferences.get(key)
 
 ### Alternado Semanal
 Configure os dois horários (dia e noite) em ⚙️ Config. — o app alterna automaticamente a cada semana a partir da Data de Início do Ciclo.
+
+---
+
+## 📈 Taxa de Referência para Hora Extra/Noturno/Domingo
+
+Algumas empresas calculam hora extra, noturno e domingo usando uma taxa por
+hora **maior** que o 時給 puro — a legislação exige incluir certos
+adicionais fixos mensais (ex: adicional de líder) nessa taxa de referência,
+mesmo que eles não entrem no cálculo de horas normais.
+
+Em ⚙️ Config → **"Taxa de Hora Extra/Noturno/Domingo"**, é possível
+configurar esse acréscimo. **Importante:** o valor a preencher não é
+necessariamente o mesmo que aparece impresso na rubrica de adicional do
+holerite — precisa ser calibrado comparando com um holerite real:
+
+```
+acréscimo/hora = (公出手当 ÷ horas de domingo ÷ 1,35) − 時給
+```
+
+Deixe os campos em `0` (padrão) se sua empresa não usa esse tipo de taxa
+elevada — o cálculo permanece idêntico ao padrão (時給 puro).
 
 ---
 
@@ -139,4 +161,6 @@ Os valores exibidos são estimativas baseadas nas configurações inseridas pelo
 
 ## 🧪 Qualidade
 
-O motor de cálculo é coberto por 28 testes automatizados (`test_main.py`).
+O motor de cálculo é coberto por 40 testes automatizados (`test_main.py`),
+incluindo validação direta contra 5 holerites reais de dois contratos
+diferentes (2021-2022 e 2026).
