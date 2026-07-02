@@ -1,5 +1,74 @@
 # Changelog — Onion Payroll
 
+## [2.11] — 2026-07-02 — GRUPO A/B/C, ZOOM DO PWA E ÚLTIMOS DROPDOWNS
+
+### 🔴 Bug crítico corrigido — Grupo A/B/C nunca afetava o calendário
+
+**Reportado pelo usuário**, com evidência de planilha real de escala da
+fábrica (3 turmas, cada uma com dias de trabalho/folga diferentes na
+mesma semana, nunca duas turmas de folga no mesmo dia).
+
+**Causa raiz:** `generate_4x2_calendar()` nunca recebia o parâmetro
+`group` em nenhuma das duas chamadas (aba Calendário e
+`compute_monthly_forecast`). O único efeito que `group` tinha no app
+inteiro era servir de palpite (`"night" if group == "B" else "day"`)
+para o turno padrão — nunca deslocava quais dias eram trabalho ou folga.
+Ou seja: trocar de Grupo A/B/C **não tinha nenhum efeito real** no
+calendário ou no cálculo de holerite.
+
+**Evidência:** planilha da fábrica confirmou matematicamente um
+deslocamento de 2 dias por turma dentro do ciclo de 6 dias (Grupo
+A=+0, B=+2, C=+4), validado contra os 7 dias completos de cada grupo —
+bate 100%, e garante que nunca duas turmas folgam no mesmo dia.
+
+**Correção:** `generate_4x2_calendar()` ganhou o parâmetro `group`
+(default `"A"`, compatível com código antigo), aplicando o deslocamento
+`{"A": 0, "B": 2, "C": 4}` antes de calcular o dia do ciclo. As duas
+chamadas (Calendário e forecast) agora passam `group` corretamente.
+
+**Validado:** 21 casos de teste reproduzindo a planilha real completa
+(7 dias × 3 grupos), mais checagem de que nunca 2 grupos folgam juntos.
+
+### 🟡 Regressão de teste corrigida (efeito colateral da correção acima)
+
+`test_domingo_sem_registro_nao_conta` presumia que o dia 14/jun/2026
+era folga do Grupo B — só era, por acidente, porque o bug acima fazia
+o grupo ser ignorado. Corrigido para usar o dia 4, confirmado como
+folga real do Grupo B pela nova lógica.
+
+### 🟡 Zoom do PWA bloqueado
+
+`docs/index.html` tinha `maximum-scale=1.0, user-scalable=no` na tag
+viewport, desativando pinch-to-zoom — herdado do template padrão que o
+`flet build web` gera a cada deploy. Corrigir só o `docs/index.html`
+manualmente resolveria até o próximo deploy sobrescrever de novo.
+
+**Correção definitiva:** `deploy.ps1` agora remove `maximum-scale=1.0,
+user-scalable=no` do `index.html` automaticamente, no mesmo passo que já
+injeta Analytics e as meta tags anti-cache (passo 7) — não precisa mais
+lembrar de corrigir isso manualmente depois de cada build.
+
+### 🟡 Últimos 3 Dropdowns convertidos para botões
+
+`group_dd`, `shift_type_dd` (⚙️ Config) e `status_dd` (modal de ponto)
+ainda usavam `ft.Dropdown` com `refresh_all()` no `on_change` — mesmo
+padrão de bug recorrente das versões anteriores. Convertidos para
+botões. `status_dd` (6 opções) virou um grid 3×2 com um texto de
+descrição do status selecionado logo abaixo. Não sobrou nenhum
+`ft.Dropdown` no app.
+
+### Adicionado
+- `_ValueHolder`: classe auxiliar mínima (só atributo `.value`) para
+  substituir Dropdowns por botões sem reescrever todos os pontos de
+  leitura do valor selecionado
+- Switch "Mostrar ferramentas de diagnóstico" — Diagnóstico de
+  Armazenamento agora escondido por padrão, mesmo padrão usado na Taxa
+  de Referência (v2.10)
+- 6 novos testes automatizados (`TestGrupoABC`) validando o
+  deslocamento de grupo contra a planilha real — total agora 46 testes
+
+---
+
 ## [2.10] — 2026-07-01 — UX DA ABA CONFIG (RECORRÊNCIA DE BUGS DE UI)
 
 ### 🟡 Bug recorrente corrigido — Dropdown de arredondamento resetava a seleção
