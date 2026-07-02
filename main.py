@@ -10,6 +10,14 @@ import math
 from datetime import date, datetime, timedelta
 from typing import Optional
 
+
+class _ValueHolder:
+    """Substituto mínimo para ft.Dropdown quando convertido para botões —
+    mantém a mesma interface `.value` usada no resto do código, sem
+    precisar reescrever todos os pontos de leitura."""
+    def __init__(self, value=None):
+        self.value = value
+
 # ─────────────────────────────────────────────
 #  BUSINESS LOGIC — Decoupled from UI
 # ─────────────────────────────────────────────
@@ -246,14 +254,25 @@ def calculate_shift_pay(
     return result
 
 
-def generate_4x2_calendar(anchor_date: date, year: int, month: int) -> dict:
+def generate_4x2_calendar(anchor_date: date, year: int, month: int, group: str = "A") -> dict:
+    """Ciclo 4x2 (4 dias trabalho + 2 folga) com 3 turmas rotativas.
+
+    `anchor_date` é a referência compartilhada do ciclo (equivale ao dia 1
+    do Grupo A). Grupo B e C são deslocados +2 e +4 dias respectivamente
+    dentro do ciclo de 6 dias, para que as turmas nunca folguem no mesmo
+    dia — confirmado contra a planilha real de escala da fábrica
+    (Grupo A folga qui/sex, B folga dom/sáb, C folga ter/qua, nunca duas
+    turmas folgando juntas).
+    """
+    GROUP_OFFSET = {"A": 0, "B": 2, "C": 4}
+    offset = GROUP_OFFSET.get(group, 0)
     result, first_day, last_day = {}, date(year, month, 1), date(year, month, 28)
     for d in range(28, 32):
         try:    last_day = date(year, month, d)
         except ValueError: break
     cursor = first_day
     while cursor <= last_day:
-        delta = (cursor - anchor_date).days % 6
+        delta = ((cursor - anchor_date).days - offset) % 6
         if delta < 0:
             delta = (delta % 6 + 6) % 6
         result[cursor.day] = "work" if delta < 4 else "off"
@@ -323,7 +342,7 @@ def compute_monthly_forecast(
         cycle = {d: status for d, (status, shift) in _alt_raw.items()}
         _alt_shift_map = {d: shift for d, (status, shift) in _alt_raw.items()}
     else:
-        cycle = generate_4x2_calendar(anchor_date, year, month)
+        cycle = generate_4x2_calendar(anchor_date, year, month, group)
 
     _stype        = shift_type_cfg if shift_type_cfg else ("night" if group == "B" else "day")
     default_shift = _stype
@@ -507,7 +526,7 @@ def show_modal(page: ft.Page, title: str, content: ft.Control,
         bgcolor=bgcolor,
         border_radius=16,
         padding=16,
-        width=360,
+        width=min(360, int((page.width or 420) * 0.92)),
         border=ft.Border.all(1, "#333333"),
         shadow=ft.BoxShadow(blur_radius=20, color="#00000088",
                             offset=ft.Offset(0, 4)),
@@ -688,7 +707,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607011135"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607021144"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -824,7 +843,7 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
         _alt_raw = generate_alternating_calendar(anchor, view_year, view_month)
         cycle = {d: status for d, (status, shift) in _alt_raw.items()}
     else:
-        cycle = generate_4x2_calendar(anchor, view_year, view_month)
+        cycle = generate_4x2_calendar(anchor, view_year, view_month, settings.get("group", "A"))
     month_key       = f"{view_year}-{view_month:02d}"
     month_overrides = overrides.get(month_key, {})
     month_holidays  = holidays.get(month_key, [])
@@ -836,20 +855,36 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
         ov     = month_overrides.get(str(day_num), {})
         is_hol = day_num in month_holidays
 
-        status_dd = ft.Dropdown(
-            label="Status", value=ov.get("status", "normal"),
-            options=[
-                ft.dropdown.Option("normal",  "Trabalho Normal"),
-                ft.dropdown.Option("early",   "Saída Antecipada — horário real"),
-                ft.dropdown.Option("absent",  "Falta 欠勤"),
-                ft.dropdown.Option("yukyu",   "有休 Yukyu — 8h sem 残業/noturno"),
-                ft.dropdown.Option("holiday", "休出 Trabalho em Feriado (+35%)"),
-                ft.dropdown.Option("legal",   "法定休出 Domingo/Folga Legal (+35%)"),
-            ],
-            bgcolor="#2A2A2A", color="#F0F0F0",
-            border_color="#333333", focused_border_color="#00D2C6",
-            label_style=ft.TextStyle(color="#A0A0A0"),
+        status_dd = _ValueHolder(ov.get("status", "normal"))
+        STATUS_OPCOES = [
+            ("normal",  "Normal",            "Trabalho Normal"),
+            ("early",   "Saída Antecipada",  "Saída Antecipada — horário real"),
+            ("absent",  "Falta",             "Falta 欠勤"),
+            ("yukyu",   "有休",               "有休 Yukyu — 8h sem 残業/noturno"),
+            ("holiday", "休出 (+35%)",        "休出 Trabalho em Feriado (+35%)"),
+            ("legal",   "法定休出 (+35%)",     "法定休出 Domingo/Folga Legal (+35%)"),
+        ]
+        status_desc = ft.Text(
+            next((d for k, _, d in STATUS_OPCOES if k == status_dd.value), ""),
+            size=10, color=TEXT_MUTED,
         )
+        status_label = ft.Text("Status", size=12, color="#A0A0A0")
+        _status_btns = {}
+        for key, label, _desc in STATUS_OPCOES:
+            btn = ft.FilledButton(
+                label, data=key,
+                style=ft.ButtonStyle(
+                    bgcolor=ACCENT if key == status_dd.value else BG_SURFACE,
+                    color="#121212" if key == status_dd.value else TEXT_PRIMARY,
+                ),
+                expand=1,
+            )
+            _status_btns[key] = btn
+        status_grid = ft.Column(controls=[
+            ft.Row([_status_btns["normal"], _status_btns["early"]], spacing=6),
+            ft.Row([_status_btns["absent"], _status_btns["yukyu"]], spacing=6),
+            ft.Row([_status_btns["holiday"], _status_btns["legal"]], spacing=6),
+        ], spacing=6)
         start_f = ft.TextField(
             label="Entrada (HH:MM)", value=ov.get("start", ""),
             bgcolor="#2A2A2A", color="#F0F0F0",
@@ -992,7 +1027,20 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
                     )
             page.update()
 
-        status_dd.on_change = lambda _: _update_preview()
+        def _set_status(key):
+            status_dd.value = key
+            status_desc.value = next((d for k, _, d in STATUS_OPCOES if k == key), "")
+            for k, btn in _status_btns.items():
+                btn.style = ft.ButtonStyle(
+                    bgcolor=ACCENT if k == key else BG_SURFACE,
+                    color="#121212" if k == key else TEXT_PRIMARY,
+                )
+                btn.update()
+            status_desc.update()
+            _update_preview()
+        for _key, _btn in _status_btns.items():
+            _btn.on_click = (lambda k: lambda _: _set_status(k))(_key)
+
         def _norm_time(field):
             def _do(_):
                 field.value = normalize_hhmm(field.value)
@@ -1063,7 +1111,9 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
                 ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
                 ft.Divider(height=1, color="#333333"),
                 hol_text,
-                status_dd,
+                status_label,
+                status_grid,
+                status_desc,
                 # Entrada e Saída na mesma linha com expand
                 ft.Row([start_f, end_f], spacing=8),
                 break_f,
@@ -2035,6 +2085,37 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
 
         page.run_task(_do_diag)
 
+    diag_content_col = ft.Column(controls=[
+        ft.FilledButton(
+            "Testar Agora",
+            on_click=_run_diagnostic,
+            style=ft.ButtonStyle(bgcolor="#444444"),
+        ),
+        ft.Container(
+            content=_diag_result,
+            bgcolor="#1a1a1a", border_radius=8,
+            padding=10,
+        ),
+        ft.Text(
+            "1) Toque em Testar Agora e leia o resultado.\n"
+            "2) Feche o app/Chrome completamente.\n"
+            "3) Reabra e toque em Testar Agora de novo.\n"
+            "4) Se o teste 3 ou 5 mostrar valor vazio/None na "
+            "segunda vez, identificamos qual storage falha.",
+            size=9, color=TEXT_MUTED,
+        ),
+    ], spacing=8, tight=True, visible=False)
+
+    def _toggle_diag(e):
+        diag_content_col.visible = e.control.value
+        diag_content_col.update()
+    diag_switch = ft.Switch(
+        label="Mostrar ferramentas de diagnóstico (uso avançado/suporte)",
+        value=False, active_color=ACCENT,
+        label_text_style=ft.TextStyle(color=TEXT_SECONDARY, size=12),
+        on_change=_toggle_diag,
+    )
+
     def _save():
         save_json(page, KEY_SETTINGS, settings)
         # Não chama refresh_all() — evita scroll voltar ao topo
@@ -2059,31 +2140,75 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
             on_blur=_blur,
         )
 
-    group_dd = ft.Dropdown(
-        label="Grupo de Turno", value=settings.get("group", "B"),
-        options=[
-            ft.dropdown.Option("A", "Grupo A"),
-            ft.dropdown.Option("B", "Grupo B"),
-            ft.dropdown.Option("C", "Grupo C"),
-        ],
-        bgcolor="#2A2A2A", color="#F0F0F0",
-        border_color="#333333", focused_border_color="#00D2C6",
-        label_style=ft.TextStyle(color="#A0A0A0"),
-    )
-    group_dd.on_change = lambda e: [settings.__setitem__("group", e.control.value), save_json(page, KEY_SETTINGS, settings), refresh_all()]
+    _group_val = [settings.get("group", "B")]
+    def _set_group(g):
+        _group_val[0] = g
+        settings["group"] = g
+        save_json(page, KEY_SETTINGS, settings)
+        for gv, btn in (("A", btn_group_a), ("B", btn_group_b), ("C", btn_group_c)):
+            btn.style = ft.ButtonStyle(
+                bgcolor=ACCENT if g == gv else BG_SURFACE,
+                color="#121212" if g == gv else TEXT_PRIMARY,
+            )
+            btn.update()
+        # Sem refresh_all() — evita scroll ao topo. As outras abas
+        # (Calendário, Holerite) leem `settings["group"]` fresco na
+        # próxima vez que forem abertas, sem precisar forçar agora.
 
-    shift_type_dd = ft.Dropdown(
-        label="Turno 勤務",
-        value=settings.get("shift_type", "night"),
-        options=[
-            ft.dropdown.Option("night", "🌙 Noturno 夜勤"),
-            ft.dropdown.Option("day",   "☀️ Diurno 昼勤"),
-        ],
-        bgcolor="#2A2A2A", color="#F0F0F0",
-        border_color="#333333", focused_border_color="#00D2C6",
-        label_style=ft.TextStyle(color="#A0A0A0"),
+    _cur_group = settings.get("group", "B")
+    btn_group_a = ft.FilledButton(
+        "Grupo A", on_click=lambda _: _set_group("A"),
+        style=ft.ButtonStyle(
+            bgcolor=ACCENT if _cur_group == "A" else BG_SURFACE,
+            color="#121212" if _cur_group == "A" else TEXT_PRIMARY,
+        ), expand=1,
     )
-    shift_type_dd.on_change = lambda e: [settings.__setitem__("shift_type", e.control.value), save_json(page, KEY_SETTINGS, settings), refresh_all()]
+    btn_group_b = ft.FilledButton(
+        "Grupo B", on_click=lambda _: _set_group("B"),
+        style=ft.ButtonStyle(
+            bgcolor=ACCENT if _cur_group == "B" else BG_SURFACE,
+            color="#121212" if _cur_group == "B" else TEXT_PRIMARY,
+        ), expand=1,
+    )
+    btn_group_c = ft.FilledButton(
+        "Grupo C", on_click=lambda _: _set_group("C"),
+        style=ft.ButtonStyle(
+            bgcolor=ACCENT if _cur_group == "C" else BG_SURFACE,
+            color="#121212" if _cur_group == "C" else TEXT_PRIMARY,
+        ), expand=1,
+    )
+    group_label = ft.Text("Grupo de Turno", size=12, color="#A0A0A0")
+    group_row = ft.Row(controls=[btn_group_a, btn_group_b, btn_group_c], spacing=6)
+
+    _shift_type_val = [settings.get("shift_type", "night")]
+    def _set_shift_type(st):
+        _shift_type_val[0] = st
+        settings["shift_type"] = st
+        save_json(page, KEY_SETTINGS, settings)
+        for sv, btn in (("night", btn_shift_night), ("day", btn_shift_day)):
+            btn.style = ft.ButtonStyle(
+                bgcolor=ACCENT if st == sv else BG_SURFACE,
+                color="#121212" if st == sv else TEXT_PRIMARY,
+            )
+            btn.update()
+
+    _cur_shift_type = settings.get("shift_type", "night")
+    btn_shift_night = ft.FilledButton(
+        "🌙 Noturno 夜勤", on_click=lambda _: _set_shift_type("night"),
+        style=ft.ButtonStyle(
+            bgcolor=ACCENT if _cur_shift_type == "night" else BG_SURFACE,
+            color="#121212" if _cur_shift_type == "night" else TEXT_PRIMARY,
+        ), expand=1,
+    )
+    btn_shift_day = ft.FilledButton(
+        "☀️ Diurno 昼勤", on_click=lambda _: _set_shift_type("day"),
+        style=ft.ButtonStyle(
+            bgcolor=ACCENT if _cur_shift_type == "day" else BG_SURFACE,
+            color="#121212" if _cur_shift_type == "day" else TEXT_PRIMARY,
+        ), expand=1,
+    )
+    shift_type_label = ft.Text("Turno 勤務", size=12, color="#A0A0A0")
+    shift_type_row = ft.Row(controls=[btn_shift_night, btn_shift_day], spacing=6)
 
     def _tf_shift(lbl, key, hint="HH:MM", is_time=True):
         f = ft.TextField(
@@ -2251,7 +2376,7 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
 
     _cur_round = settings.get("round_mode", "truncate")
     btn_round_trunc = ft.FilledButton(
-        "Truncar (p/ baixo)", on_click=lambda _: _set_round_mode("truncate"),
+        "Truncar", on_click=lambda _: _set_round_mode("truncate"),
         style=ft.ButtonStyle(
             bgcolor=ACCENT if _cur_round == "truncate" else BG_SURFACE,
             color="#121212" if _cur_round == "truncate" else TEXT_PRIMARY,
@@ -2463,7 +2588,8 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
                                     style=ft.ButtonStyle(bgcolor=ACCENT, color="#121212")),
                 ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
             ], spacing=10, tight=True),
-            bgcolor=BG_CARD, border_radius=14, padding=16, width=360,
+            bgcolor=BG_CARD, border_radius=14, padding=16,
+            width=min(360, int((page.width or 420) * 0.92)),
             border=ft.Border.all(1, "#333333"),
         )
         bg = ft.Container(
@@ -2505,7 +2631,8 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
                                     style=ft.ButtonStyle(bgcolor=DANGER)),
                 ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
             ], spacing=12, tight=True),
-            bgcolor=BG_CARD, border_radius=14, padding=16, width=320,
+            bgcolor=BG_CARD, border_radius=14, padding=16,
+            width=min(320, int((page.width or 420) * 0.92)),
             border=ft.Border.all(1, DANGER),
         )
         bg = ft.Container(
@@ -2527,7 +2654,10 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
             card(ft.Column(controls=[
                 section_header("CONFIGURAÇÃO DE SALÁRIO"),
                 mk_field("Valor Hora 時給 (¥)",              "jikyuu"),
-                ft.Row([group_dd, shift_type_dd], spacing=8),
+                group_label,
+                group_row,
+                shift_type_label,
+                shift_type_row,
                 mk_field("Data Início Ciclo 4×2 (AAAA-MM-DD)", "anchor_date",
                          ft.KeyboardType.TEXT),
                 mk_field("Bônus Padrão Mês Ímpar (¥)",        "odd_bonus"),
@@ -2606,26 +2736,12 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
             ], spacing=10, tight=True)),
 
             # ── Diagnóstico de Storage (temporário, para debug) ────────
+            # Escondido atrás de switch — só quem está debugando um
+            # problema de persistência precisa ver isso no dia a dia.
             card(ft.Column(controls=[
                 section_header("🔍 DIAGNÓSTICO DE ARMAZENAMENTO"),
-                ft.FilledButton(
-                    "Testar Agora",
-                    on_click=_run_diagnostic,
-                    style=ft.ButtonStyle(bgcolor="#444444"),
-                ),
-                ft.Container(
-                    content=_diag_result,
-                    bgcolor="#1a1a1a", border_radius=8,
-                    padding=10,
-                ),
-                ft.Text(
-                    "1) Toque em Testar Agora e leia o resultado.\n"
-                    "2) Feche o app/Chrome completamente.\n"
-                    "3) Reabra e toque em Testar Agora de novo.\n"
-                    "4) Se o teste 3 ou 5 mostrar valor vazio/None na "
-                    "segunda vez, identificamos qual storage falha.",
-                    size=9, color=TEXT_MUTED,
-                ),
+                diag_switch,
+                diag_content_col,
             ], spacing=8, tight=True)),
         ],
         spacing=0, scroll=ft.ScrollMode.AUTO,
@@ -2729,7 +2845,8 @@ def build_holidays_tab(page: ft.Page, state: dict, refresh_all):
                                     style=ft.ButtonStyle(bgcolor="#F97316")),
                 ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
             ], spacing=10, tight=True),
-            bgcolor=BG_CARD, border_radius=14, padding=16, width=320,
+            bgcolor=BG_CARD, border_radius=14, padding=16,
+            width=min(320, int((page.width or 420) * 0.92)),
             border=ft.Border.all(1, "#F97316"),
         )
         bg = ft.Container(
