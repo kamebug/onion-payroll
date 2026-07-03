@@ -1,5 +1,49 @@
 # Changelog — Onion Payroll
 
+## [2.17] — 2026-07-03 — CRÍTICO: ABAS CONFIG E AJUDA NÃO ABRIAM
+
+### 🔴 Bug crítico corrigido — Config quebrada desde a v2.14
+
+**Reportado pelo usuário:** as abas ⚙️ Config e ❓ Ajuda pararam de abrir.
+
+**Causa raiz (Config):** ao reorganizar a aba em wizard por etapas
+(v2.14), o `hidden_advanced_container` (seção "Avançado" escondida) foi
+criado referenciando `block_label`, `block_row`, `round_mode_label`,
+`round_mode_row`, `premium_switch` e `premium_fields_col` — mas essas
+variáveis só eram definidas MAIS TARDE na função. Isso não gera erro de
+sintaxe (por isso passou despercebido em todas as verificações
+anteriores), mas quebra em tempo de execução com `UnboundLocalError`
+assim que a aba tenta renderizar.
+
+**Correção:** `hidden_advanced_container` movido para depois de todas
+as variáveis que ele usa já existirem.
+
+### 🔴 Bug crítico corrigido — Ajuda quebrada desde a v2.16
+
+**Causa raiz:** os botões "Copiar Link" e "Ver Vídeo" (v2.16) usavam
+`ft.Icons.COPY` / `ft.Icons.PLAY_CIRCLE_OUTLINE` — um padrão de ícone
+diferente do que o resto do app já usa comprovadamente (`icon="upload"`,
+string minúscula simples).
+
+**Correção:** trocado para `icon="copy"` / `icon="play_circle_outline"`,
+igual ao padrão já validado em produção.
+
+### Metodologia nova — teste de renderização sem o Flet instalado
+
+Criado um módulo `flet` "falso" (aceita qualquer chamada/atributo sem
+precisar da lib real) para testar se as funções `build_*_tab()` executam
+sem erro, sem precisar abrir o app de verdade. Isso pega exatamente essa
+classe de bug (`UnboundLocalError`, `NameError`, ordem de definição
+errada) que passa despercebida em `py_compile` (só verifica sintaxe) e
+em `unittest` (só testa o motor de cálculo, não a UI).
+
+**Lição para o processo:** ao adicionar qualquer container/variável nova
+dentro de `build_settings_tab()` ou outra função de UI grande, testar a
+função inteira renderizando com o stub antes de considerar a mudança
+pronta — não basta `python -m py_compile`.
+
+---
+
 ## [2.16] — 2026-07-03 — VÍDEO DE APRESENTAÇÃO NO COMPARTILHAMENTO
 
 ### 🟢 Adicionado

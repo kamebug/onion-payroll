@@ -73,6 +73,33 @@ bate com o esperado.
 
 ---
 
+## 🔴 Bugs que passam no `py_compile` mas quebram em runtime (categoria nova)
+
+Diferente de erro de sintaxe (`py_compile` pega) ou erro de cálculo
+(`unittest` pega), esses bugs só aparecem quando a função de UI é
+**executada de verdade** — algo que nem `py_compile` nem `unittest`
+fazem, já que `unittest` só testa o motor de cálculo, não as funções
+`build_*_tab()`.
+
+| Problema | Causa raiz | Versão corrigida | Como foi descoberto |
+|---|---|---|---|
+| **Aba Config não abria** (crash total) | `hidden_advanced_container` (v2.14) referenciava `block_label`/`premium_switch`/etc. antes delas serem definidas na função — `UnboundLocalError` | **2.17 (crítico)** | Stub de teste (ver abaixo) rodando `build_settings_tab()` de verdade |
+| **Aba Ajuda não abria** (crash total) | Botões novos (v2.16) usavam `ft.Icons.COPY`/`ft.Icons.PLAY_CIRCLE_OUTLINE`, divergindo do padrão já validado no resto do app (`icon="upload"`, string minúscula) | **2.17 (crítico)** | Mesmo stub, rodando `build_help_tab()` |
+
+**Metodologia criada para pegar isso no futuro:** um módulo `flet` "falso"
+(`unittest.mock.MagicMock` respondendo a qualquer atributo/chamada),
+permitindo importar `main.py` e chamar `build_*_tab(page, state,
+refresh_all)` de verdade — sem precisar do Flet instalado — e capturar
+qualquer `NameError`/`UnboundLocalError`/`AttributeError` real que só
+aparece em tempo de execução.
+
+**Processo recomendado a partir de agora:** depois de qualquer mudança
+em `build_settings_tab()`, `build_help_tab()`, ou qualquer outra função
+`build_*_tab()`, rodar esse teste de renderização (não só
+`py_compile`) antes de considerar a mudança pronta para entregar.
+
+---
+
 ## 📋 Processo recomendado para novos problemas
 
 1. **Se for de cálculo** (números errados, lógica de negócio) →
@@ -96,6 +123,10 @@ bate com o esperado.
    individual, sem `refresh_all()`), como no seletor de Desconto
 7. **Campos lado a lado em `ft.Row`** só se houver certeza de que cabem
    em tela de celular estreita — na dúvida, empilhar em `ft.Column`
+8. **Depois de mexer em qualquer `build_*_tab()`**, rodar o teste de
+   renderização com o stub de Flet falso (ver categoria "Bugs que passam
+   no py_compile mas quebram em runtime" acima) — `py_compile` não pega
+   `UnboundLocalError`/ordem de variável errada, só erro de sintaxe
 
 ---
 

@@ -775,7 +775,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607031143"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607010336"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -2607,21 +2607,6 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
     ], spacing=12, tight=True))
     step4_salario_container.visible = _cur_cycle_confirmed
 
-    # Escondido por enquanto (a pedido do usuário) — código mantido
-    # intacto, só não aparece na tela. Para reativar: trocar visible=False
-    # por visible=True abaixo.
-    hidden_advanced_container = card(ft.Column(controls=[
-        section_header("AVANÇADO (desativado)"),
-        block_label,
-        block_row,
-        round_mode_label,
-        round_mode_row,
-        section_header("TAXA DE HORA EXTRA/NOTURNO/DOMINGO"),
-        premium_switch,
-        premium_fields_col,
-    ], spacing=12, tight=True))
-    hidden_advanced_container.visible = False
-
 
 
 
@@ -2770,6 +2755,21 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
         ft.Text("Minha empresa usa taxa diferente para hora extra/noturno/domingo",
                 size=12, color=TEXT_SECONDARY, expand=True),
     ], spacing=8)
+
+    # Escondido por enquanto (a pedido do usuário) — código mantido
+    # intacto, só não aparece na tela. Para reativar: trocar visible=False
+    # por visible=True abaixo.
+    hidden_advanced_container = card(ft.Column(controls=[
+        section_header("AVANÇADO (desativado)"),
+        block_label,
+        block_row,
+        round_mode_label,
+        round_mode_row,
+        section_header("TAXA DE HORA EXTRA/NOTURNO/DOMINGO"),
+        premium_switch,
+        premium_fields_col,
+    ], spacing=12, tight=True))
+    hidden_advanced_container.visible = False
 
     _ded_mode_val = [settings.get("deduction_mode", "historical")]
 
@@ -3404,12 +3404,12 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
                         weight=ft.FontWeight.W_600),
             ], alignment=ft.MainAxisAlignment.CENTER),
             ft.FilledButton(
-                "Copiar Link", icon=ft.Icons.COPY,
+                "Copiar Link", icon="copy",
                 on_click=_copiar_link,
                 style=ft.ButtonStyle(bgcolor=ACCENT_DARK, color="#FFFFFF"),
             ),
             ft.OutlinedButton(
-                "Ver Vídeo de Apresentação (30s)", icon=ft.Icons.PLAY_CIRCLE_OUTLINE,
+                "Ver Vídeo de Apresentação (30s)", icon="play_circle_outline",
                 on_click=_abrir_video,
                 style=ft.ButtonStyle(color=ACCENT_LITE),
             ),
