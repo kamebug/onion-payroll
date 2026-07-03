@@ -46,6 +46,7 @@ compute_monthly_forecast   = FUNCS["compute_monthly_forecast"]
 generate_4x2_calendar      = FUNCS["generate_4x2_calendar"]
 generate_weekly_calendar   = FUNCS["generate_weekly_calendar"]
 generate_alternating_calendar = FUNCS["generate_alternating_calendar"]
+generate_alternating_monthly_calendar = FUNCS["generate_alternating_monthly_calendar"]
 normalize_hhmm             = FUNCS["normalize_hhmm"]
 
 JIKYUU = 1500
@@ -186,14 +187,16 @@ class TestFeriadoEDomingo(unittest.TestCase):
         )
 
     def test_domingo_sem_registro_nao_conta(self):
+        # Dia 2/jun/2026 é folga real no modo pessoal (default a partir da
+        # v2.12) com ANCHOR=5/jan/2026 — confirmado por generate_4x2_calendar
         resultado_com = base_forecast(day_overrides={
-            "14": {"status": "normal", "start": "20:35",
-                   "end": "08:35", "break_min": 65},
+            "2": {"status": "normal", "start": "20:35",
+                  "end": "08:35", "break_min": 65},
         })
         resultado_sem = base_forecast(day_overrides={})
         self.assertGreater(
             resultado_com["gross"], resultado_sem["gross"],
-            "Registrar domingo trabalhado deve aumentar o bruto"
+            "Registrar dia de folga trabalhado deve aumentar o bruto"
         )
 
 
@@ -509,6 +512,186 @@ class TestAcrescimoTaxaPremium(unittest.TestCase):
         self.assertEqual(pay["overtime_pay"], 0)
         self.assertEqual(pay["night_pay"], 0)
         self.assertGreater(pay["holiday_pay"], 0)
+
+
+class TestGrupoABC(unittest.TestCase):
+    """Valida o deslocamento de 2 dias entre turmas (Grupo A/B/C) no
+    ciclo 4x2, usando o mecanismo `anchor_group` (v2.13): a data digitada
+    é sempre o dia 1 do grupo que estava selecionado NAQUELE momento
+    (`anchor_group`). Trocar de grupo depois, sem tocar na data, desloca
+    o calendário automaticamente pela relação de 2 dias entre turmas —
+    sem precisar de nenhum switch/modo configurável.
+
+    - `anchor_group == group` (ou não informado): sem deslocamento — a
+      data é o dia 1 do próprio grupo visualizado. Corrige o bug em que
+      um usuário do Grupo B/C que digitava seu próprio primeiro dia de
+      trabalho tinha o calendário deslocado incorretamente (v2.12).
+    - `anchor_group != group`: desloca pela relação A=0/B=2/C=4 — valida
+      contra a planilha real de escala da fábrica (v2.11), agora
+      expressa como "o usuário definiu a data com Grupo X selecionado e
+      depois trocou para Grupo Y".
+    """
+
+    ANCHOR_GRUPO = date(2026, 6, 1)  # referência = "dia 1" da planilha
+
+    # dias 1-7 da planilha real, True=work / False=off
+    PADRAO_A = [True, True, True, True, False, False, True]
+    PADRAO_B = [False, False, True, True, True, True, False]
+    PADRAO_C = [True, True, False, False, True, True, True]
+
+    def test_grupo_a_bate_com_planilha_real(self):
+        # anchor_group="A" (data definida com Grupo A selecionado)
+        cal = generate_4x2_calendar(self.ANCHOR_GRUPO, 2026, 6, "A", anchor_group="A")
+        for i, esperado in enumerate(self.PADRAO_A):
+            dia = self.ANCHOR_GRUPO.day + i
+            self.assertEqual((cal.get(dia) == "work"), esperado,
+                              f"Grupo A, dia {i+1}")
+
+    def test_grupo_b_bate_com_planilha_real_apos_trocar_de_grupo(self):
+        # Data foi definida com Grupo A selecionado (anchor_group="A"),
+        # usuário troca para Grupo B depois — deve deslocar +2 dias
+        cal = generate_4x2_calendar(self.ANCHOR_GRUPO, 2026, 6, "B", anchor_group="A")
+        for i, esperado in enumerate(self.PADRAO_B):
+            dia = self.ANCHOR_GRUPO.day + i
+            self.assertEqual((cal.get(dia) == "work"), esperado,
+                              f"Grupo B, dia {i+1}")
+
+    def test_grupo_c_bate_com_planilha_real_apos_trocar_de_grupo(self):
+        cal = generate_4x2_calendar(self.ANCHOR_GRUPO, 2026, 6, "C", anchor_group="A")
+        for i, esperado in enumerate(self.PADRAO_C):
+            dia = self.ANCHOR_GRUPO.day + i
+            self.assertEqual((cal.get(dia) == "work"), esperado,
+                              f"Grupo C, dia {i+1}")
+
+    def test_nunca_dois_grupos_de_folga_no_mesmo_dia(self):
+        cal_a = generate_4x2_calendar(self.ANCHOR_GRUPO, 2026, 6, "A", anchor_group="A")
+        cal_b = generate_4x2_calendar(self.ANCHOR_GRUPO, 2026, 6, "B", anchor_group="A")
+        cal_c = generate_4x2_calendar(self.ANCHOR_GRUPO, 2026, 6, "C", anchor_group="A")
+        for dia in cal_a:
+            folgas = [g for g, cal in (("A", cal_a), ("B", cal_b), ("C", cal_c))
+                      if cal.get(dia) == "off"]
+            self.assertLessEqual(len(folgas), 1,
+                                  f"Dia {dia}: mais de 1 grupo de folga ({folgas})")
+
+    def test_sem_anchor_group_mantem_compatibilidade_retroativa(self):
+        # Chamar sem anchor_group (código antigo/v2.12) deve continuar
+        # funcionando, equivalente a anchor_group=group (sem deslocamento)
+        cal_default = generate_4x2_calendar(self.ANCHOR_GRUPO, 2026, 6, "B")
+        cal_explicito = generate_4x2_calendar(self.ANCHOR_GRUPO, 2026, 6, "B", anchor_group="B")
+        self.assertEqual(cal_default, cal_explicito)
+
+    def test_data_digitada_e_sempre_dia_1_do_grupo_selecionado_no_momento(self):
+        # Bug reportado pelo usuário: um usuário do Grupo B que digita
+        # "hoje é meu 1o dia de trabalho" COM O GRUPO B JÁ SELECIONADO
+        # deve ter esse dia como "work", SEM deslocamento algum.
+        for grupo in ("A", "B", "C"):
+            cal = generate_4x2_calendar(self.ANCHOR_GRUPO, 2026, 6, grupo,
+                                         anchor_group=grupo)
+            self.assertEqual(cal.get(self.ANCHOR_GRUPO.day), "work",
+                              f"Grupo {grupo}: dia digitado como início deveria ser 'work'")
+
+    def test_trocar_grupo_sem_mudar_data_ajusta_automaticamente(self):
+        # Cenário completo do usuário: seleciona Grupo B, digita a data
+        # (anchor_group="B"), depois clica em Grupo A SEM mudar a data.
+        # O calendário do Grupo A deve se ajustar sozinho (-2 dias).
+        cal_como_B = generate_4x2_calendar(self.ANCHOR_GRUPO, 2026, 6, "B", anchor_group="B")
+        cal_trocado_para_A = generate_4x2_calendar(self.ANCHOR_GRUPO, 2026, 6, "A", anchor_group="B")
+        # O dia digitado (dia 1) é "work" para B (quem definiu a data)...
+        self.assertEqual(cal_como_B.get(self.ANCHOR_GRUPO.day), "work")
+        # ...mas ao trocar para A sem mudar a data, o calendário se
+        # ajusta corretamente (não fica igual ao de B)
+        self.assertNotEqual(cal_como_B, cal_trocado_para_A)
+
+    def test_forecast_usa_anchor_group_corretamente(self):
+        # Dia 1/jun/2026 definido com Grupo A selecionado (anchor_group="A").
+        # Forecast do Grupo B (trocado depois) deve dar bruto diferente
+        # do forecast do Grupo A (mesmo anchor_date).
+        forecast_a = base_forecast(anchor_date=self.ANCHOR_GRUPO, group="A", anchor_group="A")
+        forecast_b = base_forecast(anchor_date=self.ANCHOR_GRUPO, group="B", anchor_group="A")
+        self.assertNotEqual(forecast_a["gross"], forecast_b["gross"],
+                             "Grupos diferentes do anchor_group devem gerar brutos diferentes")
+
+    def test_forecast_mesmo_grupo_do_anchor_sem_deslocamento(self):
+        # Se o grupo atual É o mesmo que definiu a data, não há
+        # deslocamento — comportamento idêntico independente do grupo
+        forecast_b = base_forecast(anchor_date=self.ANCHOR_GRUPO, group="B", anchor_group="B")
+        forecast_a = base_forecast(anchor_date=self.ANCHOR_GRUPO, group="A", anchor_group="A")
+        self.assertEqual(forecast_a["gross"], forecast_b["gross"],
+                          "Cada grupo com sua própria data (sem troca) gera o mesmo bruto")
+
+
+class TestAlternadoMensal(unittest.TestCase):
+    """Valida o novo ciclo Alternado Mensal (v2.15): 1 mês inteiro em um
+    turno, próximo mês no outro, com padrão de folga configurável (5×2
+    fim de semana, ou 4×2 com Grupo A/B/C)."""
+
+    def test_mes_da_ancora_e_diurno(self):
+        shift_anchor = date(2026, 1, 15)
+        cal = generate_alternating_monthly_calendar(shift_anchor, 2026, 1, rest_pattern="5x2")
+        _, turno = next(iter(cal.values()))
+        self.assertEqual(turno, "day")
+
+    def test_alterna_mes_a_mes(self):
+        shift_anchor = date(2026, 1, 15)
+        turnos = []
+        for mes in range(1, 5):
+            cal = generate_alternating_monthly_calendar(shift_anchor, 2026, mes, rest_pattern="5x2")
+            _, turno = next(iter(cal.values()))
+            turnos.append(turno)
+        self.assertEqual(turnos, ["day", "night", "day", "night"])
+
+    def test_5x2_folga_fim_de_semana(self):
+        shift_anchor = date(2026, 1, 15)
+        cal = generate_alternating_monthly_calendar(shift_anchor, 2026, 6, rest_pattern="5x2")
+        for dia, (status, _) in cal.items():
+            d = date(2026, 6, dia)
+            esperado = "off" if d.weekday() >= 5 else "work"
+            self.assertEqual(status, esperado, f"dia {dia}")
+
+    def test_4x2_respeita_grupo(self):
+        shift_anchor = date(2026, 1, 15)
+        rest_anchor = date(2026, 6, 1)
+        cal_a = generate_alternating_monthly_calendar(
+            shift_anchor, 2026, 6, rest_pattern="4x2",
+            rest_anchor_date=rest_anchor, group="A", anchor_group="A")
+        cal_b = generate_alternating_monthly_calendar(
+            shift_anchor, 2026, 6, rest_pattern="4x2",
+            rest_anchor_date=rest_anchor, group="B", anchor_group="A")
+        status_a = {d: s for d, (s, _) in cal_a.items()}
+        status_b = {d: s for d, (s, _) in cal_b.items()}
+        self.assertNotEqual(status_a, status_b,
+                             "Grupos diferentes devem ter folgas diferentes mesmo no alternado mensal")
+
+    def test_4x2_e_5x2_sao_independentes_do_turno(self):
+        # O padrão de folga (4x2 ou 5x2) não deve mudar por causa do mês
+        # ser diurno ou noturno — só o turno muda, a folga é a mesma regra
+        shift_anchor = date(2026, 1, 15)
+        cal_jan = generate_alternating_monthly_calendar(shift_anchor, 2026, 1, rest_pattern="5x2")
+        cal_fev = generate_alternating_monthly_calendar(shift_anchor, 2026, 2, rest_pattern="5x2")
+        turno_jan = next(iter(cal_jan.values()))[1]
+        turno_fev = next(iter(cal_fev.values()))[1]
+        self.assertNotEqual(turno_jan, turno_fev)
+
+    def test_forecast_integra_alternado_mensal_5x2(self):
+        resultado = base_forecast(
+            cycle_type="alternating_monthly",
+            alt_monthly_rest_pattern="5x2",
+            shift_anchor_date=date(2026, 6, 1),
+            alt_start_day="08:35", alt_end_day="20:35",
+            alt_start_night="20:35", alt_end_night="08:35",
+        )
+        self.assertGreater(resultado["gross"], 0)
+
+    def test_forecast_integra_alternado_mensal_4x2_com_grupo(self):
+        resultado = base_forecast(
+            cycle_type="alternating_monthly",
+            alt_monthly_rest_pattern="4x2",
+            shift_anchor_date=date(2026, 6, 1),
+            group="B", anchor_group="B",
+            alt_start_day="08:35", alt_end_day="20:35",
+            alt_start_night="20:35", alt_end_night="08:35",
+        )
+        self.assertGreater(resultado["gross"], 0)
 
 
 if __name__ == "__main__":

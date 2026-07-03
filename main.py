@@ -254,18 +254,26 @@ def calculate_shift_pay(
     return result
 
 
-def generate_4x2_calendar(anchor_date: date, year: int, month: int, group: str = "A") -> dict:
+def generate_4x2_calendar(anchor_date: date, year: int, month: int, group: str = "A",
+                           anchor_group: str = None) -> dict:
     """Ciclo 4x2 (4 dias trabalho + 2 folga) com 3 turmas rotativas.
 
-    `anchor_date` é a referência compartilhada do ciclo (equivale ao dia 1
-    do Grupo A). Grupo B e C são deslocados +2 e +4 dias respectivamente
-    dentro do ciclo de 6 dias, para que as turmas nunca folguem no mesmo
-    dia — confirmado contra a planilha real de escala da fábrica
-    (Grupo A folga qui/sex, B folga dom/sáb, C folga ter/qua, nunca duas
-    turmas folgando juntas).
+    `anchor_date` é o dia 1 de trabalho do grupo `anchor_group` (o grupo
+    que estava selecionado quando a data foi definida/alterada pela
+    última vez). Ao trocar de grupo SEM alterar a data, o calendário do
+    novo grupo é recalculado automaticamente pela relação de 2 dias entre
+    turmas — confirmado contra planilha real de escala da fábrica (Grupo
+    A folga qui/sex, B folga dom/sáb, C folga ter/qua, nunca duas turmas
+    folgando juntas).
+
+    Se `anchor_group` não for informado, assume igual a `group` (a data
+    é o dia 1 do próprio grupo selecionado, sem deslocamento — caso mais
+    comum: usuário nunca trocou de grupo depois de definir a data).
     """
     GROUP_OFFSET = {"A": 0, "B": 2, "C": 4}
-    offset = GROUP_OFFSET.get(group, 0)
+    if anchor_group is None:
+        anchor_group = group
+    offset = GROUP_OFFSET.get(group, 0) - GROUP_OFFSET.get(anchor_group, 0)
     result, first_day, last_day = {}, date(year, month, 1), date(year, month, 28)
     for d in range(28, 32):
         try:    last_day = date(year, month, d)
@@ -319,6 +327,51 @@ def generate_alternating_calendar(anchor_date: date, year: int, month: int) -> d
     return result
 
 
+def generate_alternating_monthly_calendar(shift_anchor_date: date, year: int, month: int,
+                                           rest_pattern: str = "5x2",
+                                           rest_anchor_date: date = None,
+                                           group: str = "A", anchor_group: str = None) -> dict:
+    """Alternado mensal: 1 mês inteiro em um turno, próximo mês no outro.
+    Retorna dict {day: ("work"|"off", "day"|"night")}.
+
+    Duas datas independentes:
+    - `shift_anchor_date`: qualquer dia do PRIMEIRO MÊS diurno — define a
+      alternância dia/noite (meses contados a partir do mês dessa data).
+    - `rest_anchor_date`: só usado quando rest_pattern="4x2" — é o
+      `anchor_date` do padrão de folga 4×2 (mesmo mecanismo de Grupo A/B/C
+      e `anchor_group` já usado no ciclo 4×2 puro). Se não informado,
+      usa `shift_anchor_date` como referência.
+
+    `rest_pattern`:
+    - "5x2" (padrão): folga sábado/domingo, igual ao alternado semanal.
+    - "4x2": folga conforme o ciclo 4×2 (4 dias trabalho + 2 folga),
+      respeitando Grupo A/B/C — reaproveita `generate_4x2_calendar`.
+    """
+    result, first_day, last_day = {}, date(year, month, 1), date(year, month, 28)
+    for d in range(28, 32):
+        try:    last_day = date(year, month, d)
+        except ValueError: break
+
+    anchor_month_start = shift_anchor_date.replace(day=1)
+    months_diff = (year - anchor_month_start.year) * 12 + (month - anchor_month_start.month)
+    shift = "day" if months_diff % 2 == 0 else "night"
+
+    if rest_pattern == "4x2":
+        _rest_anchor = rest_anchor_date if rest_anchor_date else shift_anchor_date
+        rest_cal = generate_4x2_calendar(_rest_anchor, year, month, group, anchor_group)
+        cursor = first_day
+        while cursor <= last_day:
+            result[cursor.day] = (rest_cal.get(cursor.day, "off"), shift)
+            cursor += timedelta(days=1)
+    else:
+        cursor = first_day
+        while cursor <= last_day:
+            status = "off" if cursor.weekday() >= 5 else "work"
+            result[cursor.day] = (status, shift)
+            cursor += timedelta(days=1)
+    return result
+
+
 def compute_monthly_forecast(
     year: int, month: int, jikyuu: int, anchor_date: date, group: str,
     holiday_days: list, day_overrides: dict, odd_month_bonus: int, extra_bonus: int,
@@ -332,17 +385,28 @@ def compute_monthly_forecast(
     round_mode: str = "truncate",
     premium_allowances_monthly: float = 0, premium_standard_hours: float = 144,
     night_addon_extra: float = 0,
+    anchor_group: str = None,
+    alt_monthly_rest_pattern: str = "5x2", shift_anchor_date: date = None,
 ) -> dict:
     # ── Seleção do tipo de ciclo ──────────────────────────────────
-    _alt_shift_map = {}  # dia -> "day"/"night" (só usado se cycle_type=alternating)
+    _alt_shift_map = {}  # dia -> "day"/"night" (só usado se cycle_type=alternating*)
     if cycle_type == "5x2":
         cycle = generate_weekly_calendar(year, month)
     elif cycle_type == "alternating":
         _alt_raw = generate_alternating_calendar(anchor_date, year, month)
         cycle = {d: status for d, (status, shift) in _alt_raw.items()}
         _alt_shift_map = {d: shift for d, (status, shift) in _alt_raw.items()}
+    elif cycle_type == "alternating_monthly":
+        _shift_anchor = shift_anchor_date if shift_anchor_date else anchor_date
+        _alt_raw = generate_alternating_monthly_calendar(
+            _shift_anchor, year, month,
+            rest_pattern=alt_monthly_rest_pattern,
+            rest_anchor_date=anchor_date, group=group, anchor_group=anchor_group,
+        )
+        cycle = {d: status for d, (status, shift) in _alt_raw.items()}
+        _alt_shift_map = {d: shift for d, (status, shift) in _alt_raw.items()}
     else:
-        cycle = generate_4x2_calendar(anchor_date, year, month, group)
+        cycle = generate_4x2_calendar(anchor_date, year, month, group, anchor_group)
 
     _stype        = shift_type_cfg if shift_type_cfg else ("night" if group == "B" else "day")
     default_shift = _stype
@@ -354,8 +418,8 @@ def compute_monthly_forecast(
     days_normal = days_holiday = days_legal = 0
 
     for day_num, cycle_status in cycle.items():
-        # No modo alternado, o turno do dia muda conforme a semana
-        if cycle_type == "alternating" and day_num in _alt_shift_map:
+        # No modo alternado (semanal ou mensal), o turno do dia muda
+        if cycle_type in ("alternating", "alternating_monthly") and day_num in _alt_shift_map:
             _day_shift = _alt_shift_map[day_num]
             default_shift = _day_shift
             if _day_shift == "day":
@@ -593,10 +657,14 @@ DEFAULT_SETTINGS = {
     "block": 1, "round_mode": "truncate", "pin_enabled": False,
     "premium_allowances_monthly": 0, "premium_standard_hours": 144,
     "night_addon_extra": 0,
+    "anchor_group": None,
+    "cycle_type_confirmed": False,
     "shift_type": "night", "shift_start": "20:35", "shift_end": "08:35",
     "shift_break": 65, "shift_ot": "06:35", "extra_bonus": 0,
     "fixed_monthly_bonus": 0,  # adicional fixo todo mês (ex: liderança)
-    "cycle_type": "4x2",  # "4x2" | "5x2" | "alternating"
+    "cycle_type": "4x2",  # "4x2" | "5x2" | "alternating" | "alternating_monthly"
+    "alt_monthly_rest_pattern": "5x2",  # "5x2" | "4x2" — só usado em alternating_monthly
+    "shift_anchor_date": None,  # só usado em alternating_monthly (mês de referência diurno)
     "shift_start_day": "08:35", "shift_end_day": "20:35",
     "shift_start_night": "20:35", "shift_end_night": "08:35",
 }
@@ -707,7 +775,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607021144"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607010336"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -842,8 +910,21 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
     elif _cycle_type == "alternating":
         _alt_raw = generate_alternating_calendar(anchor, view_year, view_month)
         cycle = {d: status for d, (status, shift) in _alt_raw.items()}
+    elif _cycle_type == "alternating_monthly":
+        try:
+            _shift_anchor = date.fromisoformat(settings.get("shift_anchor_date") or settings["anchor_date"])
+        except Exception:
+            _shift_anchor = anchor
+        _alt_raw = generate_alternating_monthly_calendar(
+            _shift_anchor, view_year, view_month,
+            rest_pattern=settings.get("alt_monthly_rest_pattern", "5x2"),
+            rest_anchor_date=anchor, group=settings.get("group", "A"),
+            anchor_group=settings.get("anchor_group"),
+        )
+        cycle = {d: status for d, (status, shift) in _alt_raw.items()}
     else:
-        cycle = generate_4x2_calendar(anchor, view_year, view_month, settings.get("group", "A"))
+        cycle = generate_4x2_calendar(anchor, view_year, view_month, settings.get("group", "A"),
+                                       settings.get("anchor_group"))
     month_key       = f"{view_year}-{view_month:02d}"
     month_overrides = overrides.get(month_key, {})
     month_holidays  = holidays.get(month_key, [])
@@ -856,27 +937,36 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
         is_hol = day_num in month_holidays
 
         status_dd = _ValueHolder(ov.get("status", "normal"))
+        # (chave, label PT principal, label JP secundário p/ localizar no
+        # holerite real, descrição completa exibida abaixo)
         STATUS_OPCOES = [
-            ("normal",  "Normal",            "Trabalho Normal"),
-            ("early",   "Saída Antecipada",  "Saída Antecipada — horário real"),
-            ("absent",  "Falta",             "Falta 欠勤"),
-            ("yukyu",   "有休",               "有休 Yukyu — 8h sem 残業/noturno"),
-            ("holiday", "休出 (+35%)",        "休出 Trabalho em Feriado (+35%)"),
-            ("legal",   "法定休出 (+35%)",     "法定休出 Domingo/Folga Legal (+35%)"),
+            ("normal",  "Normal",             "",       "Trabalho Normal"),
+            ("early",   "Saída Antecipada",   "",       "Saída Antecipada — horário real"),
+            ("absent",  "Falta",              "欠勤",    "Falta 欠勤"),
+            ("yukyu",   "Folga Remunerada",   "有休",    "有休 Yukyu — 8h sem 残業/noturno"),
+            ("holiday", "Feriado +35%",       "休出",    "休出 Trabalho em Feriado (+35%)"),
+            ("legal",   "Domingo +35%",       "法定休出", "法定休出 Domingo/Folga Legal (+35%)"),
         ]
         status_desc = ft.Text(
-            next((d for k, _, d in STATUS_OPCOES if k == status_dd.value), ""),
+            next((d for k, _, _, d in STATUS_OPCOES if k == status_dd.value), ""),
             size=10, color=TEXT_MUTED,
         )
         status_label = ft.Text("Status", size=12, color="#A0A0A0")
+
+        def _status_btn_content(pt, jp, ativo):
+            cor = "#121212" if ativo else TEXT_PRIMARY
+            controls = [ft.Text(pt, size=12, weight=ft.FontWeight.W_600, color=cor)]
+            if jp:
+                controls.append(ft.Text(jp, size=9, color=cor if ativo else TEXT_MUTED))
+            return ft.Column(controls=controls, spacing=0, tight=True,
+                              horizontal_alignment=ft.CrossAxisAlignment.CENTER)
+
         _status_btns = {}
-        for key, label, _desc in STATUS_OPCOES:
+        for key, pt, jp, _desc in STATUS_OPCOES:
+            ativo = (key == status_dd.value)
             btn = ft.FilledButton(
-                label, data=key,
-                style=ft.ButtonStyle(
-                    bgcolor=ACCENT if key == status_dd.value else BG_SURFACE,
-                    color="#121212" if key == status_dd.value else TEXT_PRIMARY,
-                ),
+                content=_status_btn_content(pt, jp, ativo), data=key,
+                style=ft.ButtonStyle(bgcolor=ACCENT if ativo else BG_SURFACE),
                 expand=1,
             )
             _status_btns[key] = btn
@@ -1029,12 +1119,12 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
 
         def _set_status(key):
             status_dd.value = key
-            status_desc.value = next((d for k, _, d in STATUS_OPCOES if k == key), "")
-            for k, btn in _status_btns.items():
-                btn.style = ft.ButtonStyle(
-                    bgcolor=ACCENT if k == key else BG_SURFACE,
-                    color="#121212" if k == key else TEXT_PRIMARY,
-                )
+            status_desc.value = next((d for k, _, _, d in STATUS_OPCOES if k == key), "")
+            for k, pt, jp, _desc in STATUS_OPCOES:
+                btn = _status_btns[k]
+                ativo = (k == key)
+                btn.content = _status_btn_content(pt, jp, ativo)
+                btn.style = ft.ButtonStyle(bgcolor=ACCENT if ativo else BG_SURFACE)
                 btn.update()
             status_desc.update()
             _update_preview()
@@ -1385,8 +1475,26 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
         alignment=ft.MainAxisAlignment.CENTER,
     )
 
+    group_badge = None
+    _mostra_grupo = (_cycle_type == "4x2" or
+                      (_cycle_type == "alternating_monthly"
+                       and settings.get("alt_monthly_rest_pattern", "5x2") == "4x2"))
+    if _mostra_grupo:
+        _grupo_atual = settings.get("group", "A")
+        _grupo_ref   = settings.get("anchor_group")
+        _badge_txt   = f"📅 Escala do Grupo {_grupo_atual}"
+        if _grupo_ref and _grupo_ref != _grupo_atual:
+            _badge_txt += f"  (calculada a partir do Grupo {_grupo_ref})"
+        group_badge = ft.Container(
+            content=ft.Text(_badge_txt, size=11, color=ACCENT, weight=ft.FontWeight.W_600),
+            padding=ft.Padding(left=8, right=8, top=4, bottom=4),
+            bgcolor="#1A2E2C", border_radius=6,
+            margin=ft.Padding(left=0, right=0, top=0, bottom=4),
+        )
+
     return ft.Column(
-        controls=[nav_row, legend, ft.Container(height=2), header_row,
+        controls=[nav_row, *([group_badge] if group_badge else []), legend,
+                  ft.Container(height=2), header_row,
                   ft.Container(height=2), *weeks],
         spacing=4,
         scroll=ft.ScrollMode.AUTO,
@@ -1450,6 +1558,10 @@ def build_holerite_tab(page: ft.Page, state: dict, refresh_all):
             premium_allowances_monthly=float(settings.get("premium_allowances_monthly") or 0),
             premium_standard_hours=float(settings.get("premium_standard_hours") or 144),
             night_addon_extra=float(settings.get("night_addon_extra") or 0),
+            anchor_group=settings.get("anchor_group"),
+            alt_monthly_rest_pattern=settings.get("alt_monthly_rest_pattern", "5x2"),
+            shift_anchor_date=(date.fromisoformat(settings["shift_anchor_date"])
+                                if settings.get("shift_anchor_date") else None),
         )
     except Exception:
         data = {"gross": 0, "deductions": 0, "net": 0,
@@ -2109,12 +2221,14 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
     def _toggle_diag(e):
         diag_content_col.visible = e.control.value
         diag_content_col.update()
-    diag_switch = ft.Switch(
-        label="Mostrar ferramentas de diagnóstico (uso avançado/suporte)",
-        value=False, active_color=ACCENT,
-        label_text_style=ft.TextStyle(color=TEXT_SECONDARY, size=12),
-        on_change=_toggle_diag,
+    diag_switch_toggle = ft.Switch(
+        value=False, active_color=ACCENT, on_change=lambda e: _toggle_diag(e),
     )
+    diag_switch = ft.Row(controls=[
+        diag_switch_toggle,
+        ft.Text("Mostrar ferramentas de diagnóstico (uso avançado/suporte)",
+                size=12, color=TEXT_SECONDARY, expand=True),
+    ], spacing=8)
 
     def _save():
         save_json(page, KEY_SETTINGS, settings)
@@ -2151,6 +2265,11 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
                 color="#121212" if g == gv else TEXT_PRIMARY,
             )
             btn.update()
+        if not anchor_date_field.visible:
+            anchor_date_field.visible = True
+            anchor_date_hint.visible = False
+            anchor_date_field.update()
+            anchor_date_hint.update()
         # Sem refresh_all() — evita scroll ao topo. As outras abas
         # (Calendário, Holerite) leem `settings["group"]` fresco na
         # próxima vez que forem abertas, sem precisar forçar agora.
@@ -2179,6 +2298,34 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
     )
     group_label = ft.Text("Grupo de Turno", size=12, color="#A0A0A0")
     group_row = ft.Row(controls=[btn_group_a, btn_group_b, btn_group_c], spacing=6)
+
+    # ── Data de início do ciclo — grava automaticamente qual grupo estava
+    # selecionado no momento em que a data foi definida. Trocar de grupo
+    # DEPOIS, sem tocar na data, recalcula o calendário sozinho usando a
+    # relação de 2 dias entre turmas — sem precisar de switch nenhum.
+    def _blur_anchor_date(e):
+        v = e.control.value.strip()
+        settings["anchor_date"] = v
+        settings["anchor_group"] = settings.get("group", "A")
+        save_json(page, KEY_SETTINGS, settings)
+
+    _tem_anchor_group = settings.get("anchor_group") is not None
+    anchor_date_hint = ft.Text(
+        "👆 Selecione seu grupo acima primeiro — a data será o 1º dia "
+        "de trabalho DESSE grupo específico.",
+        size=11, color=WARNING, italic=True,
+        visible=not _tem_anchor_group,
+    )
+    anchor_date_field = ft.TextField(
+        label="Data Início Ciclo 4×2 (AAAA-MM-DD)",
+        value=str(settings.get("anchor_date", "")),
+        keyboard_type=ft.KeyboardType.TEXT,
+        bgcolor="#2A2A2A", color="#F0F0F0",
+        border_color="#333333", focused_border_color="#00D2C6",
+        label_style=ft.TextStyle(color="#A0A0A0"),
+        on_blur=_blur_anchor_date,
+        visible=_tem_anchor_group,
+    )
 
     _shift_type_val = [settings.get("shift_type", "night")]
     def _set_shift_type(st):
@@ -2239,23 +2386,50 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
     # ── Tipo de Ciclo de Trabalho ─────────────────────────────────
     def _set_cycle_type(mode):
         settings["cycle_type"] = mode
+        settings["cycle_type_confirmed"] = True
         _mem_cache[KEY_SETTINGS] = settings
         save_json(page, KEY_SETTINGS, settings)
-        btn_4x2.style = ft.ButtonStyle(
-            bgcolor=ACCENT if mode == "4x2" else BG_SURFACE,
-            color="#121212" if mode == "4x2" else TEXT_PRIMARY)
-        btn_5x2.style = ft.ButtonStyle(
-            bgcolor=ACCENT if mode == "5x2" else BG_SURFACE,
-            color="#121212" if mode == "5x2" else TEXT_PRIMARY)
-        btn_alt.style = ft.ButtonStyle(
-            bgcolor=ACCENT if mode == "alternating" else BG_SURFACE,
-            color="#121212" if mode == "alternating" else TEXT_PRIMARY)
-        btn_4x2.update(); btn_5x2.update(); btn_alt.update()
+        for m, btn in (("4x2", btn_4x2), ("5x2", btn_5x2),
+                       ("alternating", btn_alt), ("alternating_monthly", btn_alt_monthly)):
+            btn.style = ft.ButtonStyle(
+                bgcolor=ACCENT if mode == m else BG_SURFACE,
+                color="#121212" if mode == m else TEXT_PRIMARY)
+            btn.update()
         # Alternar visibilidade direto, sem refresh_all() — sem scroll ao topo
-        section_4x2_container.visible = (mode != "alternating")
-        section_alt_container.visible = (mode == "alternating")
+        _is_alt_any = mode in ("alternating", "alternating_monthly")
+        section_4x2_container.visible = not _is_alt_any
+        section_alt_container.visible = _is_alt_any
+        shift_type_picker_container.visible = not _is_alt_any
+        rest_pattern_row_container.visible = (mode == "alternating_monthly")
+        shift_anchor_date_container.visible = (mode == "alternating_monthly")
         section_4x2_container.update()
         section_alt_container.update()
+        shift_type_picker_container.update()
+        rest_pattern_row_container.update()
+        shift_anchor_date_container.update()
+        # Revela as etapas seguintes (2, 3 e 4) — etapa 3 (Grupo) só no 4×2
+        # puro OU no Alternado Mensal com padrão de folga 4×2
+        step2_turno_container.visible = True
+        step3_grupo_container.visible = (
+            mode == "4x2"
+            or (mode == "alternating_monthly"
+                and settings.get("alt_monthly_rest_pattern", "5x2") == "4x2")
+        )
+        step4_salario_container.visible = True
+        step2_turno_container.update()
+        step3_grupo_container.update()
+        step4_salario_container.update()
+
+    def _set_rest_pattern(pattern):
+        settings["alt_monthly_rest_pattern"] = pattern
+        save_json(page, KEY_SETTINGS, settings)
+        for p, btn in (("4x2", btn_rest_4x2), ("5x2", btn_rest_5x2)):
+            btn.style = ft.ButtonStyle(
+                bgcolor=ACCENT if pattern == p else BG_SURFACE,
+                color="#121212" if pattern == p else TEXT_PRIMARY)
+            btn.update()
+        step3_grupo_container.visible = (pattern == "4x2")
+        step3_grupo_container.update()
 
     _cur_cycle = settings.get("cycle_type", "4x2")
     btn_4x2 = ft.FilledButton(
@@ -2273,13 +2447,71 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
         expand=1,
     )
     btn_alt = ft.FilledButton(
-        "Alternado", on_click=lambda _: _set_cycle_type("alternating"),
+        "Alternado Semanal", on_click=lambda _: _set_cycle_type("alternating"),
         style=ft.ButtonStyle(
             bgcolor=ACCENT if _cur_cycle == "alternating" else BG_SURFACE,
             color="#121212" if _cur_cycle == "alternating" else TEXT_PRIMARY),
         expand=1,
     )
-    cycle_type_row = ft.Row([btn_4x2, btn_5x2, btn_alt], spacing=6)
+    btn_alt_monthly = ft.FilledButton(
+        "Alternado Mensal", on_click=lambda _: _set_cycle_type("alternating_monthly"),
+        style=ft.ButtonStyle(
+            bgcolor=ACCENT if _cur_cycle == "alternating_monthly" else BG_SURFACE,
+            color="#121212" if _cur_cycle == "alternating_monthly" else TEXT_PRIMARY),
+        expand=1,
+    )
+    cycle_type_row = ft.Column(controls=[
+        ft.Row([btn_4x2, btn_5x2], spacing=6),
+        ft.Row([btn_alt, btn_alt_monthly], spacing=6),
+    ], spacing=6)
+
+    # Sub-escolha: padrão de folga do Alternado Mensal (só aparece nesse modo)
+    _cur_rest = settings.get("alt_monthly_rest_pattern", "5x2")
+    btn_rest_4x2 = ft.FilledButton(
+        "Folga 4×2 (c/ Grupo)", on_click=lambda _: _set_rest_pattern("4x2"),
+        style=ft.ButtonStyle(
+            bgcolor=ACCENT if _cur_rest == "4x2" else BG_SURFACE,
+            color="#121212" if _cur_rest == "4x2" else TEXT_PRIMARY),
+        expand=1,
+    )
+    btn_rest_5x2 = ft.FilledButton(
+        "Folga 5×2 (fim de semana)", on_click=lambda _: _set_rest_pattern("5x2"),
+        style=ft.ButtonStyle(
+            bgcolor=ACCENT if _cur_rest == "5x2" else BG_SURFACE,
+            color="#121212" if _cur_rest == "5x2" else TEXT_PRIMARY),
+        expand=1,
+    )
+    rest_pattern_row_container = ft.Container(
+        content=ft.Column(controls=[
+            ft.Text("Padrão de Folga (Alternado Mensal)", size=12, color="#A0A0A0"),
+            ft.Row([btn_rest_4x2, btn_rest_5x2], spacing=6),
+        ], spacing=8, tight=True),
+        visible=(_cur_cycle == "alternating_monthly"),
+    )
+
+    # Data de referência do mês diurno (só no Alternado Mensal)
+    def _blur_shift_anchor(e):
+        settings["shift_anchor_date"] = e.control.value.strip()
+        save_json(page, KEY_SETTINGS, settings)
+    shift_anchor_date_container = ft.Container(
+        content=ft.Column(controls=[
+            ft.Text(
+                "Qualquer dia dentro do 1º MÊS que você trabalhou de dia "
+                "— o app calcula a alternância a partir daí.",
+                size=11, color=TEXT_MUTED, italic=True,
+            ),
+            ft.TextField(
+                label="Data de Referência — Mês Diurno (AAAA-MM-DD)",
+                value=str(settings.get("shift_anchor_date") or ""),
+                keyboard_type=ft.KeyboardType.TEXT,
+                bgcolor="#2A2A2A", color="#F0F0F0",
+                border_color="#333333", focused_border_color="#00D2C6",
+                label_style=ft.TextStyle(color="#A0A0A0"),
+                on_blur=_blur_shift_anchor,
+            ),
+        ], spacing=6, tight=True),
+        visible=(_cur_cycle == "alternating_monthly"),
+    )
 
 
     # Campos do turno alternado (dia/noite)
@@ -2299,7 +2531,7 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
             ft.Row([shift_start_f, shift_end_f], spacing=8),
             ft.Row([shift_break_f, shift_ot_f], spacing=8),
         ], spacing=8, tight=True),
-        visible=(settings.get("cycle_type", "4x2") != "alternating"),
+        visible=(settings.get("cycle_type", "4x2") not in ("alternating", "alternating_monthly")),
     )
     section_alt_container = ft.Container(
         content=ft.Column(controls=[
@@ -2308,8 +2540,87 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
             ft.Row([alt_night_start_f, alt_night_end_f], spacing=8),
             shift_break_f,
         ], spacing=8, tight=True),
-        visible=(settings.get("cycle_type", "4x2") == "alternating"),
+        visible=(settings.get("cycle_type", "4x2") in ("alternating", "alternating_monthly")),
     )
+
+    # ═══ Wizard por etapas (v2.14) ═══════════════════════════════════
+    # Etapa 2, 3 e 4 só aparecem depois que o usuário escolhe o tipo de
+    # ciclo pela primeira vez (settings["cycle_type_confirmed"]) — força
+    # a ordem de preenchimento sem incomodar quem já configurou antes.
+    _cur_cycle_confirmed = bool(settings.get("cycle_type_confirmed", False))
+
+    shift_type_picker_container = ft.Container(
+        content=ft.Column(controls=[shift_type_label, shift_type_row], spacing=8, tight=True),
+        visible=(settings.get("cycle_type", "4x2") not in ("alternating", "alternating_monthly")),
+    )
+
+    step2_turno_container = card(ft.Column(controls=[
+        section_header("2️⃣ HORÁRIO DO TURNO"),
+        shift_type_picker_container,
+        section_4x2_container,
+        section_alt_container,
+        shift_anchor_date_container,
+        ft.Container(
+            content=ft.Column(controls=[
+                ft.Text("💡 Como funciona o cálculo:",
+                        size=10, color=ACCENT, weight=ft.FontWeight.W_700),
+                ft.Text("• Entrada → Início 残業: horas normais (salário base)",
+                        size=10, color=TEXT_SECONDARY),
+                ft.Text("• Início 残業 → Saída: hora extra +25%",
+                        size=10, color=TEXT_SECONDARY),
+                ft.Text("• No modo Alternado, a semana define automaticamente dia ou noite",
+                        size=10, color=TEXT_MUTED),
+            ], spacing=3, tight=True),
+            bgcolor=BG_SURFACE,
+            border_radius=8,
+            padding=ft.Padding(left=10, right=10, top=8, bottom=8),
+            border=ft.Border.all(1, "#333333"),
+        ),
+    ], spacing=12, tight=True))
+    step2_turno_container.visible = _cur_cycle_confirmed
+
+    step3_grupo_container = card(ft.Column(controls=[
+        section_header("3️⃣ GRUPO DE TURNO"),
+        group_label,
+        group_row,
+        anchor_date_hint,
+        anchor_date_field,
+    ], spacing=12, tight=True))
+    _cur_cycle_val = settings.get("cycle_type", "4x2")
+    step3_grupo_container.visible = (
+        _cur_cycle_confirmed
+        and (_cur_cycle_val == "4x2"
+             or (_cur_cycle_val == "alternating_monthly"
+                 and settings.get("alt_monthly_rest_pattern", "5x2") == "4x2"))
+    )
+
+    step4_salario_container = card(ft.Column(controls=[
+        section_header("4️⃣ CONFIGURAÇÃO DE SALÁRIO"),
+        mk_field("Valor Hora 時給 (¥)",              "jikyuu"),
+        mk_field("Bônus Padrão Mês Ímpar (¥)",        "odd_bonus"),
+        mk_field("Adicional Fixo Mensal — Líder, etc. (¥)", "fixed_monthly_bonus"),
+        ft.Text(
+            "Valor somado automaticamente TODO mês na previsão "
+            "(ex: adicional de liderança, função técnica fixa).",
+            size=9, color=TEXT_MUTED,
+        ),
+    ], spacing=12, tight=True))
+    step4_salario_container.visible = _cur_cycle_confirmed
+
+    # Escondido por enquanto (a pedido do usuário) — código mantido
+    # intacto, só não aparece na tela. Para reativar: trocar visible=False
+    # por visible=True abaixo.
+    hidden_advanced_container = card(ft.Column(controls=[
+        section_header("AVANÇADO (desativado)"),
+        block_label,
+        block_row,
+        round_mode_label,
+        round_mode_row,
+        section_header("TAXA DE HORA EXTRA/NOTURNO/DOMINGO"),
+        premium_switch,
+        premium_fields_col,
+    ], spacing=12, tight=True))
+    hidden_advanced_container.visible = False
 
 
 
@@ -2450,13 +2761,15 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
     def _toggle_premium(e):
         premium_fields_col.visible = e.control.value
         premium_fields_col.update()
-    premium_switch = ft.Switch(
-        label="Minha empresa usa taxa diferente para hora extra/noturno/domingo",
-        value=premium_fields_col.visible,
-        active_color=ACCENT,
-        label_text_style=ft.TextStyle(color=TEXT_SECONDARY, size=12),
-        on_change=_toggle_premium,
+    premium_switch_toggle = ft.Switch(
+        value=premium_fields_col.visible, active_color=ACCENT,
+        on_change=lambda e: _toggle_premium(e),
     )
+    premium_switch = ft.Row(controls=[
+        premium_switch_toggle,
+        ft.Text("Minha empresa usa taxa diferente para hora extra/noturno/domingo",
+                size=12, color=TEXT_SECONDARY, expand=True),
+    ], spacing=8)
 
     _ded_mode_val = [settings.get("deduction_mode", "historical")]
 
@@ -2651,56 +2964,35 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
             ft.Text("⚙️  Configurações", size=scaled(16),
                     color=TEXT_PRIMARY, weight=ft.FontWeight.W_700),
             ft.Container(height=4),
+
+            # ═══ ETAPA 1 — Tipo de Ciclo (sempre visível, primeiro) ═══
             card(ft.Column(controls=[
-                section_header("CONFIGURAÇÃO DE SALÁRIO"),
-                mk_field("Valor Hora 時給 (¥)",              "jikyuu"),
-                group_label,
-                group_row,
-                shift_type_label,
-                shift_type_row,
-                mk_field("Data Início Ciclo 4×2 (AAAA-MM-DD)", "anchor_date",
-                         ft.KeyboardType.TEXT),
-                mk_field("Bônus Padrão Mês Ímpar (¥)",        "odd_bonus"),
-                mk_field("Adicional Fixo Mensal — Líder, etc. (¥)", "fixed_monthly_bonus"),
-                ft.Text(
-                    "Valor somado automaticamente TODO mês na previsão "
-                    "(ex: adicional de liderança, função técnica fixa).",
-                    size=9, color=TEXT_MUTED,
-                ),
-                block_label,
-                block_row,
-                round_mode_label,
-                round_mode_row,
-                section_header("TAXA DE HORA EXTRA/NOTURNO/DOMINGO"),
-                premium_switch,
-                premium_fields_col,
-                section_header("TIPO DE CICLO DE TRABALHO"),
+                section_header("1️⃣ TIPO DE CICLO DE TRABALHO"),
                 cycle_type_row,
                 ft.Text(
                     "4×2: 4 dias trabalho + 2 folga (fábricas turno fixo)  |  "
                     "5×2: segunda a sexta (turno comercial)  |  "
-                    "Alternado: 1 semana dia + 1 semana noite",
+                    "Alternado Semanal: 1 semana dia + 1 semana noite  |  "
+                    "Alternado Mensal: 1 mês dia + 1 mês noite",
                     size=9, color=TEXT_MUTED,
                 ),
-                section_4x2_container,
-                section_alt_container,
-                ft.Container(
-                    content=ft.Column(controls=[
-                        ft.Text("💡 Como funciona o cálculo:",
-                                size=10, color=ACCENT, weight=ft.FontWeight.W_700),
-                        ft.Text("• Entrada → Início 残業: horas normais (salário base)",
-                                size=10, color=TEXT_SECONDARY),
-                        ft.Text("• Início 残業 → Saída: hora extra +25%",
-                                size=10, color=TEXT_SECONDARY),
-                        ft.Text("• No modo Alternado, a semana define automaticamente dia ou noite",
-                                size=10, color=TEXT_MUTED),
-                    ], spacing=3, tight=True),
-                    bgcolor=BG_SURFACE,
-                    border_radius=8,
-                    padding=ft.Padding(left=10, right=10, top=8, bottom=8),
-                    border=ft.Border.all(1, "#333333"),
-                ),
+                rest_pattern_row_container,
             ], spacing=12, tight=True)),
+
+            # ═══ ETAPA 2 — Horário do Turno (só após escolher o ciclo) ═══
+            step2_turno_container,
+
+            # ═══ ETAPA 3 — Grupo A/B/C + Data (só no ciclo 4×2) ═══
+            step3_grupo_container,
+
+            # ═══ ETAPA 4 — Configuração de Salário (só após etapa 1) ═══
+            step4_salario_container,
+
+            # ═══ Escondidos por enquanto — mantidos no código, desligados ═══
+            # Arredondamento do ponto e taxa de referência elevada (v2.9/v2.10).
+            # Reativar: trocar visible=False por visible=True no container
+            # `hidden_advanced_container` logo abaixo.
+            hidden_advanced_container,
 
             card(ft.Column(controls=[
                 section_header("CONFIGURAÇÃO DE DESCONTOS"),
@@ -3085,8 +3377,41 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
         ], spacing=8)
 
     # ── Seções do manual ─────────────────────────────────────────────
+    APP_URL = "https://kamebug.github.io/onion-payroll/"
+
+    def _copiar_link(e):
+        page.set_clipboard(APP_URL)
+        page.open(ft.SnackBar(ft.Text("Link copiado!"), duration=1500))
+
+    share_section = ft.Container(
+        content=ft.Column(controls=[
+            _title("📤 Compartilhar o Onion Payroll"),
+            _p("Mostre esse QR code ou envie o link para um colega peelar o próprio contracheque também:"),
+            ft.Container(
+                content=ft.Image(
+                    src=f"https://api.qrserver.com/v1/create-qr-code/?size=220x220&data={APP_URL}",
+                    width=180, height=180, fit=ft.ImageFit.CONTAIN,
+                ),
+                alignment=ft.alignment.center,
+                padding=ft.Padding(top=8, bottom=8, left=0, right=0),
+            ),
+            ft.Row(controls=[
+                ft.Text(APP_URL, size=12, color=ACCENT_LITE, selectable=True,
+                        weight=ft.FontWeight.W_600),
+            ], alignment=ft.MainAxisAlignment.CENTER),
+            ft.FilledButton(
+                "Copiar Link", icon=ft.Icons.COPY,
+                on_click=_copiar_link,
+                style=ft.ButtonStyle(bgcolor=ACCENT_DARK, color="#FFFFFF"),
+            ),
+        ], spacing=8, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+        padding=12, bgcolor=BG_SURFACE, border_radius=12,
+        margin=ft.Padding(left=0, right=0, top=0, bottom=10),
+    )
+
     sections = ft.Column(
         controls=[
+            share_section,
 
             # ── Início rápido ────────────────────────────────────────
             _title("🚀 Início Rápido"),
@@ -3401,6 +3726,11 @@ async def main(page: ft.Page):
 
     _raw_s   = load_json(page, KEY_SETTINGS, {})
     settings = {**DEFAULT_SETTINGS, **(_raw_s if isinstance(_raw_s, dict) else {})}
+    # Migração v2.14: quem já usava o app antes do wizard por etapas não
+    # deve ver as etapas 2/3/4 sumirem — se já existe um cycle_type salvo
+    # de verdade (não só o default), trata como "já confirmado".
+    if isinstance(_raw_s, dict) and "cycle_type" in _raw_s and "cycle_type_confirmed" not in _raw_s:
+        settings["cycle_type_confirmed"] = True
     _mem_cache[KEY_SETTINGS] = settings
     history   = load_json(page, KEY_HISTORY,   [])
     overrides = load_json(page, KEY_OVERRIDES, {})

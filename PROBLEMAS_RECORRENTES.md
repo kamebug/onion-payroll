@@ -24,8 +24,11 @@ Esses problemas têm teste permanente — rodam toda vez que `test_main.py`
 | Domingo/feriado empilhava noturno+extra por cima do +35% | `TestBugTurnoNoturnoEmFeriado.*` | 2.8 |
 | Taxa de extra/noturno/domingo sem adicionais fixos mensais (リーダー手当 etc.) | `TestAcrescimoTaxaPremium.test_com_acrescimo_bate_com_holerites_2026` | 2.9 |
 | Arredondamento aplicado ao total final em vez da taxa por hora | `TestAcrescimoTaxaPremium.test_sem_acrescimo_bate_com_holerites_2021_2022` | 2.9 |
+| **Grupo A/B/C não afetava o calendário** (deslocamento de turma nunca aplicado) | `TestGrupoABC.*` (validado contra planilha real de escala) | **2.11 (crítico)** |
+| **Grupo B/C deslocava a data pessoal digitada pelo usuário** (dia 1 aparecia como folga) | `TestGrupoABC.*` — resolvido definitivamente com `anchor_group` (rastreamento automático, sem switch) | **2.12→2.13 (crítico)** |
+| Alternado Mensal não existia (só semanal) | `TestAlternadoMensal.*` — nova função `generate_alternating_monthly_calendar()`, reaproveitando `generate_4x2_calendar()` para o padrão de folga 4×2 | 2.15 |
 
-**Total: 40 testes, cobrindo o motor de cálculo inteiro.**
+**Total: 56 testes, cobrindo o motor de cálculo inteiro.**
 
 ---
 
@@ -42,6 +45,12 @@ isso, pois testa só funções Python puras, sem o Flutter/DOM por trás.
 | **Dados perdidos ao fechar o navegador** | `page.client_storage`/`page.eval_js` descontinuados no Flet 0.85, todo storage falhava silenciosamente | **2.7 (crítico)** | Inserir dado, fechar o navegador completamente, reabrir |
 | Botões 4×2/5×2/Alternado causavam scroll ao topo | Mesma causa do item 1, isolada nesses botões específicos | 2.6 | Trocar tipo de ciclo em Config, observar scroll |
 | **Dropdown de arredondamento do ponto resetava seleção e voltava ao topo** | `ft.Dropdown` — mesmo padrão de bug já visto no seletor de Desconto (item acima), mas reintroduzido ao criar um Dropdown novo na v2.9 sem replicar o fix de botões | 2.10 | Mudar "Arredondamento do Ponto" em Config, observar se a seleção fixa e se a página rola |
+| Dropdown de Grupo de Turno e Turno (Config) tinham o mesmo problema | Mesmo padrão — `refresh_all()` chamado desnecessariamente no `on_change` | 2.11 | Mudar "Grupo de Turno" ou "Turno" em Config |
+| Dropdown de Status no modal de ponto (6 opções) | Mesmo padrão — último `ft.Dropdown` restante no app | 2.11 | Abrir um dia no Calendário, trocar o Status |
+| Texto cortado ao lado dos switches que escondem seção (Diagnóstico, Taxa de Referência) | `ft.Switch` com `label` embutido não quebra linha em tela estreita | 2.12 | Abrir ⚙️ Config no celular estreito, ver se o texto ao lado do switch aparece completo |
+| Botões de Status do modal ficaram só em japonês após virar botão (v2.10) | Conversão de Dropdown→botão manteve os labels originais (japonês), sem repensar pro público brasileiro | 2.12 | Abrir modal de ponto, conferir se os botões têm texto em português como principal |
+| Pinch-to-zoom bloqueado no PWA | `maximum-scale=1.0, user-scalable=no` na tag viewport do `index.html` | 2.11 | Abrir o app no celular, tentar dar zoom com dois dedos |
+| Migração do wizard por etapas (v2.14) precisa ser testada manualmente | Não dá pra testar via `unittest` porque depende de `settings` salvos previamente + renderização real da UI | 2.14 | Simular um `settings` salvo de versão anterior (com `cycle_type` mas sem `cycle_type_confirmed`) e confirmar que as etapas 2/3/4 aparecem direto, sem precisar reclicar no tipo de ciclo |
 | Campo "Ajuste Fino do Noturno" cortado em tela de celular | `ft.Row` com 2 campos lado a lado, sem `expand`, na v2.9 | 2.10 | Abrir ⚙️ Config no celular, ligar o switch de taxa de referência, ver se os 2 campos aparecem inteiros |
 | Teclado do celular cobria campos no modal | Modal centralizado verticalmente, sem espaço reservado | 2.6 | Abrir modal de Histórico no celular, tocar em campo perto do fim |
 

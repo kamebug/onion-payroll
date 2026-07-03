@@ -12,10 +12,11 @@ Calcula automaticamente salário base, hora extra, adicional noturno e trabalho 
 
 - **100% offline e privado** — nenhum dado sai do dispositivo
 - **Persistência confiável** — dados sobrevivem ao fechar o navegador (via `shared_preferences`)
-- **Três tipos de ciclo de trabalho:**
-  - 🔄 **4×2** — 4 dias trabalho + 2 folga (padrão fábricas com turno fixo)
+- **Quatro tipos de ciclo de trabalho:**
+  - 🔄 **4×2** — 4 dias trabalho + 2 folga (padrão fábricas com turno fixo). **Grupo A/B/C**: selecione seu grupo, depois digite a data — aquele dia vira o 1º dia de trabalho DESSE grupo. Trocar de grupo depois, sem mexer na data, ajusta o calendário sozinho (relação de 2 dias entre turmas, validada contra escala real da fábrica — nunca duas turmas de folga no mesmo dia)
   - 📅 **5×2** — segunda a sexta (turno comercial)
   - 🔁 **Alternado Semanal** — 1 semana diurno + 1 semana noturno, automaticamente
+  - 🔁 **Alternado Mensal** — 1 mês diurno + 1 mês noturno, com padrão de folga configurável (5×2 fim de semana, ou 4×2 com Grupo A/B/C)
 - **Turno configurável** — defina entrada, saída, intervalo e início de hora extra
 - **Feriados japoneses 2025-2026 embutidos** — aparecem automaticamente
 - **Feriados corporativos** afetam o cálculo, não só a cor do calendário
@@ -38,6 +39,9 @@ Calcula automaticamente salário base, hora extra, adicional noturno e trabalho 
 - **Diagnóstico de armazenamento** integrado em ⚙️ Config para suporte
 - **Build ID** no header — confirma se a versão está atualizada
 - **Google Analytics** — acompanhamento de acessos
+- **Compartilhar o app** — QR code + link copiável na aba ❓ Ajuda, pra indicar pra colegas
+- **Interface bilíngue nos botões de status** — português como texto principal, japonês como legenda (pra localizar a rubrica no holerite real)
+- **Configuração guiada por etapas** — ⚙️ Config em wizard: tipo de ciclo → horário do turno → grupo (só no 4×2) → salário. Cada etapa só aparece depois da anterior fazer sentido
 
 ---
 
@@ -54,7 +58,7 @@ python main.py
 python test_main.py
 ```
 
-40 testes cobrindo cálculo de hora extra, ciclos de trabalho, descontos, feriados (nacionais e corporativos), domingo, falta, yukyu, abono, formatação de horário, arredondamento por categoria e taxa de referência elevada — validados contra 5 holerites reais. Recomendado antes de cada deploy.
+56 testes cobrindo cálculo de hora extra, ciclos de trabalho (incluindo o deslocamento entre turmas Grupo A/B/C), descontos, feriados (nacionais e corporativos), domingo, falta, yukyu, abono, formatação de horário, arredondamento por categoria e taxa de referência elevada — validados contra 5 holerites reais. Recomendado antes de cada deploy.
 
 ### Deploy GitHub Pages
 
@@ -89,6 +93,16 @@ value = await page.shared_preferences.get(key)
 
 ### Alternado Semanal
 Configure os dois horários (dia e noite) em ⚙️ Config. — o app alterna automaticamente a cada semana a partir da Data de Início do Ciclo.
+
+### Alternado Mensal
+Mesma configuração de horários do Alternado Semanal (dia e noite), mas a
+alternância é mensal — configure a **Data de Referência — Mês Diurno**
+(qualquer dia do primeiro mês trabalhado de dia). Escolha também o
+**Padrão de Folga**:
+- **5×2** — folga sábado/domingo (padrão)
+- **4×2** — folga em blocos de 4+2 dias, com Grupo A/B/C e sua própria
+  Data de Início do Ciclo (independente da Data de Referência — Mês
+  Diurno)
 
 ---
 
@@ -203,6 +217,6 @@ Os valores exibidos são estimativas baseadas nas configurações inseridas pelo
 
 ## 🧪 Qualidade
 
-O motor de cálculo é coberto por 40 testes automatizados (`test_main.py`),
+O motor de cálculo é coberto por 56 testes automatizados (`test_main.py`),
 incluindo validação direta contra 5 holerites reais de dois contratos
 diferentes (2021-2022 e 2026).

@@ -1,5 +1,169 @@
 # Changelog — Onion Payroll
 
+## [2.15] — 2026-07-03 — NOVO CICLO: ALTERNADO MENSAL
+
+### 🟢 Adicionado — Alternado Mensal (1 mês diurno + 1 mês noturno)
+
+**Pedido do usuário:** além do Alternado Semanal já existente, um novo
+tipo de ciclo onde o turno (diurno/noturno) muda a cada MÊS inteiro em
+vez de a cada semana — comum em fábricas com rotação mensal de turno.
+
+**Padrão de folga configurável dentro do Alternado Mensal:**
+- **5×2** (padrão): folga sábado/domingo, igual ao Alternado Semanal
+- **4×2**: folga em blocos de 4 dias trabalho + 2 folga, respeitando
+  Grupo A/B/C — reaproveita `generate_4x2_calendar()` (mesma lógica já
+  validada do ciclo 4×2 puro, incluindo o mecanismo `anchor_group`)
+
+**Duas datas de referência independentes** (só quando 4×2 é o padrão de
+folga escolhido):
+- Data do ciclo de folga (já existente, com Grupo A/B/C)
+- Nova "Data de Referência — Mês Diurno": qualquer dia dentro do
+  primeiro mês trabalhado de dia — define a alternância mensal
+
+**Correção de nomenclatura:** o antigo botão "Alternado" foi renomeado
+para "Alternado Semanal" para diferenciar do novo "Alternado Mensal".
+Nenhuma mudança de comportamento para quem já usa o Alternado Semanal.
+
+**Implementação:** nova função `generate_alternating_monthly_calendar()`,
+que separa duas responsabilidades que antes estavam grudadas na função
+semanal — o PADRÃO DE FOLGA (quais dias são trabalho/descanso) e a
+ALTERNÂNCIA DE TURNO (quando troca diurno/noturno) — permitindo combinar
+qualquer padrão de folga com qualquer período de alternância no futuro,
+sem duplicar código.
+
+**Validado:** 7 novos testes (`TestAlternadoMensal`), cobrindo os dois
+padrões de folga, a alternância mês a mês, a integração com Grupo A/B/C,
+e o forecast completo — total agora 56 testes.
+
+---
+
+## [2.14] — 2026-07-02 — ABA CONFIG REORGANIZADA EM WIZARD POR ETAPAS
+
+### 🔵 Redesenho — preenchimento guiado por etapas
+
+**Sugestão do usuário**, expandindo o padrão de switch/campo-escondido
+já usado na Taxa de Referência (v2.10) e no Diagnóstico (v2.10): a aba
+⚙️ Config foi reorganizada num fluxo de 4 etapas, cada uma só aparecendo
+depois que a anterior faz sentido ser preenchida.
+
+**Novo fluxo:**
+1. **Tipo de Ciclo** (4×2 / 5×2 / Alternado) — sempre visível, primeiro
+2. **Horário do Turno** — só aparece depois da etapa 1; conteúdo muda
+   conforme o ciclo (Diurno/Noturno + horários para 4×2/5×2; par de
+   horários dia+noite para Alternado, sem o seletor Diurno/Noturno)
+3. **Grupo de Turno** (A/B/C + data) — só aparece se o ciclo for 4×2
+4. **Configuração de Salário** (Valor Hora, bônus, adicional fixo) —
+   aparece junto com a etapa 2, depois da etapa 1
+
+**Escondidos por enquanto** (a pedido do usuário — mantidos no código,
+só não aparecem na tela): Arredondamento do Ponto, Regra de
+Arredondamento, e Taxa de Hora Extra/Noturno/Domingo. Reversível
+trocando `hidden_advanced_container.visible = False` por `True`.
+
+**Migração:** quem já usava o app antes desta versão não perde as
+etapas — se `cycle_type` já estava salvo, o wizard é tratado como
+"já confirmado" e tudo continua visível normalmente. Só usuários novos
+(instalação limpa) veem o fluxo passo-a-passo.
+
+---
+
+## [2.13] — 2026-07-02 — GRUPO A/B/C: RASTREAMENTO AUTOMÁTICO (SEM SWITCH)
+
+### 🔵 Redesenho — substituído o switch da v2.12 por rastreamento automático
+
+**Sugestão do usuário**, refinando a correção da v2.12: em vez de um
+switch manual "modo pessoal vs. compartilhado", o app agora **lembra
+automaticamente qual grupo estava selecionado quando a data foi
+definida** (`anchor_group`, gravado junto com `anchor_date` toda vez que
+o campo de data perde o foco).
+
+**Como funciona agora:**
+- Selecionar Grupo B → digitar a data → aquele dia vira o dia 1 do
+  **Grupo B** (sem deslocamento, `anchor_group == group`).
+- Clicar em outro grupo DEPOIS, sem mexer na data, recalcula sozinho
+  usando a relação de 2 dias entre turmas (`anchor_group != group`).
+
+Isso cobre os dois casos de uso da v2.12 (pessoal e compartilhado) com
+um único mecanismo, sem exigir que o usuário entenda ou lembre de
+configurar um switch — o comportamento certo emerge naturalmente da
+ordem em que as ações são feitas.
+
+**UX adicional:**
+- O campo de data só aparece depois que o usuário seleciona um grupo
+  pela primeira vez (força a ordem correta) — mas só na primeira vez;
+  quem já tem `anchor_group` salvo continua vendo o campo normalmente.
+- Novo indicador "📅 Escala do Grupo X" no topo da aba Calendário,
+  mostrando explicitamente de qual grupo é a escala visualizada (e, se
+  a data foi definida por outro grupo, isso também aparece).
+
+**Validado:** 9 testes em `TestGrupoABC`, incluindo o cenário completo
+descrito pelo usuário (selecionar grupo → digitar data → trocar de
+grupo sem mexer na data → conferir que nunca 2 grupos folgam juntos).
+
+---
+
+## [2.12] — 2026-07-02 — GRUPO PESSOAL VS. COMPARTILHADO, BOTÕES BILÍNGUES, COMPARTILHAR APP
+
+### 🔴 Bug crítico corrigido — Grupo B/C deslocava a data digitada pelo usuário
+
+**Reportado pelo usuário:** ao selecionar Grupo B ou C e digitar a própria
+data de início de trabalho, o dia digitado aparecia como "folga" em vez
+de "trabalho" — só funcionava certo se o Grupo A estivesse selecionado.
+
+**Causa raiz:** a correção da v2.11 tratava `anchor_date` como se fosse
+*sempre* a referência do Grupo A, deslocando B (+2 dias) e C (+4 dias)
+em cima dela. Mas quando o próprio usuário digita a data, ele está
+dizendo "esse é o MEU primeiro dia de trabalho" — não "esse é o primeiro
+dia do Grupo A". O código deslocava uma data que já era pessoal,
+deslocando duas vezes.
+
+**Correção — dois modos, configuráveis:**
+- **Modo pessoal (default)**: `anchor_date` é sempre o dia 1 do PRÓPRIO
+  grupo selecionado, sem deslocamento algum. Grupo passa a servir só
+  para o turno padrão (noturno/diurno).
+- **Modo compartilhado (opcional, switch em ⚙️ Config)**: mantém o
+  comportamento da v2.11 — `anchor_date` é a referência única do Grupo
+  A, com B/C deslocados +2/+4 dias. Útil se a empresa fornece um único
+  ponto de referência fixo para as 3 turmas.
+
+**Validado:** 9 testes (`TestGrupoABC`), cobrindo os dois modos
+separadamente, mais o cenário exato reportado pelo usuário (dia digitado
+por Grupo B/C deve ser "work", não "off").
+
+### 🟡 Botões do modal de ponto ficaram em japonês depois da conversão
+
+Ao converter o Dropdown de Status para botões (v2.10), alguns labels
+ficaram só em japonês (`有休`, `休出 (+35%)`, `法定休出 (+35%)`) — nada
+óbvio para o público brasileiro do app, e o botão de Yukyu em particular
+ficou "escondido" por não ser reconhecível.
+
+**Correção:** botões agora mostram português como texto principal e
+japonês como legenda secundária menor (ex: "Folga Remunerada" / `有休`),
+preservando a referência japonesa para localizar a rubrica no holerite
+real, sem esconder o significado atrás do idioma.
+
+**Confirmado:** a lógica de cálculo do Yukyu já estava correta (8h fixas,
+sem hora extra nem noturno) — o problema era só o rótulo do botão.
+
+### 🟡 Texto cortado ao lado dos switches de esconder seção
+
+`ft.Switch` com `label` embutido não quebra linha em telas estreitas —
+mesma classe de problema já vista em Dropdowns, mas em Switch. Corrigido
+substituindo o `label` embutido por um `ft.Text` separado dentro de uma
+`Row`, que quebra linha normalmente.
+
+### Adicionado
+- Seção "📤 Compartilhar o Onion Payroll" na aba ❓ Ajuda — QR code (via
+  api.qrserver.com) + link copiável com um toque
+- 3 novos testes de Grupo A/B/C cobrindo o modo pessoal — total agora
+  49 testes
+- Simulação de holerite real documentada: sem calibrar a taxa de
+  referência, extra/noturno/domingo mostram ~1,15%-1,24% de diferença
+  (esperado); calibrado, ¥0 de diferença — confirmado contra os 3
+  holerites de 2026
+
+---
+
 ## [2.11] — 2026-07-02 — GRUPO A/B/C, ZOOM DO PWA E ÚLTIMOS DROPDOWNS
 
 ### 🔴 Bug crítico corrigido — Grupo A/B/C nunca afetava o calendário
