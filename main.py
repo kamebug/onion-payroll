@@ -775,7 +775,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607031256"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607010336"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -3378,8 +3378,9 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
 
     # ── Seções do manual ─────────────────────────────────────────────
     APP_URL = "https://kamebug.github.io/onion-payroll/"
-    # VIDEO_URL removido temporariamente para isolar se o botão de vídeo
-    # (v2.16) é a causa do crash na aba Ajuda — ver PROBLEMAS_RECORRENTES.md
+    VIDEO_URL = "https://youtube.com/shorts/FRC0zbyuMI4"
+    # QR code (ft.Image com URL externa) removido temporariamente para
+    # isolar a causa do crash na aba Ajuda — ver PROBLEMAS_RECORRENTES.md
 
     def _copiar_link(e):
         page.set_clipboard(APP_URL)
@@ -3388,15 +3389,7 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
     share_section = ft.Container(
         content=ft.Column(controls=[
             _title("📤 Compartilhar o Onion Payroll"),
-            _p("Mostre esse QR code ou envie o link para um colega peelar o próprio contracheque também:"),
-            ft.Container(
-                content=ft.Image(
-                    src=f"https://api.qrserver.com/v1/create-qr-code/?size=220x220&data={APP_URL}",
-                    width=180, height=180, fit=ft.ImageFit.CONTAIN,
-                ),
-                alignment=ft.alignment.center,
-                padding=ft.Padding(top=8, bottom=8, left=0, right=0),
-            ),
+            _p("Envie o link para um colega peelar o próprio contracheque também:"),
             ft.Row(controls=[
                 ft.Text(APP_URL, size=12, color=ACCENT_LITE, selectable=True,
                         weight=ft.FontWeight.W_600),
@@ -3406,6 +3399,11 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
                 on_click=_copiar_link,
                 style=ft.ButtonStyle(bgcolor=ACCENT_DARK, color="#FFFFFF"),
             ),
+            _p("Vídeo de apresentação (30s):"),
+            ft.Row(controls=[
+                ft.Text(VIDEO_URL, size=12, color=ACCENT_LITE, selectable=True,
+                        weight=ft.FontWeight.W_600),
+            ], alignment=ft.MainAxisAlignment.CENTER),
         ], spacing=8, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
         padding=12, bgcolor=BG_SURFACE, border_radius=12,
         margin=ft.Padding(left=0, right=0, top=0, bottom=10),
