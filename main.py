@@ -775,7 +775,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607031124"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607010336"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -3378,10 +3378,14 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
 
     # ── Seções do manual ─────────────────────────────────────────────
     APP_URL = "https://kamebug.github.io/onion-payroll/"
+    VIDEO_URL = "https://youtube.com/shorts/FRC0zbyuMI4"
 
     def _copiar_link(e):
         page.set_clipboard(APP_URL)
         page.open(ft.SnackBar(ft.Text("Link copiado!"), duration=1500))
+
+    def _abrir_video(e):
+        page.launch_url(VIDEO_URL)
 
     share_section = ft.Container(
         content=ft.Column(controls=[
@@ -3403,6 +3407,11 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
                 "Copiar Link", icon=ft.Icons.COPY,
                 on_click=_copiar_link,
                 style=ft.ButtonStyle(bgcolor=ACCENT_DARK, color="#FFFFFF"),
+            ),
+            ft.OutlinedButton(
+                "Ver Vídeo de Apresentação (30s)", icon=ft.Icons.PLAY_CIRCLE_OUTLINE,
+                on_click=_abrir_video,
+                style=ft.ButtonStyle(color=ACCENT_LITE),
             ),
         ], spacing=8, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
         padding=12, bgcolor=BG_SURFACE, border_radius=12,

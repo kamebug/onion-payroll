@@ -1,5 +1,15 @@
 # Changelog — Onion Payroll
 
+## [2.16] — 2026-07-03 — VÍDEO DE APRESENTAÇÃO NO COMPARTILHAMENTO
+
+### 🟢 Adicionado
+
+Botão "Ver Vídeo de Apresentação (30s)" na seção "📤 Compartilhar o
+Onion Payroll" (aba ❓ Ajuda), abrindo o vídeo curto do app no YouTube
+(`page.launch_url`), junto do QR code e do link já existentes.
+
+---
+
 ## [2.15] — 2026-07-03 — NOVO CICLO: ALTERNADO MENSAL
 
 ### 🟢 Adicionado — Alternado Mensal (1 mês diurno + 1 mês noturno)

@@ -39,7 +39,7 @@ Calcula automaticamente salário base, hora extra, adicional noturno e trabalho 
 - **Diagnóstico de armazenamento** integrado em ⚙️ Config para suporte
 - **Build ID** no header — confirma se a versão está atualizada
 - **Google Analytics** — acompanhamento de acessos
-- **Compartilhar o app** — QR code + link copiável na aba ❓ Ajuda, pra indicar pra colegas
+- **Compartilhar o app** — QR code + link copiável + vídeo de apresentação (30s) na aba ❓ Ajuda, pra indicar pra colegas
 - **Interface bilíngue nos botões de status** — português como texto principal, japonês como legenda (pra localizar a rubrica no holerite real)
 - **Configuração guiada por etapas** — ⚙️ Config em wizard: tipo de ciclo → horário do turno → grupo (só no 4×2) → salário. Cada etapa só aparece depois da anterior fazer sentido
 
