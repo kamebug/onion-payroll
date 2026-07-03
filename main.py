@@ -775,7 +775,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607031316"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607010336"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -3382,9 +3382,13 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
     # QR code (ft.Image com URL externa) removido temporariamente para
     # isolar a causa do crash na aba Ajuda — ver PROBLEMAS_RECORRENTES.md
 
-    def _copiar_link(e):
+    def _copiar_link_app(e):
         page.set_clipboard(APP_URL)
-        page.open(ft.SnackBar(ft.Text("Link copiado!"), duration=1500))
+        page.open(ft.SnackBar(ft.Text("Link do app copiado!"), duration=1500))
+
+    def _copiar_link_video(e):
+        page.set_clipboard(VIDEO_URL)
+        page.open(ft.SnackBar(ft.Text("Link do vídeo copiado!"), duration=1500))
 
     share_section = ft.Container(
         content=ft.Column(controls=[
@@ -3395,8 +3399,8 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
                         weight=ft.FontWeight.W_600),
             ], alignment=ft.MainAxisAlignment.CENTER),
             ft.FilledButton(
-                "Copiar Link", icon="copy",
-                on_click=_copiar_link,
+                "Copiar Link do App", icon="copy",
+                on_click=_copiar_link_app,
                 style=ft.ButtonStyle(bgcolor=ACCENT_DARK, color="#FFFFFF"),
             ),
             _p("Vídeo de apresentação (30s):"),
@@ -3404,8 +3408,13 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
                 ft.Text(VIDEO_URL, size=12, color=ACCENT_LITE, selectable=True,
                         weight=ft.FontWeight.W_600),
             ], alignment=ft.MainAxisAlignment.CENTER),
+            ft.FilledButton(
+                "Copiar Link do Vídeo", icon="copy",
+                on_click=_copiar_link_video,
+                style=ft.ButtonStyle(bgcolor=ACCENT_DARK, color="#FFFFFF"),
+            ),
         ], spacing=8, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-        padding=12, bgcolor=BG_SURFACE, border_radius=12,
+        padding=12, bgcolor=BG_CARD, border_radius=12,
         margin=ft.Padding(left=0, right=0, top=0, bottom=10),
     )
 
