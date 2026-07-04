@@ -1,5 +1,55 @@
 # Changelog — Onion Payroll
 
+## [2.21] — 2026-07-04 — BOTÃO "APAGAR TODOS OS DADOS" NÃO ATUALIZAVA A TELA
+
+### 🔴 Bug corrigido — storage apagava de verdade, mas a UI mostrava dados antigos
+
+**Contexto:** ao revisar o botão "Apagar Todos os Dados Locais" (nunca
+testado a fundo nesta série de correções), confirmado que ele realmente
+limpa as 5 chaves certas de `shared_preferences` — igual às 5 chaves
+que `boot_load_storage()` carrega, sem sobrar nada. Porém, achado um bug
+separado: a tela não refletia a limpeza imediatamente.
+
+**Causa raiz:** `refresh_all()` só atualiza `state["settings"]` quando
+`_mem_cache.get(KEY_SETTINGS)` retorna algo (`if _cached and
+isinstance(...)`, pensado para preservar edições feitas por
+`__setitem__` sem precisar recarregar do disco). Depois de
+`remove_storage()`, o cache fica vazio (`None`) — a condição falha, e
+`state["settings"]` continua com o objeto ANTIGO em memória. Resultado:
+o storage já estava vazio de verdade, mas a tela de Config continuava
+mostrando jikyuu, Data de Admissão, etc. antigos até um reload completo
+do app.
+
+**Correção:** `_confirm()` (dentro de `_clear_all`) agora reseta
+`state["settings"/"history"/"overrides"/"holidays"/"holidays_corp"]`
+explicitamente para os valores padrão, e sincroniza `_mem_cache`, antes
+de chamar `refresh_all()` — sem depender do carregamento implícito que
+falha quando o cache está vazio.
+
+**Validado:** simulação completa do fluxo (settings customizados →
+apagar → conferir reset) confirmando que `jikyuu` volta ao padrão e
+`hire_date` some, sem precisar reabrir o app.
+
+---
+
+## [2.20] — 2026-07-03 — MANUAL: SEÇÃO DE YUKYU QUE FALTAVA
+
+### 🔴 Bug corrigido — link "Ver ❓ Ajuda para detalhes" não levava a nada
+
+**Reportado pelo usuário:** o resumo de saldo de Yukyu (v2.19) tem o
+texto "Ver ❓ Ajuda para detalhes", mas a seção detalhada nunca foi
+escrita — a única menção a Yukyu no manual era uma linha genérica sobre
+a cor da célula no calendário.
+
+**Correção:** nova seção "🌴 Direito a Yukyu (有給休暇)" na aba ❓ Ajuda,
+logo após "📅 Registrando o Ponto" — com a tabela de progressão completa
+(6m=10 até 6a6m+=20 dias), a regra de expiração de 2 anos, como o
+desconto automático funciona, e as duas limitações já documentadas no
+`README.md` (sem checagem de 80% de presença, sem proporcional de
+part-time).
+
+---
+
 ## [2.19] — 2026-07-03 — DIREITO A YUKYU (有給休暇) CALCULADO AUTOMATICAMENTE
 
 ### 🟢 Adicionado — cálculo de saldo de Yukyu conforme a Lei Trabalhista Japonesa

@@ -880,7 +880,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607041026"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607010336"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -3105,6 +3105,17 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
             for k in (KEY_SETTINGS, KEY_HISTORY, KEY_OVERRIDES,
                       KEY_HOLIDAYS, "onion_holidays_corp"):
                 remove_storage(page, k)
+            # Bug corrigido (v2.21): refresh_all() só atualiza
+            # state["settings"] se _mem_cache tiver algo — depois de
+            # remove_storage() o cache fica vazio, então sem isto a tela
+            # continuaria mostrando os valores ANTIGOS até um reload
+            # completo do app, mesmo já tendo apagado o storage de verdade.
+            state["settings"]  = dict(DEFAULT_SETTINGS)
+            state["history"]   = []
+            state["overrides"] = {}
+            state["holidays"]  = {}
+            state["holidays_corp"] = {}
+            _mem_cache[KEY_SETTINGS] = state["settings"]
             _close()
             refresh_all()
         panel = ft.Container(
@@ -3690,6 +3701,26 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
             _item("有休 em Feriado Corporativo",
                   "Ative o toggle 有休 em Feriado",
                   "Injeta 8h base fixo mesmo sendo feriado da empresa."),
+
+            # ── Direito a Yukyu ──────────────────────────────────────
+            _title("🌴 Direito a Yukyu (有給休暇)"),
+            _p("Baseado no Art. 39 da Lei Trabalhista Japonesa (労働基準法). Preencha a 'Data de Admissão' em ⚙️ Config (Etapa 4) — diferente da 'Data de Início do Ciclo', que é sobre o turno, não sobre quando você foi contratado."),
+            _example("Progressão dos dias concedidos (tabela cheia, 5+ dias/semana):", [
+                "6 meses de empresa       → 10 dias",
+                "1 ano e 6 meses          → 11 dias",
+                "2 anos e 6 meses         → 12 dias",
+                "3 anos e 6 meses         → 14 dias",
+                "4 anos e 6 meses         → 16 dias",
+                "5 anos e 6 meses         → 18 dias",
+                "6 anos e 6 meses ou mais → 20 dias (teto, todo ano depois)",
+            ]),
+            _item("Expiração de 2 anos", "Art. 115 da Lei Trabalhista",
+                  "Cada concessão vale só 2 anos. O app consome o saldo mais antigo primeiro (FIFO), pra não desperdiçar dias prestes a vencer."),
+            _item("Desconto automático", "Marque 有休 no calendário",
+                  "Cada dia marcado como Yukyu (célula laranja) desconta 1 dia do saldo, automaticamente, na próxima vez que você abrir ⚙️ Config."),
+            _item("Se o dia marcado não tiver saldo disponível", "Aparece um aviso ⚠️ no resumo",
+                  "Acontece se você marcar Yukyu antes de completar 6 meses, ou além do que já foi concedido — confira o histórico nesses casos."),
+            _p("⚠️ Duas limitações desta versão: (1) não verifica a regra de 80% de presença no período aquisitivo — assume que você tem direito; (2) cobre só a tabela cheia (5+ dias/semana) — não calcula o proporcional (比例付与) de quem trabalha part-time."),
 
             # ── Cores do calendário ──────────────────────────────────
             _title("🎨 Cores do Calendário"),
