@@ -138,6 +138,12 @@ em `build_settings_tab()`, `build_help_tab()`, ou qualquer outra função
    `refresh_all()` dentro de ⚙️ Config — extrair a lógica de montagem
    do texto/widget pra uma função reutilizável, guardar o widget numa
    variável nomeada, e chamar `.update()` só nele
+10. **Resumos que crescem com o tempo de uso do app** (ex: histórico de
+    concessões desde a admissão) — mostrar só o que ainda é relevante
+    HOJE (ex: concessões ativas), não o histórico completo desde o
+    início. Testar sempre com um cenário de "muitos anos de uso" antes
+    de considerar pronto — problema só aparece com dados antigos o
+    suficiente, não com uma conta nova de teste
 
 ---
 

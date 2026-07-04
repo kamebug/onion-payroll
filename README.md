@@ -128,9 +128,10 @@ normaliza sozinho para AAAA-MM-DD:
 Cada concessão expira **2 anos** depois de ser dada (Art. 115) — o app
 consome o saldo mais antigo primeiro, pra não desperdiçar dias prestes
 a vencer. Toda vez que você marca um dia como "Folga Remunerada 有休"
-no calendário, o saldo desconta automaticamente. O resumo mostra cada
-concessão com a data exata (ex: `2026-05-01: +10d, expira 2028-05-01`),
-não só o total.
+no calendário, o saldo desconta automaticamente. O resumo mostra só as
+concessões **ainda ativas** (não expiradas), cada uma com a data exata
+(ex: `2026-05-01: +10d, expira 2028-05-01`), e uma linha de "Próxima
+expiração" — sem listar o histórico completo desde a admissão.
 
 **Limitações desta versão:**
 - Cobre só a tabela cheia (5+ dias/semana) — não calcula o proporcional

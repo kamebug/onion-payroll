@@ -1,5 +1,29 @@
 # Changelog — Onion Payroll
 
+## [2.23] — 2026-07-04 — RESUMO DE YUKYU MENOS POLUÍDO PRA QUEM TEM MUITOS ANOS DE EMPRESA
+
+### 🟢 Melhorado — só concessões ativas, expiração como data
+
+**Reportado pelo usuário** (com print de um cenário de 16 anos de
+empresa): o resumo listava as 17 concessões históricas desde a
+admissão, e mostrava totais acumulados ("Concedido até hoje: 301 |
+Usado: 1 | Expirado: 261") sem contexto de tempo — números frios, sem
+indicar quando algo vai vencer.
+
+**Correção:**
+- A lista detalhada agora mostra só concessões **ainda ativas** (não
+  expiradas) — concessões já vencidas não têm mais utilidade prática
+  pro saldo de hoje, e o histórico completo já fica implícito nos dias
+  marcados no calendário
+- A linha de totais "Concedido/Usado/Expirado" foi removida, substituída
+  por **"Próxima expiração: DATA (X dias em risco)"** — informação
+  concreta e útil (quando agir), não um acumulado histórico
+
+**Validado:** cenário de 16 anos de empresa (admissão 2009) — lista cai
+de 17 para 2 linhas de concessões ativas.
+
+---
+
 ## [2.22] — 2026-07-04 — DATA SEM HÍFEN E DETALHAMENTO DO YUKYU
 
 ### 🟢 Adicionado — normalização de data (sem exigir hífen)

@@ -910,7 +910,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607041136"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607010336"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -2769,15 +2769,27 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
         _yukyu = _computar_yukyu_saldo()
         if not _yukyu:
             return "Preencha a Data de Admissão acima para calcular seu saldo."
-        _linhas = [
-            f"Saldo disponível: {_yukyu['saldo_disponivel']} dias",
-            f"Concedido até hoje: {_yukyu['total_concedido']}  |  "
-            f"Usado: {_yukyu['total_usado']}  |  Expirado: {_yukyu['total_expirado']}",
-        ]
-        for g in _yukyu["detalhe_concessoes"]:
+        hoje = date.today()
+        # Só concessões AINDA ATIVAS (não expiradas) — evita lista longa
+        # e sem utilidade prática pra quem tem muitos anos de empresa.
+        # O histórico completo de concessões já expiradas não importa
+        # mais pro saldo de hoje, então não precisa poluir a tela.
+        ativas = sorted(
+            (g for g in _yukyu["detalhe_concessoes"] if g["expiry"] > hoje),
+            key=lambda g: g["grant_date"],
+        )
+        _linhas = [f"Saldo disponível: {_yukyu['saldo_disponivel']} dias"]
+        for g in ativas:
             _linhas.append(
                 f"  • {g['grant_date'].isoformat()}: +{g['dias']}d "
                 f"(usado {g['usado']}, expira {g['expiry'].isoformat()})"
+            )
+        if ativas:
+            _prox_exp = min(ativas, key=lambda g: g["expiry"])
+            _restante = _prox_exp["dias"] - _prox_exp["usado"]
+            _linhas.append(
+                f"Próxima expiração: {_prox_exp['expiry'].isoformat()} "
+                f"({_restante} dia(s) em risco se não usados até lá)"
             )
         if _yukyu["proxima_concessao_data"]:
             _linhas.append(
