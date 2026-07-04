@@ -1,5 +1,100 @@
 # Changelog — Onion Payroll
 
+## [2.19] — 2026-07-03 — DIREITO A YUKYU (有給休暇) CALCULADO AUTOMATICAMENTE
+
+### 🟢 Adicionado — cálculo de saldo de Yukyu conforme a Lei Trabalhista Japonesa
+
+**Pedido do usuário:** ao marcar a Data de Admissão, o app agora calcula
+automaticamente quantos dias de Yukyu (有給休暇) o usuário tem direito,
+e desconta cada dia marcado como "yukyu" no calendário.
+
+**Pesquisado diretamente na Lei Trabalhista Japonesa (Art. 39, 労働基準法)**
+antes de implementar — não foi assumido de memória:
+- Direito nasce aos 6 meses de vínculo (10 dias), com 80%+ de presença
+  no período — a checagem de presença **não é verificada automaticamente**
+  nesta versão (assume elegibilidade; ver limitação documentada)
+- Progressão: 6m=10, 1a6m=11, 2a6m=12, 3a6m=14, 4a6m=16, 5a6m=18,
+  6a6m+=20 dias (teto, mantido a cada 12 meses depois disso)
+- Cada concessão expira 2 anos depois (Art. 115) — implementado com um
+  "livro-razão" (ledger) que consome o saldo mais antigo primeiro (FIFO),
+  a mesma lógica prática usada para não desperdiçar dias prestes a vencer
+- Cobertura: só tabela cheia (5+ dias/semana) — 比例付与 (proporcional
+  para part-time) fica para uma versão futura, se necessário
+
+**Novo campo:** "Data de Admissão" (⚙️ Config, Etapa 4) — separado da
+"Data de Início do Ciclo" (que é sobre o turno, não a admissão).
+
+**Novo resumo automático:** mostra saldo disponível, total concedido,
+usado, expirado, e a data/quantidade da próxima concessão — recalculado
+toda vez que a aba Config é aberta, lendo os dias marcados como "yukyu"
+em todo o histórico do calendário (não só o mês atual).
+
+**Validado:** 8 novos testes (`TestYukyu`), incluindo progressão
+completa até o teto de 20 dias, expiração de 2 anos, uso antes da
+concessão (inválido) e uso além do saldo (inválido) — total agora 64
+testes.
+
+### 🔴 Bug de teste corrigido — mesma categoria de antes
+
+Ao inserir a classe `TestYukyu`, o bloco `if __name__ == "__main__":`
+foi apagado por engano (não só mal posicionado — removido). A suíte
+rodava sem erro mas **sem executar nenhum teste** (saída vazia, código
+de saída 0). Detectado só porque o processo de conferir a contagem de
+testes (lição da v2.9) foi seguido antes de entregar.
+
+---
+
+## [2.18] — 2026-07-03 — LIMPEZA DA ABA AJUDA (PALETA, LINKS, EXEMPLOS)
+
+### 🔴 Bug corrigido — fundo branco e texto ilegível na aba Ajuda
+
+**Causa raiz:** `build_help_tab()` tinha uma paleta de cores clara
+definida localmente (`BG_CARD = "#FFFFFF"`), desalinhada do tema escuro
+usado no resto do app — e pior, com `TEXT_PRIMARY`/`YEN_GOLD` ainda nas
+cores claras originais (quase brancas), pensadas para fundo ESCURO.
+Resultado: título quase invisível (texto quase branco sobre fundo quase
+branco).
+
+**Correção:** paleta local removida por completo — a função agora herda
+as constantes globais do tema escuro, iguais a todas as outras abas.
+
+### 🟡 Botões "Copiar Link" removidos
+
+`page.set_clipboard()` não estava funcionando de forma confiável nos
+testes do usuário. Em vez de investigar mais uma API não documentada,
+os botões foram removidos — os links continuam como texto selecionável
+(toque e segure para copiar, padrão do navegador), sem depender de API
+nenhuma.
+
+### 🟡 Exemplos de funções desativadas removidos do manual
+
+As seções "Arredondamento do Ponto" e "Taxa de Hora Extra/Noturno/
+Domingo" no manual explicavam funcionalidades que foram escondidas da
+aba Config na v2.14 (`hidden_advanced_container`). Manter os exemplos
+no manual, com a função inacessível na tela, só gerava confusão.
+Removidas; a seção "Arredondamento da Taxa por Hora" foi mantida (esse
+mecanismo continua sempre ativo, não é uma função desativada).
+
+### 🟡 Animação de opacidade morta removida
+
+`content_area` tinha `animate_opacity` configurado mas a opacidade
+nunca era de fato alterada em lugar nenhum do código — animação sem
+efeito, removida por limpeza (investigando relato de "luz piscando"
+na troca de abas, ainda não localizado com certeza).
+
+### Metodologia — deploy falho não é sempre bug de código
+
+Durante a investigação desta versão, descobriu-se que alguns "bugs"
+reportados eram na verdade falhas do GitHub Actions (`Deployment
+failed, try again later` / `Multiple artifacts named "github-pages"`)
+causadas por múltiplos deploys em sequência rápida colidindo. **Lição:**
+antes de assumir que é bug de código, conferir se o deploy mais recente
+realmente terminou com sucesso (aba Actions do GitHub, ícone verde) —
+usar o Build ID no cabeçalho do app para confirmar qual versão está
+realmente no ar.
+
+---
+
 ## [2.17] — 2026-07-03 — CRÍTICO: ABAS CONFIG E AJUDA NÃO ABRIAM
 
 ### 🔴 Bug crítico corrigido — Config quebrada desde a v2.14

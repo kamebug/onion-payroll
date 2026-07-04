@@ -27,8 +27,9 @@ Esses problemas têm teste permanente — rodam toda vez que `test_main.py`
 | **Grupo A/B/C não afetava o calendário** (deslocamento de turma nunca aplicado) | `TestGrupoABC.*` (validado contra planilha real de escala) | **2.11 (crítico)** |
 | **Grupo B/C deslocava a data pessoal digitada pelo usuário** (dia 1 aparecia como folga) | `TestGrupoABC.*` — resolvido definitivamente com `anchor_group` (rastreamento automático, sem switch) | **2.12→2.13 (crítico)** |
 | Alternado Mensal não existia (só semanal) | `TestAlternadoMensal.*` — nova função `generate_alternating_monthly_calendar()`, reaproveitando `generate_4x2_calendar()` para o padrão de folga 4×2 | 2.15 |
+| Direito a Yukyu não era calculado (usuário controlava manualmente) | `TestYukyu.*` — nova função `calcular_yukyu()`, pesquisada na Lei Trabalhista Japonesa Art. 39/115 antes de implementar | 2.19 |
 
-**Total: 56 testes, cobrindo o motor de cálculo inteiro.**
+**Total: 64 testes, cobrindo o motor de cálculo inteiro.**
 
 ---
 
@@ -50,6 +51,9 @@ isso, pois testa só funções Python puras, sem o Flutter/DOM por trás.
 | Texto cortado ao lado dos switches que escondem seção (Diagnóstico, Taxa de Referência) | `ft.Switch` com `label` embutido não quebra linha em tela estreita | 2.12 | Abrir ⚙️ Config no celular estreito, ver se o texto ao lado do switch aparece completo |
 | Botões de Status do modal ficaram só em japonês após virar botão (v2.10) | Conversão de Dropdown→botão manteve os labels originais (japonês), sem repensar pro público brasileiro | 2.12 | Abrir modal de ponto, conferir se os botões têm texto em português como principal |
 | Pinch-to-zoom bloqueado no PWA | `maximum-scale=1.0, user-scalable=no` na tag viewport do `index.html` | 2.11 | Abrir o app no celular, tentar dar zoom com dois dedos |
+| **Aba Ajuda com fundo branco e texto ilegível** | Paleta de cores clara definida localmente em `build_help_tab()`, com `TEXT_PRIMARY`/`YEN_GOLD` ainda nas cores de tema escuro (quase branco sobre quase branco) | **2.17→2.18 (crítico)** | Abrir aba ❓ Ajuda, checar se o fundo é escuro (igual ao resto do app) e o título é legível |
+| Botões "Copiar Link" não funcionavam | `page.set_clipboard()` não confiável nos testes reais — removidos, mantido só texto selecionável | 2.18 | Abrir ❓ Ajuda → Compartilhar, conferir que não há mais botão de copiar, só os links em texto |
+| Deploy falhando não é sempre bug de código | GitHub Actions "Deployment failed" / "Multiple artifacts" por deploys simultâneos colidindo — não relacionado ao `main.py` | processo | Antes de investigar código, conferir aba Actions do GitHub (ícone verde ✓) e o Build ID no cabeçalho do app |
 | Migração do wizard por etapas (v2.14) precisa ser testada manualmente | Não dá pra testar via `unittest` porque depende de `settings` salvos previamente + renderização real da UI | 2.14 | Simular um `settings` salvo de versão anterior (com `cycle_type` mas sem `cycle_type_confirmed`) e confirmar que as etapas 2/3/4 aparecem direto, sem precisar reclicar no tipo de ciclo |
 | Campo "Ajuste Fino do Noturno" cortado em tela de celular | `ft.Row` com 2 campos lado a lado, sem `expand`, na v2.9 | 2.10 | Abrir ⚙️ Config no celular, ligar o switch de taxa de referência, ver se os 2 campos aparecem inteiros |
 | Teclado do celular cobria campos no modal | Modal centralizado verticalmente, sem espaço reservado | 2.6 | Abrir modal de Histórico no celular, tocar em campo perto do fim |
@@ -65,6 +69,7 @@ projeto por pelo menos uma versão inteira.
 | Problema | Causa raiz | Versão corrigida | Como foi descoberto |
 |---|---|---|---|
 | 9 testes nunca executavam (`TestFeriadoCorporativo`, `TestAdicionalFixoMensal`, `TestBugTurnoNoturnoEmFeriado`) | `unittest.main()` posicionado no meio do arquivo, antes dessas 3 classes serem definidas — Python executa de cima pra baixo, então elas nunca chegavam a existir quando os testes rodavam | 2.9 | Rodando `python test_main.py` manualmente e comparando a contagem de testes executados (26) com a contagem de classes definidas no arquivo (12) |
+| **Suíte inteira parou de rodar (saída vazia, "sucesso" falso)** | Bloco `if __name__ == "__main__":` apagado por engano ao inserir uma classe de teste nova no final do arquivo — dessa vez não mal posicionado, removido de vez | **2.19** | Saída completamente vazia com código de saída 0 — só percebido porque virou hábito conferir a contagem de testes (lição da linha acima) |
 
 **Lição para o processo:** ao adicionar uma nova classe de teste, sempre
 confirmar que `unittest.main()` está no **final real do arquivo** — não

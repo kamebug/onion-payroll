@@ -35,6 +35,7 @@ def carregar_funcoes_de_calculo():
         "timedelta": __import__("datetime").timedelta,
         "Optional": __import__("typing").Optional,
         "math": __import__("math"),
+        "calendar": __import__("calendar"),
     }
     exec(src[start:end], namespace)
     return namespace
@@ -47,6 +48,7 @@ generate_4x2_calendar      = FUNCS["generate_4x2_calendar"]
 generate_weekly_calendar   = FUNCS["generate_weekly_calendar"]
 generate_alternating_calendar = FUNCS["generate_alternating_calendar"]
 generate_alternating_monthly_calendar = FUNCS["generate_alternating_monthly_calendar"]
+calcular_yukyu              = FUNCS["calcular_yukyu"]
 normalize_hhmm             = FUNCS["normalize_hhmm"]
 
 JIKYUU = 1500
@@ -692,6 +694,66 @@ class TestAlternadoMensal(unittest.TestCase):
             alt_start_night="20:35", alt_end_night="08:35",
         )
         self.assertGreater(resultado["gross"], 0)
+
+
+class TestYukyu(unittest.TestCase):
+    """Valida o cálculo de direito a Yukyu (有給休暇), Art. 39 da Lei
+    Trabalhista Japonesa, com concessão progressiva e expiração de 2
+    anos (Art. 115) — v2.19."""
+
+    def test_antes_de_6_meses_sem_direito(self):
+        r = calcular_yukyu(date(2026, 1, 1), date(2026, 6, 1), [])
+        self.assertEqual(r["saldo_disponivel"], 0)
+
+    def test_6_meses_concede_10_dias(self):
+        r = calcular_yukyu(date(2025, 11, 1), date(2026, 7, 3), [])
+        self.assertEqual(r["saldo_disponivel"], 10)
+        self.assertEqual(r["proxima_concessao_dias"], 11)
+
+    def test_progressao_completa_ate_20_dias(self):
+        # 7 anos e meio de empresa — já passou de todos os marcos fixos
+        r = calcular_yukyu(date(2019, 1, 1), date(2026, 7, 3), [])
+        self.assertEqual(r["total_concedido"], 121)  # 10+11+12+14+16+18+20+20
+        self.assertEqual(r["proxima_concessao_dias"], 20)
+
+    def test_uso_valido_desconta_do_saldo(self):
+        usos = [date(2026, 5, 20), date(2026, 6, 5)]
+        r = calcular_yukyu(date(2025, 11, 1), date(2026, 7, 3), usos)
+        self.assertEqual(r["saldo_disponivel"], 8)
+        self.assertEqual(r["total_usado"], 2)
+        self.assertEqual(r["usos_invalidos"], [])
+
+    def test_uso_antes_da_concessao_e_invalido(self):
+        # Concessão só ocorre em 2026-05-01 (6 meses); usos antes disso
+        # não devem descontar o saldo
+        usos = [date(2026, 3, 10), date(2026, 4, 5)]
+        r = calcular_yukyu(date(2025, 11, 1), date(2026, 7, 3), usos)
+        self.assertEqual(r["saldo_disponivel"], 10)
+        self.assertEqual(len(r["usos_invalidos"]), 2)
+
+    def test_uso_alem_do_saldo_e_invalido(self):
+        # 10 dias concedidos, 11 usados — o 11º deve ficar como inválido
+        usos = [date(2026, 5, d) for d in range(1, 12)]
+        r = calcular_yukyu(date(2025, 11, 1), date(2026, 7, 3), usos)
+        self.assertEqual(r["saldo_disponivel"], 0)
+        self.assertEqual(len(r["usos_invalidos"]), 1)
+
+    def test_expiracao_apos_2_anos(self):
+        # Concessão de 2019-07-01 (10 dias) expira em 2021-07-01 —
+        # não deve contar no saldo de hoje (muito depois)
+        r = calcular_yukyu(date(2019, 1, 1), date(2026, 7, 3), [])
+        detalhe = r["detalhe_concessoes"][0]  # primeira concessão (6 meses)
+        self.assertEqual(detalhe["grant_date"], date(2019, 7, 1))
+        self.assertEqual(detalhe["expiry"], date(2021, 7, 1))
+        self.assertGreater(r["total_expirado"], 0)
+
+    def test_add_months_ajusta_dia_invalido(self):
+        # 31/jan + 1 mês não pode virar 31/fev (não existe) — deve
+        # ajustar para o último dia válido do mês de destino
+        _add_months = FUNCS["_add_months"]
+        self.assertEqual(_add_months(date(2026, 1, 31), 1), date(2026, 2, 28))
+
+
 
 
 if __name__ == "__main__":

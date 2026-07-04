@@ -41,6 +41,7 @@ Calcula automaticamente salário base, hora extra, adicional noturno e trabalho 
 - **Google Analytics** — acompanhamento de acessos
 - **Compartilhar o app** — QR code + link copiável + vídeo de apresentação (30s) na aba ❓ Ajuda, pra indicar pra colegas
 - **Interface bilíngue nos botões de status** — português como texto principal, japonês como legenda (pra localizar a rubrica no holerite real)
+- **Direito a Yukyu calculado automaticamente** — a partir da Data de Admissão, segue a progressão da Lei Trabalhista Japonesa (Art. 39: 6m=10, 1a6m=11 ... 6a6m+=20 dias), com expiração de 2 anos (Art. 115) e desconto automático a cada dia marcado como Yukyu no calendário
 - **Configuração guiada por etapas** — ⚙️ Config em wizard: tipo de ciclo → horário do turno → grupo (só no 4×2) → salário. Cada etapa só aparece depois da anterior fazer sentido
 
 ---
@@ -58,7 +59,7 @@ python main.py
 python test_main.py
 ```
 
-56 testes cobrindo cálculo de hora extra, ciclos de trabalho (incluindo o deslocamento entre turmas Grupo A/B/C), descontos, feriados (nacionais e corporativos), domingo, falta, yukyu, abono, formatação de horário, arredondamento por categoria e taxa de referência elevada — validados contra 5 holerites reais. Recomendado antes de cada deploy.
+64 testes cobrindo cálculo de hora extra, ciclos de trabalho (incluindo o deslocamento entre turmas Grupo A/B/C), descontos, feriados (nacionais e corporativos), domingo, falta, yukyu, abono, formatação de horário, arredondamento por categoria e taxa de referência elevada — validados contra 5 holerites reais. Recomendado antes de cada deploy.
 
 ### Deploy GitHub Pages
 
@@ -103,6 +104,35 @@ alternância é mensal — configure a **Data de Referência — Mês Diurno**
 - **4×2** — folga em blocos de 4+2 dias, com Grupo A/B/C e sua própria
   Data de Início do Ciclo (independente da Data de Referência — Mês
   Diurno)
+
+---
+
+## 🌴 Direito a Yukyu (有給休暇)
+
+Configure a **Data de Admissão** em ⚙️ Config (separada da "Data de
+Início do Ciclo", que é sobre o turno) e o app calcula automaticamente
+seu saldo de Yukyu, seguindo o Art. 39 da Lei Trabalhista Japonesa:
+
+```
+6 meses de empresa → 10 dias
+1 ano e 6 meses    → 11 dias
+2 anos e 6 meses   → 12 dias
+3 anos e 6 meses   → 14 dias
+4 anos e 6 meses   → 16 dias
+5 anos e 6 meses   → 18 dias
+6 anos e 6 meses+  → 20 dias (teto, todo ano depois disso)
+```
+
+Cada concessão expira **2 anos** depois de ser dada (Art. 115) — o app
+consome o saldo mais antigo primeiro, pra não desperdiçar dias prestes
+a vencer. Toda vez que você marca um dia como "Folga Remunerada 有休"
+no calendário, o saldo desconta automaticamente.
+
+**Limitações desta versão:**
+- Cobre só a tabela cheia (5+ dias/semana) — não calcula o proporcional
+  de part-time (比例付与)
+- Não verifica a regra de 80% de presença no período aquisitivo — assume
+  que você tem direito
 
 ---
 
@@ -217,6 +247,6 @@ Os valores exibidos são estimativas baseadas nas configurações inseridas pelo
 
 ## 🧪 Qualidade
 
-O motor de cálculo é coberto por 56 testes automatizados (`test_main.py`),
+O motor de cálculo é coberto por 64 testes automatizados (`test_main.py`),
 incluindo validação direta contra 5 holerites reais de dois contratos
 diferentes (2021-2022 e 2026).

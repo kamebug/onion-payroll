@@ -7,6 +7,7 @@ Todas as correções de API aplicadas.
 import flet as ft
 import json
 import math
+import calendar
 from datetime import date, datetime, timedelta
 from typing import Optional
 
@@ -372,6 +373,109 @@ def generate_alternating_monthly_calendar(shift_anchor_date: date, year: int, mo
     return result
 
 
+def _add_months(d: date, months: int) -> date:
+    """Soma `months` meses a uma data, ajustando o dia se o mês de
+    destino for mais curto (ex: 31/jan + 1 mês = 28/fev, não erro)."""
+    month_idx = d.month - 1 + months
+    year = d.year + month_idx // 12
+    month = month_idx % 12 + 1
+    day = min(d.day, calendar.monthrange(year, month)[1])
+    return date(year, month, day)
+
+
+def calcular_yukyu(hire_date: date, today: date, usage_dates: list) -> dict:
+    """Calcula o saldo de 有給休暇 (Yukyu) conforme Art. 39 da Lei
+    Trabalhista Japonesa (労働基準法), para trabalhador de 5+ dias/semana
+    (tabela cheia — não cobre 比例付与/proporcional de part-time).
+
+    Concessões (meses desde a admissão → dias concedidos):
+    6º mês=10, 1a6m=11, 2a6m=12, 3a6m=14, 4a6m=16, 5a6m=18, 6a6m+=20
+    (permanece 20/ano a cada 12 meses depois de 6a6m).
+
+    Cada concessão expira 2 anos após ser concedida (Art. 115) — o saldo
+    é consumido na ordem mais antiga primeiro (FIFO), a mesma lógica que
+    a legislação usa para não desperdiçar dias prestes a vencer.
+
+    ⚠️ NÃO verifica a regra de 80% de presença no período aquisitivo —
+    assume elegibilidade. Ver aba Ajuda para essa limitação documentada.
+
+    `usage_dates`: lista de `date` — cada uma representa 1 dia de Yukyu
+    já registrado no calendário (status="yukyu").
+    """
+    MARCOS_MESES_DIAS = [
+        (6, 10), (18, 11), (30, 12), (42, 14),
+        (54, 16), (66, 18), (78, 20),
+    ]
+
+    grants = []
+    for meses, dias in MARCOS_MESES_DIAS:
+        gd = _add_months(hire_date, meses)
+        if gd <= today:
+            grants.append((gd, dias))
+    # Depois de 6a6m (78 meses), continua concedendo 20 dias a cada 12 meses
+    meses_extra = 78 + 12
+    while True:
+        gd = _add_months(hire_date, meses_extra)
+        if gd > today:
+            break
+        grants.append((gd, 20))
+        meses_extra += 12
+
+    grants.sort(key=lambda g: g[0])
+    ledger = [
+        {"grant_date": gd, "dias": dias, "expiry": _add_months(gd, 24), "usado": 0}
+        for gd, dias in grants
+    ]
+
+    usos_invalidos = []
+    for u in sorted(usage_dates):
+        alvo = None
+        for g in ledger:
+            if g["grant_date"] <= u < g["expiry"] and g["usado"] < g["dias"]:
+                alvo = g
+                break
+        if alvo:
+            alvo["usado"] += 1
+        else:
+            usos_invalidos.append(u)
+
+    saldo_disponivel = sum(g["dias"] - g["usado"] for g in ledger if g["expiry"] > today)
+    total_concedido   = sum(g["dias"] for g in ledger)
+    total_usado        = sum(g["usado"] for g in ledger)
+    total_expirado      = sum(g["dias"] - g["usado"] for g in ledger if g["expiry"] <= today)
+
+    proxima_concessao = None
+    if grants:
+        ultimo_marco_meses = None
+        for meses, _ in MARCOS_MESES_DIAS:
+            if _add_months(hire_date, meses) > today:
+                ultimo_marco_meses = meses
+                break
+        if ultimo_marco_meses is None:
+            # Já passou de todos os marcos fixos; próxima é a anual de 20
+            m = 78
+            while _add_months(hire_date, m) <= today:
+                m += 12
+            proxima_concessao = (_add_months(hire_date, m), 20)
+        else:
+            dias_marco = next(d for m, d in MARCOS_MESES_DIAS if m == ultimo_marco_meses)
+            proxima_concessao = (_add_months(hire_date, ultimo_marco_meses), dias_marco)
+    else:
+        # Ainda nenhuma concessão — a próxima é a primeira (6 meses)
+        proxima_concessao = (_add_months(hire_date, 6), 10)
+
+    return {
+        "saldo_disponivel": saldo_disponivel,
+        "total_concedido": total_concedido,
+        "total_usado": total_usado,
+        "total_expirado": total_expirado,
+        "usos_invalidos": usos_invalidos,
+        "proxima_concessao_data": proxima_concessao[0] if proxima_concessao else None,
+        "proxima_concessao_dias": proxima_concessao[1] if proxima_concessao else None,
+        "detalhe_concessoes": ledger,
+    }
+
+
 def compute_monthly_forecast(
     year: int, month: int, jikyuu: int, anchor_date: date, group: str,
     holiday_days: list, day_overrides: dict, odd_month_bonus: int, extra_bonus: int,
@@ -653,6 +757,7 @@ JP_HOLIDAYS_BUILTIN = {
 
 DEFAULT_SETTINGS = {
     "jikyuu": 1500, "group": "B", "anchor_date": date.today().isoformat(),
+    "hire_date": None,  # Data de Admissão — separada de anchor_date (turno), usada só para Yukyu
     "odd_bonus": 50000, "deduction_mode": "historical", "fixed_deduction": 45000,
     "block": 1, "round_mode": "truncate", "pin_enabled": False,
     "premium_allowances_monthly": 0, "premium_standard_hours": 144,
@@ -775,7 +880,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607031332"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607010336"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -2594,6 +2699,79 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
                  and settings.get("alt_monthly_rest_pattern", "5x2") == "4x2"))
     )
 
+    def _blur_hire_date(e):
+        settings["hire_date"] = e.control.value.strip()
+        save_json(page, KEY_SETTINGS, settings)
+
+    hire_date_field = ft.TextField(
+        label="Data de Admissão (AAAA-MM-DD)",
+        value=str(settings.get("hire_date") or ""),
+        keyboard_type=ft.KeyboardType.TEXT,
+        bgcolor="#2A2A2A", color="#F0F0F0",
+        border_color="#333333", focused_border_color="#00D2C6",
+        label_style=ft.TextStyle(color="#A0A0A0"),
+        on_blur=_blur_hire_date,
+    )
+
+    def _computar_yukyu_saldo():
+        hd = settings.get("hire_date")
+        if not hd:
+            return None
+        try:
+            hire = date.fromisoformat(hd)
+        except Exception:
+            return None
+        usage_dates = []
+        for month_key, dias in state.get("overrides", {}).items():
+            try:
+                ano_s, mes_s = month_key.split("-")
+                ano, mes = int(ano_s), int(mes_s)
+            except Exception:
+                continue
+            for dia_str, ov in dias.items():
+                if isinstance(ov, dict) and ov.get("status") == "yukyu":
+                    try:
+                        usage_dates.append(date(ano, mes, int(dia_str)))
+                    except Exception:
+                        pass
+        return calcular_yukyu(hire, date.today(), usage_dates)
+
+    _yukyu = _computar_yukyu_saldo()
+    if _yukyu:
+        _linhas_yukyu = [
+            f"Saldo disponível: {_yukyu['saldo_disponivel']} dias",
+            f"Concedido até hoje: {_yukyu['total_concedido']}  |  "
+            f"Usado: {_yukyu['total_usado']}  |  Expirado: {_yukyu['total_expirado']}",
+        ]
+        if _yukyu["proxima_concessao_data"]:
+            _linhas_yukyu.append(
+                f"Próxima concessão: {_yukyu['proxima_concessao_data'].isoformat()} "
+                f"(+{_yukyu['proxima_concessao_dias']} dias)"
+            )
+        if _yukyu["usos_invalidos"]:
+            _linhas_yukyu.append(
+                f"⚠️ {len(_yukyu['usos_invalidos'])} dia(s) marcados como Yukyu no "
+                f"calendário sem saldo disponível na época — confira o histórico."
+            )
+        _texto_yukyu = "\n".join(_linhas_yukyu)
+    else:
+        _texto_yukyu = "Preencha a Data de Admissão acima para calcular seu saldo."
+
+    yukyu_summary = ft.Container(
+        content=ft.Column(controls=[
+            ft.Text("🌴 Direito a Yukyu (有給休暇)", size=13, color=ACCENT,
+                    weight=ft.FontWeight.W_700),
+            ft.Text(_texto_yukyu, size=11, color=TEXT_SECONDARY),
+            ft.Text(
+                "⚠️ Não verifica a regra de 80% de presença — assume que "
+                "você tem direito. Ver ❓ Ajuda para detalhes.",
+                size=9, color=TEXT_MUTED, italic=True,
+            ),
+        ], spacing=4, tight=True),
+        bgcolor=BG_SURFACE, border_radius=8, padding=10,
+        margin=ft.Padding(left=0, right=0, top=8, bottom=0),
+    )
+
     step4_salario_container = card(ft.Column(controls=[
         section_header("4️⃣ CONFIGURAÇÃO DE SALÁRIO"),
         mk_field("Valor Hora 時給 (¥)",              "jikyuu"),
@@ -2604,6 +2782,8 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
             "(ex: adicional de liderança, função técnica fixa).",
             size=9, color=TEXT_MUTED,
         ),
+        hire_date_field,
+        yukyu_summary,
     ], spacing=12, tight=True))
     step4_salario_container.visible = _cur_cycle_confirmed
 
@@ -3291,18 +3471,10 @@ def build_holidays_tab(page: ft.Page, state: dict, refresh_all):
 # ─────────────────────────────────────────────
 
 def build_help_tab(page: ft.Page, state: dict, refresh_all):
-
-    ACCENT_LITE = "#00A896"
-    TEXT_PRIMARY = "#F0F0F0"
-    TEXT_SECONDARY = "#A0A0A0"
-    TEXT_MUTED = "#94A3B8"
-    BG_CARD = "#FFFFFF"
-    BG_SURFACE = "#F8FAFC"
-    ACCENT_DARK = "#007A6E"
-    SUCCESS = "#00D2C6"
-    WARNING = "#FFB74D"
-    DANGER = "#EF5350"
-    YEN_GOLD = "#F0F0F0"
+    # Paleta local removida (v2.18) — usava cores claras (fundo branco)
+    # desalinhadas do tema escuro do resto do app. Agora herda as
+    # constantes globais (ACCENT_LITE, TEXT_PRIMARY, BG_CARD, etc.),
+    # iguais às usadas em todas as outras abas.
 
     def _title(t):
         return ft.Container(
@@ -3379,40 +3551,23 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
     # ── Seções do manual ─────────────────────────────────────────────
     APP_URL = "https://kamebug.github.io/onion-payroll/"
     VIDEO_URL = "https://youtube.com/shorts/FRC0zbyuMI4"
-    # QR code (ft.Image com URL externa) removido temporariamente para
-    # isolar a causa do crash na aba Ajuda — ver PROBLEMAS_RECORRENTES.md
-
-    def _copiar_link_app(e):
-        page.set_clipboard(APP_URL)
-        page.open(ft.SnackBar(ft.Text("Link do app copiado!"), duration=1500))
-
-    def _copiar_link_video(e):
-        page.set_clipboard(VIDEO_URL)
-        page.open(ft.SnackBar(ft.Text("Link do vídeo copiado!"), duration=1500))
+    # QR code e botões "Copiar Link" removidos (v2.18) — page.set_clipboard
+    # não estava funcionando de forma confiável. Os links ficam como texto
+    # selecionável (toque e segure para copiar, padrão do navegador).
 
     share_section = ft.Container(
         content=ft.Column(controls=[
             _title("📤 Compartilhar o Onion Payroll"),
-            _p("Envie o link para um colega peelar o próprio contracheque também:"),
+            _p("Envie o link para um colega peelar o próprio contracheque também (toque e segure para copiar):"),
             ft.Row(controls=[
                 ft.Text(APP_URL, size=12, color=ACCENT_LITE, selectable=True,
                         weight=ft.FontWeight.W_600),
             ], alignment=ft.MainAxisAlignment.CENTER),
-            ft.FilledButton(
-                "Copiar Link do App", icon="copy",
-                on_click=_copiar_link_app,
-                style=ft.ButtonStyle(bgcolor=ACCENT_DARK, color="#FFFFFF"),
-            ),
             _p("Vídeo de apresentação (30s):"),
             ft.Row(controls=[
                 ft.Text(VIDEO_URL, size=12, color=ACCENT_LITE, selectable=True,
                         weight=ft.FontWeight.W_600),
             ], alignment=ft.MainAxisAlignment.CENTER),
-            ft.FilledButton(
-                "Copiar Link do Vídeo", icon="copy",
-                on_click=_copiar_link_video,
-                style=ft.ButtonStyle(bgcolor=ACCENT_DARK, color="#FFFFFF"),
-            ),
         ], spacing=8, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
         padding=12, bgcolor=BG_CARD, border_radius=12,
         margin=ft.Padding(left=0, right=0, top=0, bottom=10),
@@ -3501,19 +3656,6 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
             _p("⚠️ Domingo e feriado trabalhado recebem APENAS +35% sobre a base — não soma noturno nem hora extra por cima, mesmo que o horário caia na madrugada. Validado com holerites reais da empresa."),
             _p("Arredondamento: 四捨五入 — frações < 0.5 descartadas, ≥ 0.5 arredondadas para cima. Todos os valores em ¥ inteiro."),
 
-            # ── Exemplo: arredondamento do ponto (bloco de 15/30 min) ──
-            _title("🔢 Arredondamento do Ponto (⚙️ Config.)"),
-            _p("Configurável em ⚙️ Config. — 'Minuto a minuto' (sem arredondar), '15 min' ou '30 min', combinado com 'Truncar' (sempre pra baixo) ou 'Mais Próximo'. Só afeta os MINUTOS trabalhados, antes de calcular qualquer valor em ¥."),
-            _example("Exemplo — 22 minutos brutos de hora extra, bloco 15min:", [
-                "Truncar:      22 → 15 min",
-                "Mais Próximo: 22 está a 7min de 15 e a 8min de 30 → 15 min",
-            ]),
-            _example("Exemplo — 23 minutos brutos, mesmo bloco 15min:", [
-                "Truncar:      23 → 15 min  (sempre descarta o excedente)",
-                "Mais Próximo: 23 está a 8min de 15 e a 7min de 30 → 30 min",
-            ]),
-            _p("É na borda entre um bloco e outro que 'Truncar' e 'Mais Próximo' dão resultados diferentes."),
-
             # ── Exemplo: arredondamento da taxa por hora ────────────────
             _title("🔢 Arredondamento da Taxa por Hora (sempre ativo)"),
             _p("Diferente do arredondamento do ponto: aqui não se mexe nos minutos, mexe-se no ¥/hora usado para multiplicar. A taxa (時給 × multiplicador) é arredondada para o yen mais próximo ANTES de multiplicar pelas horas — não depois. Sempre ativo, não é configurável."),
@@ -3528,34 +3670,6 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
                 "Total = 358 × 118,75 = ¥42.512,50 → ¥42.513",
             ]),
             _p("Os dois exemplos acima batem exatos com holerites reais analisados — essa é a diferença entre 'quase certo' e 100% preciso."),
-
-            # ── Taxa elevada de extra/noturno/domingo ─────────────────
-            _title("📈 Taxa de Hora Extra/Noturno/Domingo (acréscimo)"),
-            _p("Algumas empresas calculam hora extra, noturno e domingo usando uma taxa por hora MAIOR que o 時給 puro — porque a lei exige incluir certos adicionais fixos mensais (ex: adicional de líder) nessa taxa. Isso NÃO afeta as horas normais, só os adicionais."),
-            _item("Como saber se isso te afeta", "Compare com um holerite real",
-                  "Pegue a rubrica de domingo (公出手当) do seu holerite: (公出手当 ÷ horas de domingo ÷ 1,35) − 時給. Se der ~0, não precisa mexer em nada."),
-            _item("Onde configurar", "⚙️ Config. → Taxa de Hora Extra/Noturno/Domingo",
-                  "Ligue o switch, preencha o 'Acréscimo' calibrado (não o valor impresso no holerite — eles raramente coincidem). Deixe desligado se não sabe."),
-            _p("Passo a passo completo pra calcular o acréscimo, usando dados reais (時給=¥1.590, 公出手当=¥47.784, 22h de domingo):"),
-            _example("1) Taxa real usada pela empresa:", [
-                "taxa = 公出手当 ÷ horas ÷ 1,35",
-                "taxa = 47.784 ÷ 22 ÷ 1,35 = ¥1.608,89/h",
-            ]),
-            _example("2) Acréscimo por hora (taxa real − 時給):", [
-                "acréscimo/h = 1.608,89 − 1.590 = ¥18,89/h",
-            ]),
-            _example("3) Converter para o valor MENSAL que o campo pede:", [
-                "acréscimo mensal = acréscimo/h × Horas Padrão",
-                "acréscimo mensal = 18,89 × 144 = ¥2.720",
-                "→ Esse ¥2.720 vai no campo 'Acréscimo p/ Taxa de Extra/Domingo'",
-            ]),
-            _example("4) Ajuste fino do noturno (rubrica 深夜手当 separada):", [
-                "taxa noturno = 深夜手当 ÷ horas noturnas ÷ 0,25",
-                "taxa noturno = 45.338 ÷ 112,5 ÷ 0,25 = ¥1.612,00/h",
-                "ajuste fino = 1.612,00 − 1.590 − 18,89 = ¥3,11/h",
-                "→ Esse ¥3,11 vai no campo 'Ajuste Fino do Noturno'",
-            ]),
-            _p("⚠️ Validado com 5 holerites reais (2 salários-hora diferentes, 2021-2026): esse acréscimo bateu exato quando calibrado, mas não tem uma fórmula simples de 'somar os adicionais visíveis' — precisa comparar com um holerite seu. Se um holerite futuro der acréscimo ~0, é sinal de que o adicional que gerava a diferença parou de ser pago — zere os campos de volta."),
 
             # ── Ponto diário ─────────────────────────────────────────
             _title("📅 Registrando o Ponto"),
@@ -3821,8 +3935,6 @@ async def main(page: ft.Page):
         expand=True,
         bgcolor=BG_DEEP,
         padding=ft.Padding(left=scaled(12), right=scaled(12), top=scaled(8), bottom=scaled(8)),
-        animate_opacity=ft.Animation(180, ft.AnimationCurve.EASE_IN_OUT),
-        opacity=1.0,
     )
 
     tab_defs = [
