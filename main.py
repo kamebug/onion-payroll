@@ -910,7 +910,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607041215"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607041234"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -3576,7 +3576,8 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
     def _item(icon, label, desc):
         return ft.Container(
             content=ft.Row(controls=[
-                ft.Text(icon, size=18),
+                ft.Container(content=ft.Text(icon, size=13, weight=ft.FontWeight.W_600),
+                             width=100),
                 ft.Column(controls=[
                     ft.Text(label, size=12, color=TEXT_PRIMARY,
                             weight=ft.FontWeight.W_600),
@@ -3625,7 +3626,7 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
                 ft.Text(label, size=11, color=TEXT_PRIMARY,
                         weight=ft.FontWeight.W_600),
                 ft.Text(desc, size=10, color=TEXT_SECONDARY),
-            ], spacing=0, tight=True),
+            ], spacing=0, tight=True, expand=True),
         ], spacing=8)
 
     # ── Seções do manual ─────────────────────────────────────────────
@@ -3761,13 +3762,13 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
             _title("📅 Registrando o Ponto"),
             _item("Trabalho Normal", "Nenhuma alteração",
                   "Deixe em branco → usa o horário configurado em ⚙️ Config."),
-            _item("有休 Yukyu — Célula Laranja", "8h base fixo sem hora extra e noturno",
+            _item("有休 Yukyu", "Célula laranja — 8h fixo, sem extra/noturno",
                   "Com horário → paga as horas efetivas. Sem horário → 8h fixo."),
             _item("欠勤 Falta — Célula Roxa", "¥0 — não remunerada",
                   "O campo horário é ignorado. Falta = sem pagamento."),
-            _item("Saída Antecipada — Célula Verde-azulado", "Preencha o horário de saída real",
-                  "Hora extra = 0 se saiu antes do limite configurado. Cálculo pelo tempo real."),
-            _item("延長 Minutos Extras Solicitados", "Campo numérico no modal",
+            _item("Saída Antecipada", "Célula verde-azulado",
+                  "Preencha o horário de saída real. Hora extra = 0 se saiu antes do limite configurado."),
+            _item("延長 Min. Extras", "Campo numérico no modal",
                   "Minutos além do turno que a empresa pediu. Calculado separadamente com +25%."),
             _item("Abono / Vale / Bico extra (¥)", "Campo numérico no modal",
                   "Qualquer ganho extra do dia: vale, arubaito (バイト), gorjeta, ajuda de custo. Acumulado no holerite separadamente."),
@@ -3793,7 +3794,7 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
                   "Cada concessão vale só 2 anos. O app consome o saldo mais antigo primeiro (FIFO), pra não desperdiçar dias prestes a vencer."),
             _item("Desconto automático", "Marque 有休 no calendário",
                   "Cada dia marcado como Yukyu (célula laranja) desconta 1 dia do saldo, automaticamente, na próxima vez que você abrir ⚙️ Config."),
-            _item("Se o dia marcado não tiver saldo disponível", "Aparece um aviso ⚠️ no resumo",
+            _item("Uso sem saldo disponível", "Aparece um aviso ⚠️ no resumo",
                   "Acontece se você marcar Yukyu antes de completar 6 meses, ou além do que já foi concedido — confira o histórico nesses casos."),
             _p("⚠️ Duas limitações desta versão: (1) não verifica a regra de 80% de presença no período aquisitivo — assume que você tem direito; (2) cobre só a tabela cheia (5+ dias/semana) — não calcula o proporcional (比例付与) de quem trabalha part-time."),
 
@@ -3831,11 +3832,11 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
                   "Taxa média calculada automaticamente a partir dos holerites reais registrados no Histórico."),
             _item("✏️ Desconto Fixo", "Botão em ⚙️ Config.",
                   "Usa o valor fixo em ¥ que você configurar, ignorando o histórico."),
-            _item("⭐ Campos obrigatórios no Histórico", "Apenas 3 campos",
+            _item("⭐ Campos obrigatórios", "Apenas 3 campos",
                   "Total Bruto, Total Desconto e Salário Líquido são essenciais. Os demais campos do modal são opcionais — só para seu registro pessoal."),
             _item("📅 Mês do Histórico", "Use o mês do TRABALHO",
                   "Se você recebeu o holerite em julho referente ao trabalho de junho, registre como '2026-06', não '2026-07'."),
-            _item("✏️ Editar ou remover registro", "Toque em qualquer card do Histórico",
+            _item("✏️ Editar registro", "Toque em qualquer card",
                   "Abre o registro para edição. Um botão Remover aparece quando estiver editando."),
 
             # ── CSV de feriados ──────────────────────────────────────
