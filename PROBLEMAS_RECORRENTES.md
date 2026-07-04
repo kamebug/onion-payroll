@@ -56,6 +56,7 @@ isso, pois testa só funções Python puras, sem o Flutter/DOM por trás.
 | Deploy falhando não é sempre bug de código | GitHub Actions "Deployment failed" / "Multiple artifacts" por deploys simultâneos colidindo — não relacionado ao `main.py` | processo | Antes de investigar código, conferir aba Actions do GitHub (ícone verde ✓) e o Build ID no cabeçalho do app |
 | "Apagar Todos os Dados" limpava o storage mas a tela continuava com dados antigos | `refresh_all()` só recarrega `state["settings"]` se o cache não estiver vazio — depois de `remove_storage()` o cache fica `None`, então a condição falhava | 2.21 | Preencher configurações, apagar tudo, conferir se os campos voltam ao padrão SEM precisar fechar e reabrir o app |
 | Migração do wizard por etapas (v2.14) precisa ser testada manualmente | Não dá pra testar via `unittest` porque depende de `settings` salvos previamente + renderização real da UI | 2.14 | Simular um `settings` salvo de versão anterior (com `cycle_type` mas sem `cycle_type_confirmed`) e confirmar que as etapas 2/3/4 aparecem direto, sem precisar reclicar no tipo de ciclo |
+| Texto da aba Ajuda estourava a largura, precisava de zoom 50% pra ler | Linha monoespaçada de ~60 caracteres no bloco `_example()` de progressão do Yukyu | 2.24 | Abrir ❓ Ajuda no celular sem nenhum zoom manual, conferir se todo o texto cabe na largura da tela |
 | Campo "Ajuste Fino do Noturno" cortado em tela de celular | `ft.Row` com 2 campos lado a lado, sem `expand`, na v2.9 | 2.10 | Abrir ⚙️ Config no celular, ligar o switch de taxa de referência, ver se os 2 campos aparecem inteiros |
 | Teclado do celular cobria campos no modal | Modal centralizado verticalmente, sem espaço reservado | 2.6 | Abrir modal de Histórico no celular, tocar em campo perto do fim |
 
@@ -144,6 +145,11 @@ em `build_settings_tab()`, `build_help_tab()`, ou qualquer outra função
     início. Testar sempre com um cenário de "muitos anos de uso" antes
     de considerar pronto — problema só aparece com dados antigos o
     suficiente, não com uma conta nova de teste
+11. **Texto com `font_family="monospace"`** (blocos de exemplo/fórmula)
+    — manter cada linha em ~28 caracteres ou menos. Fonte monoespaçada
+    é mais larga que proporcional por caractere, e não há garantia de
+    quebra automática — mais seguro encurtar o conteúdo do que confiar
+    no comportamento de wrap do Flet sem poder testar ao vivo
 
 ---
 

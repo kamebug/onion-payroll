@@ -1,5 +1,36 @@
 # Changelog — Onion Payroll
 
+## [2.24] — 2026-07-04 — TEXTO DA AJUDA ESTOURAVA A LARGURA DA TELA
+
+### 🔴 Bug corrigido — precisava de zoom de 50% pra ler o conteúdo
+
+**Reportado pelo usuário:** a aba ❓ Ajuda não cabia na tela do celular
+— precisava reduzir o zoom do navegador pra 50% pra conseguir ler,
+mesmo em modo retrato normal.
+
+**Causa raiz provável:** o helper `_example()` usa fonte monoespaçada
+(`font_family="monospace"`) para blocos de cálculo — e uma das linhas
+(tabela de progressão de Yukyu) tinha ~60 caracteres. Em fonte
+monoespaçada (caracteres mais largos que fonte proporcional), isso é
+largo o suficiente para estourar a largura útil de telas de celular
+mais estreitas, sem quebra de linha automática garantida — o que pode
+forçar a coluna inteira da página a ficar mais larga que a tela.
+
+**Correção:** todas as linhas dos 4 blocos de exemplo (`_example()`)
+encurtadas para no máximo ~28 caracteres, bem dentro da margem segura
+para fonte monoespaçada em tela estreita. Preferido reduzir o conteúdo
+diretamente em vez de depender de comportamento de quebra de linha do
+Flet não verificado (mesma cautela já aplicada a `ft.Icons`/
+`page.launch_url` nas versões anteriores).
+
+**Nota sobre pinch-to-zoom:** o Flet/Flutter Web com renderizador
+CanvasKit frequentemente intercepta gestos de toque antes de chegarem
+no controle nativo de zoom do navegador — mesmo com `user-scalable=no`
+removido do `index.html` (v2.11), pinch-to-zoom pode continuar limitado
+por essa característica da plataforma, não por configuração do app.
+
+---
+
 ## [2.23] — 2026-07-04 — RESUMO DE YUKYU MENOS POLUÍDO PRA QUEM TEM MUITOS ANOS DE EMPRESA
 
 ### 🟢 Melhorado — só concessões ativas, expiração como data

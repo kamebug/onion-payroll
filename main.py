@@ -910,7 +910,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607041152"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607010336"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -3740,14 +3740,20 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
             _title("🔢 Arredondamento da Taxa por Hora (sempre ativo)"),
             _p("Diferente do arredondamento do ponto: aqui não se mexe nos minutos, mexe-se no ¥/hora usado para multiplicar. A taxa (時給 × multiplicador) é arredondada para o yen mais próximo ANTES de multiplicar pelas horas — não depois. Sempre ativo, não é configurável."),
             _example("Exemplo — hora extra, 時給=¥1.430, 30h trabalhadas:", [
-                "Taxa bruta = 1.430 × 1,25 = 1.787,50 ¥/hora",
-                "Arredondada (0,5 sempre sobe) = 1.788 ¥/hora",
-                "Total = 1.788 × 30 = ¥53.640",
+                "Taxa: 1.430 × 1,25",
+                "= 1.787,50 ¥/hora",
+                "Arred. (0,5 sobe):",
+                "1.788 ¥/hora",
+                "Total: 1.788 × 30",
+                "= ¥53.640",
             ]),
             _example("Exemplo — noturno, 時給=¥1.430, 118,75h trabalhadas:", [
-                "Taxa bruta = 1.430 × 0,25 = 357,50 ¥/hora",
-                "Arredondada = 358 ¥/hora",
-                "Total = 358 × 118,75 = ¥42.512,50 → ¥42.513",
+                "Taxa: 1.430 × 0,25",
+                "= 357,50 ¥/hora",
+                "Arred.: 358 ¥/hora",
+                "Total: 358 × 118,75",
+                "= ¥42.512,50",
+                "→ ¥42.513",
             ]),
             _p("Os dois exemplos acima batem exatos com holerites reais analisados — essa é a diferença entre 'quase certo' e 100% preciso."),
 
@@ -3775,13 +3781,13 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
             _title("🌴 Direito a Yukyu (有給休暇)"),
             _p("Baseado no Art. 39 da Lei Trabalhista Japonesa (労働基準法). Preencha a 'Data de Admissão' em ⚙️ Config (Etapa 4) — diferente da 'Data de Início do Ciclo', que é sobre o turno, não sobre quando você foi contratado."),
             _example("Progressão dos dias concedidos (tabela cheia, 5+ dias/semana):", [
-                "6 meses de empresa       → 10 dias",
-                "1 ano e 6 meses          → 11 dias",
-                "2 anos e 6 meses         → 12 dias",
-                "3 anos e 6 meses         → 14 dias",
-                "4 anos e 6 meses         → 16 dias",
-                "5 anos e 6 meses         → 18 dias",
-                "6 anos e 6 meses ou mais → 20 dias (teto, todo ano depois)",
+                "6 meses      → 10 dias",
+                "1 ano 6m     → 11 dias",
+                "2 anos 6m    → 12 dias",
+                "3 anos 6m    → 14 dias",
+                "4 anos 6m    → 16 dias",
+                "5 anos 6m    → 18 dias",
+                "6 anos 6m+   → 20 dias (teto)",
             ]),
             _item("Expiração de 2 anos", "Art. 115 da Lei Trabalhista",
                   "Cada concessão vale só 2 anos. O app consome o saldo mais antigo primeiro (FIFO), pra não desperdiçar dias prestes a vencer."),
