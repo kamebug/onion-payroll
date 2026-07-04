@@ -111,7 +111,9 @@ alternância é mensal — configure a **Data de Referência — Mês Diurno**
 
 Configure a **Data de Admissão** em ⚙️ Config (separada da "Data de
 Início do Ciclo", que é sobre o turno) e o app calcula automaticamente
-seu saldo de Yukyu, seguindo o Art. 39 da Lei Trabalhista Japonesa:
+seu saldo de Yukyu, seguindo o Art. 39 da Lei Trabalhista Japonesa.
+Pode digitar sem hífen (`20260703`, `2026/07/03`, `2026.7.3`) — o campo
+normaliza sozinho para AAAA-MM-DD:
 
 ```
 6 meses de empresa → 10 dias
@@ -126,7 +128,9 @@ seu saldo de Yukyu, seguindo o Art. 39 da Lei Trabalhista Japonesa:
 Cada concessão expira **2 anos** depois de ser dada (Art. 115) — o app
 consome o saldo mais antigo primeiro, pra não desperdiçar dias prestes
 a vencer. Toda vez que você marca um dia como "Folga Remunerada 有休"
-no calendário, o saldo desconta automaticamente.
+no calendário, o saldo desconta automaticamente. O resumo mostra cada
+concessão com a data exata (ex: `2026-05-01: +10d, expira 2028-05-01`),
+não só o total.
 
 **Limitações desta versão:**
 - Cobre só a tabela cheia (5+ dias/semana) — não calcula o proporcional

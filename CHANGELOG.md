@@ -1,5 +1,43 @@
 # Changelog — Onion Payroll
 
+## [2.22] — 2026-07-04 — DATA SEM HÍFEN E DETALHAMENTO DO YUKYU
+
+### 🟢 Adicionado — normalização de data (sem exigir hífen)
+
+**Reportado pelo usuário:** os campos de data (Admissão, Início do
+Ciclo, Referência do Alternado Mensal) exigiam digitar o hífen
+manualmente (AAAA-MM-DD), sem tolerância a outros formatos.
+
+**Correção:** nova função `normalize_date()` (mesmo padrão já usado em
+`normalize_hhmm()` pros campos de horário) — aceita `20260703`,
+`2026/07/03`, `2026.7.3` ou já com hífen, normalizando tudo pra
+AAAA-MM-DD ao sair do campo. Entrada inválida (data que não existe, ou
+formato não reconhecido) mantém o texto como veio, sem travar o campo.
+
+### 🟢 Adicionado — datas reais no detalhamento do Yukyu
+
+**Reportado pelo usuário:** o resumo de saldo mostrava só totais
+("Concedido: 10, Expirado: 0"), sem indicar QUANDO cada concessão
+aconteceu ou vai expirar.
+
+**Correção:** cada concessão no resumo agora mostra a data exata:
+`• 2026-05-01: +10d (usado 2, expira 2028-05-01)` — usando o detalhe
+que `calcular_yukyu()` já calculava internamente (`detalhe_concessoes`)
+mas não estava sendo exibido.
+
+### 🔵 Refatorado — atualização direcionada, sem refresh_all()
+
+Ao implementar a atualização em tempo real do resumo de Yukyu quando a
+Data de Admissão muda, a primeira tentativa usou `refresh_all()` — o
+que reintroduziria o bug de scroll voltando ao topo (já corrigido
+várias vezes nesta aba). Corrigido antes de entregar: a lógica de
+montar o texto do resumo foi extraída para uma função reutilizável
+(`_montar_texto_yukyu()`), e a atualização usa um widget nomeado
+(`yukyu_texto_widget`) com `.update()` direcionado, seguindo o mesmo
+cuidado já documentado em `PROBLEMAS_RECORRENTES.md`.
+
+---
+
 ## [2.21] — 2026-07-04 — BOTÃO "APAGAR TODOS OS DADOS" NÃO ATUALIZAVA A TELA
 
 ### 🔴 Bug corrigido — storage apagava de verdade, mas a UI mostrava dados antigos

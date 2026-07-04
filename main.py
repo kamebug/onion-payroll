@@ -53,6 +53,36 @@ def normalize_hhmm(s: str) -> str:
         return s
 
 
+def normalize_date(s: str) -> str:
+    """Converte entrada livre de data para AAAA-MM-DD, sem exigir hífen.
+    20260703 → 2026-07-03 | 2026/07/03 → 2026-07-03 | 2026.7.3 → 2026-07-03
+    Já em AAAA-MM-DD → mantém (só normaliza zeros à esquerda).
+    Entrada inválida → devolve como veio, sem travar o campo.
+    """
+    if not s:
+        return ""
+    s = s.strip().replace("/", "-").replace(".", "-")
+    if "-" in s:
+        parts = s.split("-")
+        if len(parts) == 3:
+            try:
+                ano, mes, dia = int(parts[0]), int(parts[1]), int(parts[2])
+                date(ano, mes, dia)  # valida se a data existe de verdade
+                return f"{ano:04d}-{mes:02d}-{dia:02d}"
+            except (ValueError, IndexError):
+                return s
+        return s
+    digits = "".join(c for c in s if c.isdigit())
+    if len(digits) == 8:  # AAAAMMDD
+        try:
+            ano, mes, dia = int(digits[:4]), int(digits[4:6]), int(digits[6:8])
+            date(ano, mes, dia)
+            return f"{ano:04d}-{mes:02d}-{dia:02d}"
+        except ValueError:
+            return s
+    return s
+
+
 def parse_hhmm(s: str) -> Optional[datetime]:
     try:
         return datetime.strptime(s.strip(), "%H:%M")
@@ -880,7 +910,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607041049"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607010336"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -2409,7 +2439,9 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
     # DEPOIS, sem tocar na data, recalcula o calendário sozinho usando a
     # relação de 2 dias entre turmas — sem precisar de switch nenhum.
     def _blur_anchor_date(e):
-        v = e.control.value.strip()
+        v = normalize_date(e.control.value.strip())
+        e.control.value = v
+        e.control.update()
         settings["anchor_date"] = v
         settings["anchor_group"] = settings.get("group", "A")
         save_json(page, KEY_SETTINGS, settings)
@@ -2596,7 +2628,10 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
 
     # Data de referência do mês diurno (só no Alternado Mensal)
     def _blur_shift_anchor(e):
-        settings["shift_anchor_date"] = e.control.value.strip()
+        v = normalize_date(e.control.value.strip())
+        e.control.value = v
+        e.control.update()
+        settings["shift_anchor_date"] = v
         save_json(page, KEY_SETTINGS, settings)
     shift_anchor_date_container = ft.Container(
         content=ft.Column(controls=[
@@ -2700,18 +2735,12 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
     )
 
     def _blur_hire_date(e):
-        settings["hire_date"] = e.control.value.strip()
+        v = normalize_date(e.control.value.strip())
+        e.control.value = v
+        e.control.update()
+        settings["hire_date"] = v
         save_json(page, KEY_SETTINGS, settings)
-
-    hire_date_field = ft.TextField(
-        label="Data de Admissão (AAAA-MM-DD)",
-        value=str(settings.get("hire_date") or ""),
-        keyboard_type=ft.KeyboardType.TEXT,
-        bgcolor="#2A2A2A", color="#F0F0F0",
-        border_color="#333333", focused_border_color="#00D2C6",
-        label_style=ft.TextStyle(color="#A0A0A0"),
-        on_blur=_blur_hire_date,
-    )
+        refresh_all()  # recalcula e mostra o novo saldo de Yukyu na hora
 
     def _computar_yukyu_saldo():
         hd = settings.get("hire_date")
@@ -2736,32 +2765,60 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
                         pass
         return calcular_yukyu(hire, date.today(), usage_dates)
 
-    _yukyu = _computar_yukyu_saldo()
-    if _yukyu:
-        _linhas_yukyu = [
+    def _montar_texto_yukyu():
+        _yukyu = _computar_yukyu_saldo()
+        if not _yukyu:
+            return "Preencha a Data de Admissão acima para calcular seu saldo."
+        _linhas = [
             f"Saldo disponível: {_yukyu['saldo_disponivel']} dias",
             f"Concedido até hoje: {_yukyu['total_concedido']}  |  "
             f"Usado: {_yukyu['total_usado']}  |  Expirado: {_yukyu['total_expirado']}",
         ]
+        for g in _yukyu["detalhe_concessoes"]:
+            _linhas.append(
+                f"  • {g['grant_date'].isoformat()}: +{g['dias']}d "
+                f"(usado {g['usado']}, expira {g['expiry'].isoformat()})"
+            )
         if _yukyu["proxima_concessao_data"]:
-            _linhas_yukyu.append(
+            _linhas.append(
                 f"Próxima concessão: {_yukyu['proxima_concessao_data'].isoformat()} "
                 f"(+{_yukyu['proxima_concessao_dias']} dias)"
             )
         if _yukyu["usos_invalidos"]:
-            _linhas_yukyu.append(
+            _linhas.append(
                 f"⚠️ {len(_yukyu['usos_invalidos'])} dia(s) marcados como Yukyu no "
                 f"calendário sem saldo disponível na época — confira o histórico."
             )
-        _texto_yukyu = "\n".join(_linhas_yukyu)
-    else:
-        _texto_yukyu = "Preencha a Data de Admissão acima para calcular seu saldo."
+        return "\n".join(_linhas)
+
+    def _blur_hire_date(e):
+        v = normalize_date(e.control.value.strip())
+        e.control.value = v
+        e.control.update()
+        settings["hire_date"] = v
+        save_json(page, KEY_SETTINGS, settings)
+        # Atualização direcionada, sem refresh_all() — evita o scroll
+        # voltar ao topo (mesmo cuidado já aplicado em todo o Config)
+        yukyu_texto_widget.value = _montar_texto_yukyu()
+        yukyu_texto_widget.update()
+
+    hire_date_field = ft.TextField(
+        label="Data de Admissão (AAAA-MM-DD)",
+        value=str(settings.get("hire_date") or ""),
+        keyboard_type=ft.KeyboardType.TEXT,
+        bgcolor="#2A2A2A", color="#F0F0F0",
+        border_color="#333333", focused_border_color="#00D2C6",
+        label_style=ft.TextStyle(color="#A0A0A0"),
+        on_blur=_blur_hire_date,
+    )
+
+    yukyu_texto_widget = ft.Text(_montar_texto_yukyu(), size=11, color=TEXT_SECONDARY)
 
     yukyu_summary = ft.Container(
         content=ft.Column(controls=[
             ft.Text("🌴 Direito a Yukyu (有給休暇)", size=13, color=ACCENT,
                     weight=ft.FontWeight.W_700),
-            ft.Text(_texto_yukyu, size=11, color=TEXT_SECONDARY),
+            yukyu_texto_widget,
             ft.Text(
                 "⚠️ Não verifica a regra de 80% de presença — assume que "
                 "você tem direito. Ver ❓ Ajuda para detalhes.",

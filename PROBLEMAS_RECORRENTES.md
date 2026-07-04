@@ -133,6 +133,11 @@ em `build_settings_tab()`, `build_help_tab()`, ou qualquer outra função
    renderização com o stub de Flet falso (ver categoria "Bugs que passam
    no py_compile mas quebram em runtime" acima) — `py_compile` não pega
    `UnboundLocalError`/ordem de variável errada, só erro de sintaxe
+9. **Se um campo precisa atualizar outro widget na mesma tela** (ex:
+   Data de Admissão atualizando o resumo de Yukyu), nunca usar
+   `refresh_all()` dentro de ⚙️ Config — extrair a lógica de montagem
+   do texto/widget pra uma função reutilizável, guardar o widget numa
+   variável nomeada, e chamar `.update()` só nele
 
 ---
 
