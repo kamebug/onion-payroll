@@ -1033,7 +1033,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607060336"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607010336"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -2816,127 +2816,21 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
     shift_break_f = _tf_shift("Intervalo 休憩 (min)", "shift_break", "65", is_time=False)
     shift_ot_f    = _tf_shift("残業 Início Hora Extra (fim turno normal)", "shift_ot", "06:35", is_time=True)
 
-    # ── Intervalos Detalhados (avançado, opcional) — v2.33 ──────────
-    # Pedido do usuário: empresas com pausas curtas (ex: 10min a cada
-    # 2h) durante o turno noturno inflavam o adicional noturno, porque
-    # o cálculo antigo só sabia a DURAÇÃO total do intervalo, não QUANDO
-    # ele acontece — não dava pra saber se a pausa caía dentro do
-    # período 22h-05h. Recurso opcional: mantém o campo simples de
-    # duração pra quem não precisar, mas permite configurar horários
-    # exatos pra quem precisar de precisão no adicional noturno.
-    #
-    # É uma FUNÇÃO CONSTRUTORA (não um widget único) porque essa seção
-    # precisa aparecer tanto no turno fixo quanto no turno alternado —
-    # um mesmo widget não pode ter dois "pais" na árvore do Flet, então
-    # cada chamada gera uma instância nova e independente.
-    def _build_intervalos_detalhados_section():
-        def _periodo_row(idx, p):
-            def _blur_inicio(e):
-                v = normalize_hhmm(e.control.value)
-                e.control.value = v
-                e.control.update()
-                settings["break_periods_detailed"][idx]["start"] = v
-                save_json(page, KEY_SETTINGS, settings)
-
-            def _blur_fim(e):
-                v = normalize_hhmm(e.control.value)
-                e.control.value = v
-                e.control.update()
-                settings["break_periods_detailed"][idx]["end"] = v
-                save_json(page, KEY_SETTINGS, settings)
-
-            def _remover_periodo(e):
-                settings["break_periods_detailed"].pop(idx)
-                save_json(page, KEY_SETTINGS, settings)
-                _rebuild_periodos()
-
-            start_f = ft.TextField(
-                label="Início", value=p.get("start", ""), hint_text="HH:MM",
-                bgcolor="#2A2A2A", color="#F0F0F0",
-                border_color="#333333", focused_border_color="#00D2C6",
-                label_style=ft.TextStyle(color="#A0A0A0"),
-                on_blur=_blur_inicio, expand=1,
-            )
-            end_f = ft.TextField(
-                label="Fim", value=p.get("end", ""), hint_text="HH:MM",
-                bgcolor="#2A2A2A", color="#F0F0F0",
-                border_color="#333333", focused_border_color="#00D2C6",
-                label_style=ft.TextStyle(color="#A0A0A0"),
-                on_blur=_blur_fim, expand=1,
-            )
-            return ft.Row(controls=[
-                start_f, end_f,
-                ft.TextButton("Remover", on_click=_remover_periodo,
-                              style=ft.ButtonStyle(color=DANGER)),
-            ], spacing=6)
-
-        def _rebuild_periodos():
-            periodos = settings.get("break_periods_detailed", [])
-            linhas = [_periodo_row(i, p) for i, p in enumerate(periodos)]
-            if not linhas:
-                linhas = [ft.Text("Nenhum intervalo detalhado ainda.",
-                                   size=11, color=TEXT_MUTED, italic=True)]
-            periodos_list_container.content = ft.Column(controls=linhas, spacing=6, tight=True)
-            periodos_list_container.update()
-
-        def _adicionar_periodo(e):
-            settings.setdefault("break_periods_detailed", []).append({"start": "", "end": ""})
-            save_json(page, KEY_SETTINGS, settings)
-            _rebuild_periodos()
-
-        def _toggle_periodos(e):
-            settings["break_periods_enabled"] = e.control.value
-            save_json(page, KEY_SETTINGS, settings)
-            periodos_list_container.visible = e.control.value
-            add_periodo_btn.visible = e.control.value
-            periodos_list_container.update()
-            add_periodo_btn.update()
-
-        _periodos_ativos = bool(settings.get("break_periods_enabled", False))
-
-        periodos_switch = ft.Switch(
-            value=_periodos_ativos, active_color=ACCENT,
-            on_change=_toggle_periodos,
-        )
-        periodos_list_container = ft.Container(content=ft.Column(controls=[]),
-                                                visible=_periodos_ativos)
-        add_periodo_btn = ft.OutlinedButton(
-            "+ Adicionar Intervalo",
-            on_click=_adicionar_periodo, visible=_periodos_ativos,
-        )
-        _rebuild_periodos()
-
-        return ft.Container(
-            content=ft.Column(controls=[
-                ft.Row(controls=[
-                    ft.Text("Intervalos Detalhados (avançado)", size=12,
-                            color=TEXT_SECONDARY, weight=ft.FontWeight.W_600,
-                            expand=True),
-                    periodos_switch,
-                ]),
-                ft.Text(
-                    "Pra cálculo preciso do adicional noturno quando há "
-                    "várias pausas curtas (ex: 10min a cada 2h). Se "
-                    "ativado, os horários informados aqui são usados só "
-                    "pra excluir pausas do período 22h-05h — não muda o "
-                    "cálculo de hora normal/extra, que continua usando a "
-                    "duração simples do intervalo acima.",
-                    size=9, color=TEXT_MUTED,
-                ),
-                periodos_list_container,
-                add_periodo_btn,
-            ], spacing=8, tight=True),
-            bgcolor=BG_SURFACE, border_radius=8, padding=10,
-            margin=ft.Padding(left=0, right=0, top=8, bottom=0),
-        )
-
+    # v2.33 tentou adicionar "Intervalos Detalhados" (avançado) aqui —
+    # removido na v2.35 porque o usuário reportou que a aba Config
+    # parou de abrir depois dessa mudança, e não foi possível identificar
+    # a causa exata sem acesso a teste real do Flet (só stub/mock, que
+    # não pega toda classe de incompatibilidade de API). Priorizando
+    # estabilidade: a aba volta a abrir garantido, sem esse recurso.
+    # O motor de cálculo (calculate_shift_pay com break_periods) continua
+    # funcionando — só a UI de configuração foi removida. Ver
+    # PROBLEMAS_RECORRENTES.md.
 
     section_4x2_container = ft.Container(
         content=ft.Column(controls=[
             section_header("HORÁRIO DO TURNO 勤務時間"),
             ft.Row([shift_start_f, shift_end_f], spacing=8),
             ft.Row([shift_break_f, shift_ot_f], spacing=8),
-            _build_intervalos_detalhados_section(),
         ], spacing=8, tight=True),
         visible=(settings.get("cycle_type", "4x2") not in ("alternating", "alternating_monthly")),
     )
@@ -2946,7 +2840,6 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
             ft.Row([alt_day_start_f, alt_day_end_f], spacing=8),
             ft.Row([alt_night_start_f, alt_night_end_f], spacing=8),
             shift_break_f,
-            _build_intervalos_detalhados_section(),
         ], spacing=8, tight=True),
         visible=(settings.get("cycle_type", "4x2") in ("alternating", "alternating_monthly")),
     )
@@ -3914,40 +3807,26 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
     # ── Seções do manual ─────────────────────────────────────────────
     APP_URL = "https://kamebug.github.io/onion-payroll/"
     VIDEO_URL = "https://youtube.com/shorts/gOclnXQZ5SM"  # v3 do roteiro, frases hedged
-    # v2.28: o link do APP é pra compartilhar com alguém por mensagem —
-    # precisa COPIAR, não abrir. Já o vídeo faz mais sentido ABRIR (o
-    # YouTube tem botão de compartilhar próprio de lá). page.set_clipboard
-    # tinha sido removido (v2.18) suspeitando de não funcionar, mas isso
-    # foi durante a investigação de um bug que depois descobrimos ser
-    # outra coisa (_item() com largura errada, v2.25) — não relacionado
-    # a clipboard. Trazendo de volta com essa ressalva.
-
-    def _copiar_app(e):
-        page.set_clipboard(APP_URL)
-        copy_status_text.value = "✓ Copiado! Cole numa mensagem para compartilhar."
-        copy_status_text.update()
-
-    def _abrir_video(e):
-        page.launch_url(VIDEO_URL)
-
-    copy_status_text = ft.Text("", size=11, color=SUCCESS)
+    # v2.35: botões de copiar/abrir removidos. Depois de várias tentativas
+    # (page.set_clipboard, page.launch_url, page.open, TextButton com e
+    # sem confirmação inline) o usuário reportou que NENHUMA delas
+    # funcionava de verdade no dispositivo real — só texto puro
+    # selecionável, comprovadamente estável em outras partes do app,
+    # continua aqui. Ver PROBLEMAS_RECORRENTES.md.
 
     share_section = ft.Container(
         content=ft.Column(controls=[
             _title("📤 Compartilhar o Onion Payroll"),
-            _p("Copie o link e envie por mensagem para um colega peelar o próprio contracheque também:"),
+            _p("Copie o link (toque e segure o texto) e envie por mensagem para um colega peelar o próprio contracheque também:"),
             ft.Row(controls=[
                 ft.Text(APP_URL, size=12, color=ACCENT_LITE, selectable=True,
                         weight=ft.FontWeight.W_600),
             ], alignment=ft.MainAxisAlignment.CENTER),
-            ft.TextButton("📋 Copiar Link do App", on_click=_copiar_app),
-            copy_status_text,
             _p("Vídeo de apresentação (30s) — abra e compartilhe direto do YouTube:"),
             ft.Row(controls=[
                 ft.Text(VIDEO_URL, size=12, color=ACCENT_LITE, selectable=True,
                         weight=ft.FontWeight.W_600),
             ], alignment=ft.MainAxisAlignment.CENTER),
-            ft.TextButton("🔗 Abrir Vídeo", on_click=_abrir_video),
         ], spacing=8, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
         padding=12, bgcolor=BG_CARD, border_radius=12,
         margin=ft.Padding(left=0, right=0, top=0, bottom=10),
