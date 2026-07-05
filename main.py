@@ -912,7 +912,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607051029"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607010336"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -3649,7 +3649,7 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
 
     # ── Seções do manual ─────────────────────────────────────────────
     APP_URL = "https://kamebug.github.io/onion-payroll/"
-    VIDEO_URL = "https://youtube.com/shorts/FRC0zbyuMI4"
+    VIDEO_URL = "https://youtube.com/shorts/gOclnXQZ5SM"  # v3 do roteiro, frases hedged
     # v2.28: o link do APP é pra compartilhar com alguém por mensagem —
     # precisa COPIAR, não abrir. Já o vídeo faz mais sentido ABRIR (o
     # YouTube tem botão de compartilhar próprio de lá). page.set_clipboard
