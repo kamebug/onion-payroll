@@ -181,6 +181,78 @@ def night_minutes_worked(shift_start: datetime, shift_end: datetime,
     return count
 
 
+def build_timeline_segments(shift_start: datetime, shift_end: datetime,
+                             ot_start: datetime = None,
+                             break_periods: list = None) -> list:
+    """Constrói a linha do tempo do turno como segmentos contínuos,
+    cortando exatamente nos pontos onde alguma classificação muda:
+    início/fim de intervalo, início da hora extra, e as fronteiras do
+    adicional noturno (22h e 5h de cada dia tocado pelo turno).
+
+    Ideia central (sugerida por auditoria externa do projeto): em vez de
+    calcular direto "horas noturnas" e depois subtrair intervalo (que dá
+    errado quando o intervalo cai PARCIALMENTE dentro do período
+    noturno, ou quando cai dentro da janela de hora extra), primeiro
+    representa o turno inteiro como uma sequência de pedaços de tempo,
+    cada um já classificado (intervalo? noturno? hora extra?) — só
+    DEPOIS soma os minutos de cada categoria. Elimina a necessidade de
+    qualquer "min(x, net_min)" como rede de segurança — a matemática já
+    fecha certo por construção, porque cada minuto do turno pertence a
+    exatamente um segmento.
+
+    Retorna lista de dicts: {"start", "end", "minutes", "is_break",
+    "is_night", "is_overtime"}, em ordem cronológica, cobrindo o turno
+    inteiro sem lacunas nem sobreposição.
+
+    `break_periods`: lista de tuplas (start_dt, end_dt) já ancoradas.
+    `ot_start`: datetime já ancorado (ou None, se não houver hora extra
+    nesse turno — turno inteiro tratado como não-extra).
+    """
+    end = shift_end
+    if end <= shift_start:
+        end += timedelta(days=1)
+
+    pontos = {shift_start, end}
+    if ot_start and shift_start < ot_start < end:
+        pontos.add(ot_start)
+
+    # Fronteiras do adicional noturno (22h e 5h) em cada dia tocado
+    dia_cursor = shift_start.replace(hour=0, minute=0, second=0, microsecond=0)
+    while dia_cursor <= end:
+        for hora in (5, 22):
+            p = dia_cursor.replace(hour=hora)
+            if shift_start < p < end:
+                pontos.add(p)
+        dia_cursor += timedelta(days=1)
+
+    periodos_resolvidos = []
+    if break_periods:
+        for bp_start, bp_end in break_periods:
+            if bp_start and bp_end:
+                periodos_resolvidos.append((bp_start, bp_end))
+                if shift_start < bp_start < end:
+                    pontos.add(bp_start)
+                if shift_start < bp_end < end:
+                    pontos.add(bp_end)
+
+    ordenados = sorted(p for p in pontos if shift_start <= p <= end)
+    segmentos = []
+    for i in range(len(ordenados) - 1):
+        seg_ini, seg_fim = ordenados[i], ordenados[i + 1]
+        if seg_ini >= seg_fim:
+            continue
+        meio = seg_ini + (seg_fim - seg_ini) / 2
+        is_break = any(bs <= seg_ini and seg_fim <= be for bs, be in periodos_resolvidos)
+        is_night = (meio.hour >= 22 or meio.hour < 5)
+        is_overtime = bool(ot_start and seg_ini >= ot_start)
+        minutos = int(round((seg_fim - seg_ini).total_seconds() / 60))
+        segmentos.append({
+            "start": seg_ini, "end": seg_fim, "minutes": minutos,
+            "is_break": is_break, "is_night": is_night, "is_overtime": is_overtime,
+        })
+    return segmentos
+
+
 def calculate_shift_pay(
     jikyuu: int, shift_type: str, start_str: str = "", end_str: str = "",
     break_min: int = 65, block: int = 1, is_holiday: bool = False,
@@ -324,44 +396,86 @@ def calculate_shift_pay(
     if not start_dt or not end_dt or not ot_dt:
         return result
 
-    gross_min = minutes_between(start_dt, end_dt)
-    net_min   = max(0, truncate_minutes(gross_min - break_min, block, round_mode))
+    # Ancorar end_dt/ot_dt ao dia certo relativo ao início do turno — a
+    # fórmula antiga não precisava disso (minutes_between() já resolve
+    # a virada de meia-noite internamente, via diferença relativa), mas
+    # a engine de linha do tempo (v2.38) compara datas diretamente, e
+    # sem ancorar corretamente, QUALQUER horário "menor" que o de início
+    # (ex: 06:35 vs entrada 20:30) seria interpretado como ainda no
+    # MESMO dia, marcando o turno inteiro como hora extra por engano.
+    # Ancorar aqui de uma vez é seguro pros dois caminhos (minutes_between
+    # continua funcionando igual com datas já ancoradas).
+    if end_dt <= start_dt:
+        end_dt += timedelta(days=1)
+    if ot_dt <= start_dt:
+        ot_dt += timedelta(days=1)
 
-    result["net_minutes"]      = net_min
-    jikyuu_per_min             = jikyuu / 60.0
-    # OT só existe se end_dt ultrapassou ot_dt dentro do mesmo contexto de turno
-    # Usar diferença bruta sem wrap de 1 dia: se end_dt < ot_dt = sem OT
-    _ot_raw = (end_dt - ot_dt).total_seconds() / 60
-    # Se negativo, end_dt está antes de ot_dt (turno normal) — mas pode ser dia seguinte
-    # Comparar via minutes_between do turno: ot_dt é posterior a start_dt no turno
-    _start_to_ot  = minutes_between(start_dt, ot_dt)   # minutos do start ao limite OT
-    _start_to_end = minutes_between(start_dt, end_dt)   # minutos do start ao fim real
-    # OT só existe se o fim ultrapassou o limite OT dentro do turno
-    if _start_to_end > _start_to_ot:
-        raw_ot_min = _start_to_end - _start_to_ot
-    else:
-        raw_ot_min = 0
-    # Hora extra arredondada SEPARADAMENTE a partir do valor bruto (não
-    # derivada do net_min já truncado) — regra MHLW 昭63.3.14 基発150号:
-    # cada rubrica é arredondada por dia, individualmente, antes de somar
-    # o mês. Ainda limitada ao net_min como teto de sanidade.
-    ot_min = min(truncate_minutes(raw_ot_min, block, round_mode), net_min)
-    result["overtime_minutes"] = ot_min
-    result["regular_minutes"]  = net_min - ot_min
+    # Resolver os intervalos informados (se houver) para datetime ancorado
+    _resolved_periods = []
     if break_periods:
-        _resolved_periods = []
         for _bp_s, _bp_e in break_periods:
             _bs = _anchor_to_shift(start_dt, _bp_s)
             _be = _anchor_to_shift(_bs, _bp_e) if _bs else None
             if _bs and _be:
                 _resolved_periods.append((_bs, _be))
-        raw_night_min = night_minutes_worked(start_dt, end_dt, _resolved_periods)
+
+    if _resolved_periods:
+        # ── Engine de linha do tempo (v2.38) ──────────────────────
+        # Quando a POSIÇÃO real do intervalo é conhecida (não só a
+        # duração), constrói a linha do tempo do turno inteira, corta
+        # nos pontos onde a classificação muda (intervalo, hora extra,
+        # fronteiras do adicional noturno 22h/5h), e só então soma os
+        # minutos de cada categoria. Isso resolve, por construção, casos
+        # que a fórmula antiga (baseada em totais) não conseguia tratar
+        # corretamente: intervalo parcialmente noturno, intervalo dentro
+        # da janela de hora extra, múltiplos intervalos. Sugestão de
+        # auditoria externa do projeto — ver PROBLEMAS_RECORRENTES.md.
+        segmentos = build_timeline_segments(start_dt, end_dt, ot_dt, _resolved_periods)
+        trabalhados = [s for s in segmentos if not s["is_break"]]
+        net_min     = sum(s["minutes"] for s in trabalhados)
+        raw_ot_min  = sum(s["minutes"] for s in trabalhados if s["is_overtime"])
+        raw_night_min = sum(s["minutes"] for s in trabalhados if s["is_night"])
+        result["net_minutes"] = net_min
+        jikyuu_per_min = jikyuu / 60.0
+        # Arredondamento por rubrica, igual ao caminho antigo — mas sem
+        # precisar de nenhum "min(x, net_min)" como rede de segurança,
+        # já que a soma dos segmentos nunca pode passar do total do turno
+        ot_min    = truncate_minutes(raw_ot_min, block, round_mode)
+        night_min = truncate_minutes(raw_night_min, block, round_mode)
+        result["overtime_minutes"] = ot_min
+        result["regular_minutes"]  = net_min - ot_min
+        result["night_minutes"]    = night_min
     else:
+        # ── Fórmula original (v2.9-v2.33) ─────────────────────────
+        # Mantida INTACTA — validada contra 5 holerites reais (2021,
+        # 2022, fev/mar/abr 2026) com ¥0 de diferença. Só entra aqui
+        # quando não há informação de POSIÇÃO do intervalo (a maioria
+        # dos usuários, que só configuram a duração) — sem essa
+        # informação, a engine de linha do tempo não tem como saber
+        # onde cortar, então não haveria ganho de precisão em trocar.
+        gross_min = minutes_between(start_dt, end_dt)
+        net_min   = max(0, truncate_minutes(gross_min - break_min, block, round_mode))
+
+        result["net_minutes"]      = net_min
+        jikyuu_per_min             = jikyuu / 60.0
+        _start_to_ot  = minutes_between(start_dt, ot_dt)
+        _start_to_end = minutes_between(start_dt, end_dt)
+        if _start_to_end > _start_to_ot:
+            raw_ot_min = _start_to_end - _start_to_ot
+        else:
+            raw_ot_min = 0
+        # Hora extra arredondada SEPARADAMENTE a partir do valor bruto (não
+        # derivada do net_min já truncado) — regra MHLW 昭63.3.14 基発150号:
+        # cada rubrica é arredondada por dia, individualmente, antes de somar
+        # o mês. Ainda limitada ao net_min como teto de sanidade.
+        ot_min = min(truncate_minutes(raw_ot_min, block, round_mode), net_min)
+        result["overtime_minutes"] = ot_min
+        result["regular_minutes"]  = net_min - ot_min
         raw_night_min = night_minutes_in_range(start_dt, end_dt)
-    # Adicional noturno também arredondado separadamente a partir do bruto,
-    # em vez de só herdar o cap do net_min sem arredondamento próprio.
-    night_min                  = min(truncate_minutes(raw_night_min, block, round_mode), net_min)
-    result["night_minutes"]    = night_min
+        # Adicional noturno também arredondado separadamente a partir do bruto,
+        # em vez de só herdar o cap do net_min sem arredondamento próprio.
+        night_min                  = min(truncate_minutes(raw_night_min, block, round_mode), net_min)
+        result["night_minutes"]    = night_min
     holiday_premium            = 0.35 if is_holiday else 0.0
 
     # Acréscimo por hora vindo de adicionais fixos mensais (リーダー手当 etc.)
@@ -1040,7 +1154,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607060439"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607010336"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 

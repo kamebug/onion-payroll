@@ -46,6 +46,8 @@ calculate_shift_pay        = FUNCS["calculate_shift_pay"]
 night_minutes_worked       = FUNCS["night_minutes_worked"]
 night_minutes_in_range     = FUNCS["night_minutes_in_range"]
 parse_hhmm                 = FUNCS["parse_hhmm"]
+build_timeline_segments    = FUNCS["build_timeline_segments"]
+_anchor_to_shift            = FUNCS["_anchor_to_shift"]
 compute_monthly_forecast   = FUNCS["compute_monthly_forecast"]
 generate_4x2_calendar      = FUNCS["generate_4x2_calendar"]
 generate_weekly_calendar   = FUNCS["generate_weekly_calendar"]
@@ -875,6 +877,92 @@ class TestIntervalosDetalhados(unittest.TestCase):
                           night_minutes_in_range(s, e))
         self.assertEqual(night_minutes_worked(s, e, []),
                           night_minutes_in_range(s, e))
+
+
+class TestEngineLinhaDoTempo(unittest.TestCase):
+    """Valida a engine de segmentação temporal (v2.38), sugerida por
+    auditoria externa do projeto — resolve casos que a fórmula antiga
+    (baseada em totais) não conseguia tratar corretamente: intervalo
+    parcialmente noturno, intervalo dentro da janela de hora extra,
+    múltiplos intervalos. Só é usada quando a POSIÇÃO do intervalo é
+    conhecida (break_periods) — sem isso, mantém a fórmula antiga
+    intacta (validada contra 5 holerites reais, ¥0 de diferença)."""
+
+    def test_segmentos_cobrem_o_turno_sem_lacuna_nem_sobreposicao(self):
+        start = parse_hhmm("20:30")
+        end = parse_hhmm("08:35")
+        ot = _anchor_to_shift(start, "06:35")
+        segs = build_timeline_segments(start, end, ot, [])
+        total = sum(s["minutes"] for s in segs)
+        self.assertEqual(total, 725)  # 12h05min gross
+
+    def test_intervalo_parcialmente_noturno_e_dividido_na_fronteira(self):
+        start = parse_hhmm("20:30")
+        end = parse_hhmm("08:35")
+        ot = _anchor_to_shift(start, "06:35")
+        bp_start = _anchor_to_shift(start, "21:45")
+        bp_end = _anchor_to_shift(bp_start, "22:15")
+        segs = build_timeline_segments(start, end, ot, [(bp_start, bp_end)])
+        breaks = [s for s in segs if s["is_break"]]
+        self.assertEqual(len(breaks), 2, "intervalo deveria dividir em 2 na fronteira das 22h")
+        self.assertEqual(breaks[0]["minutes"], 15)
+        self.assertFalse(breaks[0]["is_night"])
+        self.assertEqual(breaks[1]["minutes"], 15)
+        self.assertTrue(breaks[1]["is_night"])
+
+    def test_sem_break_periods_usa_formula_antiga_sem_mudanca(self):
+        # Mesmo cenário, com e sem break_periods=None explícito — deve
+        # dar EXATAMENTE o mesmo resultado (retrocompatibilidade total)
+        r1 = calculate_shift_pay(1590, "night", base_shift="night",
+                                  start_str="20:35", end_str="08:35", break_min=65,
+                                  ot_start_str="06:35")
+        r2 = calculate_shift_pay(1590, "night", base_shift="night",
+                                  start_str="20:35", end_str="08:35", break_min=65,
+                                  ot_start_str="06:35", break_periods=None)
+        self.assertEqual(r1, r2)
+
+    def test_intervalo_multiplo_soma_minutos_corretamente(self):
+        r = calculate_shift_pay(
+            1590, "night", base_shift="night",
+            start_str="20:30", end_str="08:35", break_min=65,
+            ot_start_str="06:35",
+            break_periods=[("21:45", "22:15"), ("01:00", "01:15"), ("06:00", "06:20")],
+        )
+        self.assertEqual(r["net_minutes"], 660)       # 725 - 65
+        self.assertEqual(r["overtime_minutes"], 120)  # 06:35-08:35, sem intervalo nesse trecho
+        self.assertEqual(r["regular_minutes"], 540)
+        self.assertEqual(r["night_minutes"], 390)     # 420 brutos - 30min de intervalo noturno
+
+    def test_intervalo_dentro_da_hora_extra_reduz_overtime_minutes(self):
+        # Caso que a fórmula ANTIGA calculava errado: intervalo dentro
+        # da janela de hora extra não reduzia o overtime_minutes, só
+        # limitava o teto via min(raw_ot_min, net_min) — sem efeito
+        # quando raw_ot_min já era menor que net_min
+        r = calculate_shift_pay(
+            1590, "night", base_shift="night",
+            start_str="20:30", end_str="08:35", break_min=15,
+            ot_start_str="06:35",
+            break_periods=[("07:00", "07:15")],
+        )
+        self.assertEqual(r["overtime_minutes"], 105)  # 120 brutos - 15min de intervalo
+        self.assertEqual(r["net_minutes"], 710)
+        self.assertEqual(r["regular_minutes"], 605)
+
+    def test_soma_dos_segmentos_trabalhados_bate_com_net_minutes(self):
+        # Verificação de consistência interna: a soma dos segmentos NÃO
+        # marcados como intervalo deve ser exatamente igual a net_minutes
+        start = parse_hhmm("20:30")
+        end = parse_hhmm("08:35")
+        ot = _anchor_to_shift(start, "06:35")
+        bp1 = (_anchor_to_shift(start, "22:30"), _anchor_to_shift(start, "23:15"))
+        segs = build_timeline_segments(start, end, ot, [bp1])
+        trabalhados = sum(s["minutes"] for s in segs if not s["is_break"])
+        r = calculate_shift_pay(
+            1590, "night", base_shift="night",
+            start_str="20:30", end_str="08:35", break_min=45,
+            ot_start_str="06:35", break_periods=[("22:30", "23:15")],
+        )
+        self.assertEqual(trabalhados, r["net_minutes"])
 
 
 if __name__ == "__main__":
