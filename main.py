@@ -909,6 +909,13 @@ DEFAULT_SETTINGS = {
     "hire_date": None,  # Data de Admissão — separada de anchor_date (turno), usada só para Yukyu
     "odd_bonus": 50000, "deduction_mode": "historical", "fixed_deduction": 45000,
     "block": 1, "round_mode": "truncate", "pin_enabled": False,
+    # v2.37: REVERTIDO — gravar 2720/3,11 como padrão universal (v2.36)
+    # estava errado, porque esse valor é específico da empresa de UM
+    # usuário. O app é distribuído publicamente (tem LICENSE, disclaimer,
+    # vídeo promocional) — outros usuários com outra empresa (ou sem
+    # esse adicional) ficariam com o cálculo errado por causa de um
+    # padrão que não é universal. Volta a 0, neutro e correto para
+    # qualquer instalação nova.
     "premium_allowances_monthly": 0, "premium_standard_hours": 144,
     "night_addon_extra": 0,
     "anchor_group": None,
@@ -1033,7 +1040,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607060400"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607010336"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -3807,26 +3814,29 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
     # ── Seções do manual ─────────────────────────────────────────────
     APP_URL = "https://kamebug.github.io/onion-payroll/"
     VIDEO_URL = "https://youtube.com/shorts/gOclnXQZ5SM"  # v3 do roteiro, frases hedged
-    # v2.35: botões de copiar/abrir removidos. Depois de várias tentativas
-    # (page.set_clipboard, page.launch_url, page.open, TextButton com e
-    # sem confirmação inline) o usuário reportou que NENHUMA delas
-    # funcionava de verdade no dispositivo real — só texto puro
-    # selecionável, comprovadamente estável em outras partes do app,
-    # continua aqui. Ver PROBLEMAS_RECORRENTES.md.
+    # v2.37: trocado ft.Text(selectable=True) por ft.TextField(read_only=True)
+    # — sugestão do usuário, ainda não testada antes nesta conversa.
+    # TextField é widget de INPUT nativo (usado em dezenas de lugares
+    # já comprovados no app), diferente de Text/SelectableText — pode
+    # integrar melhor com o menu nativo de Copiar/Selecionar do sistema
+    # operacional (Android/iOS) do que um Text simplesmente selecionável.
+
+    def _link_readonly_field(valor):
+        return ft.TextField(
+            value=valor, read_only=True,
+            text_align=ft.TextAlign.CENTER,
+            bgcolor="#2A2A2A", color=ACCENT_LITE,
+            border_color="#333333", focused_border_color="#00D2C6",
+            text_size=12,
+        )
 
     share_section = ft.Container(
         content=ft.Column(controls=[
             _title("📤 Compartilhar o Onion Payroll"),
-            _p("Copie o link (toque e segure o texto) e envie por mensagem para um colega peelar o próprio contracheque também:"),
-            ft.Row(controls=[
-                ft.Text(APP_URL, size=12, color=ACCENT_LITE, selectable=True,
-                        weight=ft.FontWeight.W_600),
-            ], alignment=ft.MainAxisAlignment.CENTER),
+            _p("Toque e segure o campo abaixo para copiar o link e enviar por mensagem para um colega peelar o próprio contracheque também:"),
+            _link_readonly_field(APP_URL),
             _p("Vídeo de apresentação (30s) — abra e compartilhe direto do YouTube:"),
-            ft.Row(controls=[
-                ft.Text(VIDEO_URL, size=12, color=ACCENT_LITE, selectable=True,
-                        weight=ft.FontWeight.W_600),
-            ], alignment=ft.MainAxisAlignment.CENTER),
+            _link_readonly_field(VIDEO_URL),
         ], spacing=8, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
         padding=12, bgcolor=BG_CARD, border_radius=12,
         margin=ft.Padding(left=0, right=0, top=0, bottom=10),
@@ -4156,6 +4166,13 @@ async def main(page: ft.Page):
     # de verdade (não só o default), trata como "já confirmado".
     if isinstance(_raw_s, dict) and "cycle_type" in _raw_s and "cycle_type_confirmed" not in _raw_s:
         settings["cycle_type_confirmed"] = True
+    # Migração v2.36 REVERTIDA na v2.37 — aplicava ¥2.720 pra qualquer
+    # usuário com o campo em 0, mas isso inclui usuários NOVOS de
+    # empresas diferentes cujo valor correto de verdade É 0. Sem forma
+    # confiável de diferenciar "usuário antigo desta empresa específica"
+    # de "usuário novo de outra empresa" sem a tela visível, a correção
+    # segura é não migrar nada — cada instalação fica com 0 (neutro) até
+    # decidirmos uma forma de calibração que não dependa de hardcode.
     _mem_cache[KEY_SETTINGS] = settings
     history   = load_json(page, KEY_HISTORY,   [])
     overrides = load_json(page, KEY_OVERRIDES, {})
