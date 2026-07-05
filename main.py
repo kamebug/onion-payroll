@@ -1033,7 +1033,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607060310"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607010336"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -2901,7 +2901,7 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
         periodos_list_container = ft.Container(content=ft.Column(controls=[]),
                                                 visible=_periodos_ativos)
         add_periodo_btn = ft.OutlinedButton(
-            "+ Adicionar Intervalo", icon="add",
+            "+ Adicionar Intervalo",
             on_click=_adicionar_periodo, visible=_periodos_ativos,
         )
         _rebuild_periodos()
@@ -3924,10 +3924,13 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
 
     def _copiar_app(e):
         page.set_clipboard(APP_URL)
-        page.open(ft.SnackBar(ft.Text("Link copiado! Cole numa mensagem para compartilhar."), duration=2000))
+        copy_status_text.value = "✓ Copiado! Cole numa mensagem para compartilhar."
+        copy_status_text.update()
 
     def _abrir_video(e):
         page.launch_url(VIDEO_URL)
+
+    copy_status_text = ft.Text("", size=11, color=SUCCESS)
 
     share_section = ft.Container(
         content=ft.Column(controls=[
@@ -3938,6 +3941,7 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
                         weight=ft.FontWeight.W_600),
             ], alignment=ft.MainAxisAlignment.CENTER),
             ft.TextButton("📋 Copiar Link do App", on_click=_copiar_app),
+            copy_status_text,
             _p("Vídeo de apresentação (30s) — abra e compartilhe direto do YouTube:"),
             ft.Row(controls=[
                 ft.Text(VIDEO_URL, size=12, color=ACCENT_LITE, selectable=True,
