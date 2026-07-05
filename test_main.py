@@ -43,6 +43,9 @@ def carregar_funcoes_de_calculo():
 
 FUNCS = carregar_funcoes_de_calculo()
 calculate_shift_pay        = FUNCS["calculate_shift_pay"]
+night_minutes_worked       = FUNCS["night_minutes_worked"]
+night_minutes_in_range     = FUNCS["night_minutes_in_range"]
+parse_hhmm                 = FUNCS["parse_hhmm"]
 compute_monthly_forecast   = FUNCS["compute_monthly_forecast"]
 generate_4x2_calendar      = FUNCS["generate_4x2_calendar"]
 generate_weekly_calendar   = FUNCS["generate_weekly_calendar"]
@@ -215,6 +218,62 @@ class TestFaltaEYukyu(unittest.TestCase):
         # Não há um campo direto, mas o resultado deve ser diferente do normal
         normal = base_forecast()
         self.assertNotEqual(resultado["gross"], normal["gross"])
+
+    def test_yukyu_usa_jornada_normal_configurada_nao_8h_fixo(self):
+        # Reportado pelo usuário: turno 20:30-08:35, intervalo 65min, OT
+        # às 06:35 → jornada normal real é 9h, não 8h. O Yukyu sem
+        # horário explícito deve pagar 9h, não um valor fixo de 8h.
+        r = calculate_shift_pay(
+            jikyuu=1590, shift_type="yukyu",
+            base_shift="night", ot_start_str="06:35",
+            cfg_start_str="20:30", cfg_end_str="08:35",
+            break_min=65,
+        )
+        self.assertEqual(r["net_minutes"], 540)  # 9h
+        self.assertEqual(r["base_pay"], 1590 * 9)
+
+    def test_yukyu_com_jornada_de_8h_continua_dando_8h(self):
+        # Turno com jornada líquida de 8h de verdade (entrada 08:35, OT
+        # às 17:40 — 8h35 depois do jikyuu extraindo 65min de intervalo,
+        # equivalente a exatamente 8h líquidas)
+        r = calculate_shift_pay(
+            jikyuu=1590, shift_type="yukyu",
+            base_shift="day", ot_start_str="17:40",
+            cfg_start_str="08:35", cfg_end_str="20:35",
+            break_min=65,
+        )
+        self.assertEqual(r["net_minutes"], 480)  # 8h
+        self.assertEqual(r["base_pay"], 1590 * 8)
+
+    def test_yukyu_sem_configuracao_cai_no_fallback_8h(self):
+        # Sem base_shift/ot_start_str/cfg_start_str/cfg_end_str
+        # informados (compatibilidade com chamadas antigas), continua
+        # caindo no padrão diurno 08:35→18:35, que dá exatamente 8h55
+        # (não mais um "8h" mágico, mas também não quebra)
+        r = calculate_shift_pay(jikyuu=1590, shift_type="yukyu")
+        self.assertGreater(r["base_pay"], 0)
+
+    def test_ot_start_configurado_afeta_dia_normal_tambem(self):
+        # Confirma que o bug não era só do Yukyu: o limiar de hora extra
+        # configurado pelo usuário (ot_start_str) precisa afetar o
+        # cálculo de um dia NORMAL de trabalho também, não só o Yukyu.
+        # Turno 20:30-08:35, intervalo 65min, testando dois limiares de
+        # OT diferentes — o resultado de horas extras deve mudar.
+        r_ot_06h35 = calculate_shift_pay(
+            jikyuu=1590, shift_type="night", base_shift="night",
+            start_str="20:30", end_str="08:35", break_min=65,
+            ot_start_str="06:35",
+        )
+        r_ot_07h35 = calculate_shift_pay(
+            jikyuu=1590, shift_type="night", base_shift="night",
+            start_str="20:30", end_str="08:35", break_min=65,
+            ot_start_str="07:35",
+        )
+        self.assertGreater(
+            r_ot_06h35["overtime_minutes"], r_ot_07h35["overtime_minutes"],
+            "Limiar de OT mais cedo (06:35) deve gerar mais minutos de "
+            "hora extra do que um limiar mais tarde (07:35)"
+        )
 
 
 class TestDesconto(unittest.TestCase):
@@ -754,6 +813,68 @@ class TestYukyu(unittest.TestCase):
         self.assertEqual(_add_months(date(2026, 1, 31), 1), date(2026, 2, 28))
 
 
+
+
+class TestIntervalosDetalhados(unittest.TestCase):
+    """Valida a exclusão de intervalos/pausas do cálculo de adicional
+    noturno (v2.33) — recurso opcional, pedido pelo usuário pra empresas
+    com pausas curtas (ex: 10min a cada 2h) dentro do turno noturno."""
+
+    def test_sem_intervalos_comportamento_identico_ao_antigo(self):
+        r = calculate_shift_pay(
+            jikyuu=1590, shift_type="night", base_shift="night",
+            start_str="20:30", end_str="08:35", break_min=65,
+            ot_start_str="06:35",
+        )
+        self.assertEqual(r["night_minutes"], 420)
+
+    def test_intervalos_dentro_do_periodo_noturno_sao_excluidos(self):
+        r = calculate_shift_pay(
+            jikyuu=1590, shift_type="night", base_shift="night",
+            start_str="20:30", end_str="08:35", break_min=65,
+            ot_start_str="06:35",
+            break_periods=[("22:30", "22:40"), ("00:30", "00:40"),
+                           ("02:30", "02:40"), ("04:30", "04:40")],
+        )
+        # 420min (sem exclusão) - 40min (4 pausas de 10min) = 380min
+        self.assertEqual(r["night_minutes"], 380)
+
+    def test_intervalo_fora_do_periodo_noturno_nao_afeta(self):
+        # Pausa às 20:45 (antes das 22h) não deve mudar nada no adicional
+        # noturno, já que está fora do período 22h-05h
+        r = calculate_shift_pay(
+            jikyuu=1590, shift_type="night", base_shift="night",
+            start_str="20:30", end_str="08:35", break_min=65,
+            ot_start_str="06:35",
+            break_periods=[("20:45", "20:55")],
+        )
+        self.assertEqual(r["night_minutes"], 420)
+
+    def test_intervalo_apos_meia_noite_ancora_no_dia_seguinte(self):
+        # Turno cruza a meia-noite — uma pausa "01:00" deve ser ancorada
+        # no dia seguinte ao início do turno (20:30), não confundida
+        # com 01:00 do mesmo dia (que seria antes do turno começar)
+        periodos = night_minutes_worked
+        r_com = calculate_shift_pay(
+            jikyuu=1590, shift_type="night", base_shift="night",
+            start_str="20:30", end_str="08:35", break_min=65,
+            ot_start_str="06:35",
+            break_periods=[("01:00", "01:15")],
+        )
+        r_sem = calculate_shift_pay(
+            jikyuu=1590, shift_type="night", base_shift="night",
+            start_str="20:30", end_str="08:35", break_min=65,
+            ot_start_str="06:35",
+        )
+        self.assertEqual(r_sem["night_minutes"] - r_com["night_minutes"], 15)
+
+    def test_night_minutes_worked_sem_periodos_igual_a_night_minutes_in_range(self):
+        s = parse_hhmm("20:30")
+        e = parse_hhmm("08:35")
+        self.assertEqual(night_minutes_worked(s, e, None),
+                          night_minutes_in_range(s, e))
+        self.assertEqual(night_minutes_worked(s, e, []),
+                          night_minutes_in_range(s, e))
 
 
 if __name__ == "__main__":

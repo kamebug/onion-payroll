@@ -130,6 +130,57 @@ def night_minutes_in_range(shift_start: datetime, shift_end: datetime) -> int:
     return count
 
 
+def _anchor_to_shift(base_start: datetime, time_str: str) -> Optional[datetime]:
+    """Ancora um horário HH:MM ao 'dia lógico' do turno, relativo a
+    base_start — mesma convenção de virada de meia-noite já usada em
+    minutes_between(): se o horário informado for numericamente
+    ANTERIOR ao início de referência, assume que é no dia seguinte
+    (comum em intervalos de turnos noturnos que cruzam a meia-noite,
+    ex: turno 20:30→08:35 com um intervalo às 01:00)."""
+    dt = parse_hhmm(time_str)
+    if dt is None:
+        return None
+    if dt < base_start:
+        dt += timedelta(days=1)
+    return dt
+
+
+def night_minutes_worked(shift_start: datetime, shift_end: datetime,
+                          break_periods: list = None) -> int:
+    """Conta minutos entre 22:00-05:00 que caem dentro do turno,
+    EXCLUINDO qualquer minuto que também caia dentro de um período de
+    intervalo/pausa (break_periods).
+
+    Sem isso, empresas que aplicam vários intervalos curtos (ex: 10min
+    a cada 2h) durante o turno noturno tinham o adicional noturno
+    inflado — a contagem antiga (`night_minutes_in_range`) não sabia
+    diferenciar minuto trabalhado de minuto de pausa, só olhava o
+    relógio.
+
+    `break_periods`: lista de tuplas (start_dt, end_dt) já ancoradas
+    (ver `_anchor_to_shift`). Se None ou vazia, comportamento IDÊNTICO
+    a `night_minutes_in_range` (retrocompatível — recurso opcional,
+    desligado por padrão).
+    """
+    count = 0
+    cursor = shift_start
+    end = shift_end
+    if end <= shift_start:
+        end += timedelta(days=1)
+    while cursor < end:
+        is_night = cursor.hour >= 22 or cursor.hour < 5
+        is_break = False
+        if break_periods:
+            for bp_start, bp_end in break_periods:
+                if bp_start <= cursor < bp_end:
+                    is_break = True
+                    break
+        if is_night and not is_break:
+            count += 1
+        cursor += timedelta(minutes=1)
+    return count
+
+
 def calculate_shift_pay(
     jikyuu: int, shift_type: str, start_str: str = "", end_str: str = "",
     break_min: int = 65, block: int = 1, is_holiday: bool = False,
@@ -137,6 +188,9 @@ def calculate_shift_pay(
     round_mode: str = "truncate",
     fixed_allowances_monthly: float = 0, standard_monthly_hours: float = 144,
     night_addon_extra: float = 0,
+    ot_start_str: str = "",
+    cfg_start_str: str = "", cfg_end_str: str = "",
+    break_periods: list = None,
 ) -> dict:
     """
     shift_type: "night"|"day"|"holiday"|"yukyu"|"absent" — determina o
@@ -147,6 +201,27 @@ def calculate_shift_pay(
         ser passado aqui, pois o feriado pode cair em QUALQUER turno.
         Se não informado, assume o mesmo valor de shift_type (compatível
         com chamadas antigas que não differenciavam).
+    ot_start_str: horário configurado de início da hora extra (ex:
+        "06:35"). Se não informado, cai no padrão "06:35"/"18:35" por
+        turno (comportamento antigo).
+    cfg_start_str, cfg_end_str: horário de entrada/saída CONFIGURADO
+        pelo usuário (ex: "20:30"/"08:35") — usado, junto com
+        `ot_start_str`, para calcular a JORNADA NORMAL do Yukyu sem
+        horário explícito (ver abaixo). Sem isso, o Yukyu sempre usava
+        8h fixo E o horário hardcoded "20:35"/"08:35" do turno padrão,
+        ignorando a jornada real configurada (ex: turnos de 9h como
+        20:30-08:35 com intervalo de 65min e OT às 06:35 — a jornada
+        normal real é 9h, não 8h).
+    break_periods: lista de (start_str, end_str) — horários HH:MM de
+        cada intervalo/pausa dentro do turno (ex: [("22:30","22:40"),
+        ("00:30","00:40")] para pausas curtas de 10min a cada 2h).
+        Recurso OPCIONAL/avançado: se None ou vazia, o adicional
+        noturno conta todo o intervalo 22h-05h sem excluir pausas
+        (comportamento antigo). Quando informado, minutos de pausa que
+        caem dentro de 22h-05h são excluídos do adicional noturno —
+        sem isso, empresas com pausas curtas durante o turno noturno
+        tinham o adicional inflado (pausa contada como se fosse
+        trabalhada).
 
     fixed_allowances_monthly: soma de adicionais fixos mensais (ex: リーダー
         手当, 管理手当, 技術手当) que por lei (労基法37条 + regras de exclusão
@@ -179,6 +254,32 @@ def calculate_shift_pay(
         result["total_gross"] = result["base_pay"]
         return result
 
+    # Determinar o turno EFETIVO para horários/limiar de OT — calculado
+    # ANTES do branch de Yukyu, pra podermos usar a JORNADA NORMAL
+    # configurada (não um valor fixo) mesmo quando o Yukyu é marcado sem
+    # horário explícito.
+    _effective_shift = base_shift if base_shift else shift_type
+
+    if _effective_shift == "night":
+        default_start, default_end, _default_ot = "20:35", "08:35", "06:35"
+    elif _effective_shift in ("day", "holiday"):
+        default_start, default_end, _default_ot = "08:35", "20:35", "18:35"
+    elif shift_type == "yukyu":
+        # Yukyu sem base_shift informado (turno real desconhecido aqui) —
+        # cai no padrão diurno só como referência neutra de jornada.
+        default_start, default_end, _default_ot = "08:35", "20:35", "18:35"
+    else:
+        return result
+
+    # cfg_start_str/cfg_end_str (horário CONFIGURADO pelo usuário) tem
+    # prioridade sobre o horário hardcoded do turno padrão — sem isso, o
+    # Yukyu sem horário explícito usava "20:35"/"08:35" fixo mesmo que o
+    # usuário tivesse configurado "20:30"/"08:35" (ou qualquer outro).
+    default_start = cfg_start_str if cfg_start_str else default_start
+    default_end   = cfg_end_str   if cfg_end_str   else default_end
+
+    _ot_final = ot_start_str if ot_start_str else _default_ot
+
     if shift_type == "yukyu":
         if start_str and end_str:
             # Yukyu parcial: calcular pelo horário real, SEM OT e SEM noturno
@@ -191,21 +292,26 @@ def calculate_shift_pay(
                 result["base_pay"]    = shisha_gofuuu((jikyuu / 60.0) * net_min)
                 result["total_gross"] = result["base_pay"]
                 return result
-        # Sem horário ou horário inválido: 8h base fixo (padrão)
-        result["base_pay"] = shisha_gofuuu(jikyuu * 8)
+        # Sem horário: usar a JORNADA NORMAL configurada (do início do
+        # turno até o início da hora extra, descontando intervalo) — não
+        # mais um valor fixo de 8h. Reflete o que a pessoa realmente
+        # ganharia num dia comum de trabalho (Art. 39 §9 da Lei
+        # Trabalhista: Yukyu paga o salário do dia normal de trabalho,
+        # que pode ser 9h, 8h, ou outro valor, conforme o turno real).
+        _yk_start_dt = parse_hhmm(default_start)
+        _yk_ot_dt    = parse_hhmm(_ot_final)
+        if _yk_start_dt and _yk_ot_dt:
+            _yk_gross_min = minutes_between(_yk_start_dt, _yk_ot_dt)
+            _yk_net_min   = max(0, truncate_minutes(_yk_gross_min - break_min, block, round_mode))
+            result["net_minutes"] = _yk_net_min
+            result["base_pay"]    = shisha_gofuuu((jikyuu / 60.0) * _yk_net_min)
+        else:
+            # Fallback final (não deveria ocorrer com horários válidos)
+            result["base_pay"] = shisha_gofuuu(jikyuu * 8)
         result["total_gross"] = result["base_pay"]
         return result
 
-    # Determinar o turno EFETIVO para horários/limiar de OT:
-    # usa base_shift se informado (caso de feriado/domingo no turno real
-    # do funcionário), senão cai no comportamento antigo (shift_type)
-    _effective_shift = base_shift if base_shift else shift_type
-
-    if _effective_shift == "night":
-        default_start, default_end, ot_start_str = "20:35", "08:35", "06:35"
-    elif _effective_shift in ("day", "holiday"):
-        default_start, default_end, ot_start_str = "08:35", "20:35", "18:35"
-    else:
+    if _effective_shift not in ("night", "day", "holiday"):
         return result
 
     s_str = start_str if start_str else default_start
@@ -213,7 +319,7 @@ def calculate_shift_pay(
 
     start_dt = parse_hhmm(s_str)
     end_dt   = parse_hhmm(e_str)
-    ot_dt    = parse_hhmm(ot_start_str)
+    ot_dt    = parse_hhmm(_ot_final)
 
     if not start_dt or not end_dt or not ot_dt:
         return result
@@ -242,7 +348,16 @@ def calculate_shift_pay(
     ot_min = min(truncate_minutes(raw_ot_min, block, round_mode), net_min)
     result["overtime_minutes"] = ot_min
     result["regular_minutes"]  = net_min - ot_min
-    raw_night_min               = night_minutes_in_range(start_dt, end_dt)
+    if break_periods:
+        _resolved_periods = []
+        for _bp_s, _bp_e in break_periods:
+            _bs = _anchor_to_shift(start_dt, _bp_s)
+            _be = _anchor_to_shift(_bs, _bp_e) if _bs else None
+            if _bs and _be:
+                _resolved_periods.append((_bs, _be))
+        raw_night_min = night_minutes_worked(start_dt, end_dt, _resolved_periods)
+    else:
+        raw_night_min = night_minutes_in_range(start_dt, end_dt)
     # Adicional noturno também arredondado separadamente a partir do bruto,
     # em vez de só herdar o cap do net_min sem arredondamento próprio.
     night_min                  = min(truncate_minutes(raw_night_min, block, round_mode), net_min)
@@ -521,6 +636,7 @@ def compute_monthly_forecast(
     night_addon_extra: float = 0,
     anchor_group: str = None,
     alt_monthly_rest_pattern: str = "5x2", shift_anchor_date: date = None,
+    break_periods: list = None,
 ) -> dict:
     # ── Seleção do tipo de ciclo ──────────────────────────────────
     _alt_shift_map = {}  # dia -> "day"/"night" (só usado se cycle_type=alternating*)
@@ -652,6 +768,9 @@ def compute_monthly_forecast(
             fixed_allowances_monthly=premium_allowances_monthly,
             standard_monthly_hours=premium_standard_hours,
             night_addon_extra=night_addon_extra,
+            ot_start_str=_ot,  # horário configurado de início da hora extra
+            cfg_start_str=_start, cfg_end_str=_end,  # horário de entrada/saída configurado
+            break_periods=break_periods,
         )
         if (is_sunday and not is_holiday) or status == "legal":
             total_legal += pay["total_gross"]
@@ -796,6 +915,8 @@ DEFAULT_SETTINGS = {
     "cycle_type_confirmed": False,
     "disclaimer_accepted": False,
     "disclaimer_accepted_at": None,  # timestamp ISO de quando o usuário clicou Aceitar
+    "break_periods_enabled": False,   # recurso avançado opcional (v2.33)
+    "break_periods_detailed": [],     # lista de {"start":"HH:MM","end":"HH:MM"}
     "shift_type": "night", "shift_start": "20:35", "shift_end": "08:35",
     "shift_break": 65, "shift_ot": "06:35", "extra_bonus": 0,
     "fixed_monthly_bonus": 0,  # adicional fixo todo mês (ex: liderança)
@@ -912,7 +1033,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607051304"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607010336"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -1174,7 +1295,13 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
             except: brk = 65
             jikyuu  = int(state["settings"].get("jikyuu", 1500))
             grp     = state["settings"].get("group", "B")
-            stype   = "night" if grp == "B" else "day"
+            # Prefere o Turno explícito configurado (⚙️ Config) — a
+            # heurística por grupo só entra como último recurso, igual
+            # ao que compute_monthly_forecast já faz.
+            stype   = state["settings"].get("shift_type") or ("night" if grp == "B" else "day")
+            ot_cfg  = state["settings"].get("shift_ot") or ("06:35" if stype == "night" else "18:35")
+            cfg_start = state["settings"].get("shift_start") or ("20:35" if stype == "night" else "08:35")
+            cfg_end   = state["settings"].get("shift_end")   or ("08:35" if stype == "night" else "20:35")
             is_hol_day = day_num in month_holidays
             cycle_st   = cycle.get(day_num, "off")
             is_off_day = (cycle_st == "off") or is_hol_day
@@ -1193,17 +1320,29 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
                         f"{yen(pay['base_pay'])} (sem 残業/noturno)"
                     )
                 else:
-                    pay = calculate_shift_pay(jikyuu, "yukyu")
+                    # Sem horário: usa a JORNADA NORMAL configurada (não
+                    # mais 8h fixo) — precisa do base_shift/ot_start_str/
+                    # cfg_start_str/cfg_end_str reais pra bater com o que
+                    # compute_monthly_forecast calcula de verdade.
+                    pay = calculate_shift_pay(jikyuu, "yukyu",
+                                              break_min=brk, base_shift=stype,
+                                              ot_start_str=ot_cfg,
+                                              cfg_start_str=cfg_start, cfg_end_str=cfg_end)
+                    _horas_yk = pay["net_minutes"] / 60
                     preview_text.value = (
                         f"有休 dia completo: {yen(pay['base_pay'])} "
-                        f"(8h × ¥{jikyuu}/h, sem 残業/noturno)"
+                        f"({_horas_yk:g}h × ¥{jikyuu}/h, sem 残業/noturno)"
                     )
 
             elif is_off_day and not s:
                 # Folga/feriado sem horário preenchido
                 if yukyu_sw.value and is_hol_day:
-                    pay = calculate_shift_pay(jikyuu, "yukyu")
-                    preview_text.value = f"有休 em feriado: {yen(pay['base_pay'])} (8h base)"
+                    pay = calculate_shift_pay(jikyuu, "yukyu",
+                                              break_min=brk, base_shift=stype,
+                                              ot_start_str=ot_cfg,
+                                              cfg_start_str=cfg_start, cfg_end_str=cfg_end)
+                    _horas_yk = pay["net_minutes"] / 60
+                    preview_text.value = f"有休 em feriado: {yen(pay['base_pay'])} ({_horas_yk:g}h base)"
                 else:
                     preview_text.value = "Folga / feriado — sem trabalho registrado"
 
@@ -1214,7 +1353,8 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
                 pay = calculate_shift_pay(jikyuu, "holiday",
                                           start_str=s, end_str=e,
                                           break_min=brk, is_holiday=True,
-                                          base_shift=stype)
+                                          base_shift=stype, ot_start_str=ot_cfg,
+                                          cfg_start_str=cfg_start, cfg_end_str=cfg_end)
                 nm = pay["net_minutes"]
                 parts = [f"base {yen(pay['base_pay'])}",
                          f"休出 +{yen(pay['holiday_pay'])}"]
@@ -1230,7 +1370,9 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
             else:
                 # Dia de trabalho normal (com ou sem horário customizado)
                 pay = calculate_shift_pay(jikyuu, stype,
-                                          start_str=s, end_str=e, break_min=brk)
+                                          start_str=s, end_str=e, break_min=brk,
+                                          ot_start_str=ot_cfg,
+                                          cfg_start_str=cfg_start, cfg_end_str=cfg_end)
                 nm = pay["net_minutes"]
                 parts = [f"base {yen(pay['base_pay'])}"]
                 if pay["overtime_pay"]:
@@ -1699,6 +1841,11 @@ def build_holerite_tab(page: ft.Page, state: dict, refresh_all):
             alt_monthly_rest_pattern=settings.get("alt_monthly_rest_pattern", "5x2"),
             shift_anchor_date=(date.fromisoformat(settings["shift_anchor_date"])
                                 if settings.get("shift_anchor_date") else None),
+            break_periods=(
+                [(bp.get("start", ""), bp.get("end", ""))
+                 for bp in settings.get("break_periods_detailed", [])]
+                if settings.get("break_periods_enabled") else None
+            ),
         )
     except Exception:
         data = {"gross": 0, "deductions": 0, "net": 0,
@@ -2669,11 +2816,127 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
     shift_break_f = _tf_shift("Intervalo 休憩 (min)", "shift_break", "65", is_time=False)
     shift_ot_f    = _tf_shift("残業 Início Hora Extra (fim turno normal)", "shift_ot", "06:35", is_time=True)
 
+    # ── Intervalos Detalhados (avançado, opcional) — v2.33 ──────────
+    # Pedido do usuário: empresas com pausas curtas (ex: 10min a cada
+    # 2h) durante o turno noturno inflavam o adicional noturno, porque
+    # o cálculo antigo só sabia a DURAÇÃO total do intervalo, não QUANDO
+    # ele acontece — não dava pra saber se a pausa caía dentro do
+    # período 22h-05h. Recurso opcional: mantém o campo simples de
+    # duração pra quem não precisar, mas permite configurar horários
+    # exatos pra quem precisar de precisão no adicional noturno.
+    #
+    # É uma FUNÇÃO CONSTRUTORA (não um widget único) porque essa seção
+    # precisa aparecer tanto no turno fixo quanto no turno alternado —
+    # um mesmo widget não pode ter dois "pais" na árvore do Flet, então
+    # cada chamada gera uma instância nova e independente.
+    def _build_intervalos_detalhados_section():
+        def _periodo_row(idx, p):
+            def _blur_inicio(e):
+                v = normalize_hhmm(e.control.value)
+                e.control.value = v
+                e.control.update()
+                settings["break_periods_detailed"][idx]["start"] = v
+                save_json(page, KEY_SETTINGS, settings)
+
+            def _blur_fim(e):
+                v = normalize_hhmm(e.control.value)
+                e.control.value = v
+                e.control.update()
+                settings["break_periods_detailed"][idx]["end"] = v
+                save_json(page, KEY_SETTINGS, settings)
+
+            def _remover_periodo(e):
+                settings["break_periods_detailed"].pop(idx)
+                save_json(page, KEY_SETTINGS, settings)
+                _rebuild_periodos()
+
+            start_f = ft.TextField(
+                label="Início", value=p.get("start", ""), hint_text="HH:MM",
+                bgcolor="#2A2A2A", color="#F0F0F0",
+                border_color="#333333", focused_border_color="#00D2C6",
+                label_style=ft.TextStyle(color="#A0A0A0"),
+                on_blur=_blur_inicio, expand=1,
+            )
+            end_f = ft.TextField(
+                label="Fim", value=p.get("end", ""), hint_text="HH:MM",
+                bgcolor="#2A2A2A", color="#F0F0F0",
+                border_color="#333333", focused_border_color="#00D2C6",
+                label_style=ft.TextStyle(color="#A0A0A0"),
+                on_blur=_blur_fim, expand=1,
+            )
+            return ft.Row(controls=[
+                start_f, end_f,
+                ft.TextButton("Remover", on_click=_remover_periodo,
+                              style=ft.ButtonStyle(color=DANGER)),
+            ], spacing=6)
+
+        def _rebuild_periodos():
+            periodos = settings.get("break_periods_detailed", [])
+            linhas = [_periodo_row(i, p) for i, p in enumerate(periodos)]
+            if not linhas:
+                linhas = [ft.Text("Nenhum intervalo detalhado ainda.",
+                                   size=11, color=TEXT_MUTED, italic=True)]
+            periodos_list_container.content = ft.Column(controls=linhas, spacing=6, tight=True)
+            periodos_list_container.update()
+
+        def _adicionar_periodo(e):
+            settings.setdefault("break_periods_detailed", []).append({"start": "", "end": ""})
+            save_json(page, KEY_SETTINGS, settings)
+            _rebuild_periodos()
+
+        def _toggle_periodos(e):
+            settings["break_periods_enabled"] = e.control.value
+            save_json(page, KEY_SETTINGS, settings)
+            periodos_list_container.visible = e.control.value
+            add_periodo_btn.visible = e.control.value
+            periodos_list_container.update()
+            add_periodo_btn.update()
+
+        _periodos_ativos = bool(settings.get("break_periods_enabled", False))
+
+        periodos_switch = ft.Switch(
+            value=_periodos_ativos, active_color=ACCENT,
+            on_change=_toggle_periodos,
+        )
+        periodos_list_container = ft.Container(content=ft.Column(controls=[]),
+                                                visible=_periodos_ativos)
+        add_periodo_btn = ft.OutlinedButton(
+            "+ Adicionar Intervalo", icon="add",
+            on_click=_adicionar_periodo, visible=_periodos_ativos,
+        )
+        _rebuild_periodos()
+
+        return ft.Container(
+            content=ft.Column(controls=[
+                ft.Row(controls=[
+                    ft.Text("Intervalos Detalhados (avançado)", size=12,
+                            color=TEXT_SECONDARY, weight=ft.FontWeight.W_600,
+                            expand=True),
+                    periodos_switch,
+                ]),
+                ft.Text(
+                    "Pra cálculo preciso do adicional noturno quando há "
+                    "várias pausas curtas (ex: 10min a cada 2h). Se "
+                    "ativado, os horários informados aqui são usados só "
+                    "pra excluir pausas do período 22h-05h — não muda o "
+                    "cálculo de hora normal/extra, que continua usando a "
+                    "duração simples do intervalo acima.",
+                    size=9, color=TEXT_MUTED,
+                ),
+                periodos_list_container,
+                add_periodo_btn,
+            ], spacing=8, tight=True),
+            bgcolor=BG_SURFACE, border_radius=8, padding=10,
+            margin=ft.Padding(left=0, right=0, top=8, bottom=0),
+        )
+
+
     section_4x2_container = ft.Container(
         content=ft.Column(controls=[
             section_header("HORÁRIO DO TURNO 勤務時間"),
             ft.Row([shift_start_f, shift_end_f], spacing=8),
             ft.Row([shift_break_f, shift_ot_f], spacing=8),
+            _build_intervalos_detalhados_section(),
         ], spacing=8, tight=True),
         visible=(settings.get("cycle_type", "4x2") not in ("alternating", "alternating_monthly")),
     )
@@ -2683,6 +2946,7 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
             ft.Row([alt_day_start_f, alt_day_end_f], spacing=8),
             ft.Row([alt_night_start_f, alt_night_end_f], spacing=8),
             shift_break_f,
+            _build_intervalos_detalhados_section(),
         ], spacing=8, tight=True),
         visible=(settings.get("cycle_type", "4x2") in ("alternating", "alternating_monthly")),
     )

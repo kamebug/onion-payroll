@@ -34,7 +34,14 @@ Copy-Item "$ROOT\assets"           "$ROOT\build_src\assets" -Recurse -Force
 Write-Host ""
 Write-Host "Gerando build web..." -ForegroundColor Cyan
 Set-Location "$ROOT\build_src"
-& $FLET build web --base-url /$REPO
+# --web-renderer html (v2.33): o padrão do Flet e CanvasKit, que desenha
+# o app inteiro como uma unica imagem/canvas - o navegador nao ve texto
+# nem botoes de verdade, so "pixels". Isso explicava por que selecionar
+# o link nao mostrava opcao de copiar, e por que pressionar os botoes
+# por um tempo mostrava a opcao de imagem PNG (comportamento generico
+# do navegador para conteudo de canvas). O renderizador HTML produz
+# elementos DOM reais.
+& $FLET build web --base-url /$REPO --web-renderer html
 
 if ($LASTEXITCODE -ne 0) {
     Set-Location $ROOT
