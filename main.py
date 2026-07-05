@@ -794,6 +794,8 @@ DEFAULT_SETTINGS = {
     "night_addon_extra": 0,
     "anchor_group": None,
     "cycle_type_confirmed": False,
+    "disclaimer_accepted": False,
+    "disclaimer_accepted_at": None,  # timestamp ISO de quando o usuário clicou Aceitar
     "shift_type": "night", "shift_start": "20:35", "shift_end": "08:35",
     "shift_break": 65, "shift_ot": "06:35", "extra_bonus": 0,
     "fixed_monthly_bonus": 0,  # adicional fixo todo mês (ex: liderança)
@@ -910,7 +912,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607041234"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607010336"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -1827,7 +1829,9 @@ def build_holerite_tab(page: ft.Page, state: dict, refresh_all):
             ),
             ft.Container(
                 content=ft.Text(
-                    "⚠️ Valores estimados. Não substitui o holerite oficial. Consulte seu RH.",
+                    "⚠️ Valores estimados, fornecidos \"como está\", sem garantias. "
+                    "Não substitui o holerite oficial nem consultoria profissional. "
+                    "Detalhes em ❓ Ajuda.",
                     size=10, color=TEXT_MUTED,
                     text_align=ft.TextAlign.CENTER,
                     italic=True,
@@ -3287,6 +3291,20 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
                 ),
             ], spacing=10, tight=True)),
 
+            card(ft.Column(controls=[
+                section_header("TERMOS E LICENÇA"),
+                ft.Text(
+                    f"✅ Termos aceitos em: {settings.get('disclaimer_accepted_at') or '—'}",
+                    size=11, color=TEXT_SECONDARY,
+                ),
+                ft.Text(
+                    "Projeto distribuído sob Licença MIT — código aberto, "
+                    "gratuito, fornecido \"como está\", sem garantias. Veja o "
+                    "arquivo LICENSE no repositório do GitHub.",
+                    size=10, color=TEXT_MUTED,
+                ),
+            ], spacing=8, tight=True)),
+
             # ── Diagnóstico de Storage (temporário, para debug) ────────
             # Escondido atrás de switch — só quem está debugando um
             # problema de persistência precisa ver isso no dia a dia.
@@ -3632,23 +3650,36 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
     # ── Seções do manual ─────────────────────────────────────────────
     APP_URL = "https://kamebug.github.io/onion-payroll/"
     VIDEO_URL = "https://youtube.com/shorts/FRC0zbyuMI4"
-    # QR code e botões "Copiar Link" removidos (v2.18) — page.set_clipboard
-    # não estava funcionando de forma confiável. Os links ficam como texto
-    # selecionável (toque e segure para copiar, padrão do navegador).
+    # v2.28: o link do APP é pra compartilhar com alguém por mensagem —
+    # precisa COPIAR, não abrir. Já o vídeo faz mais sentido ABRIR (o
+    # YouTube tem botão de compartilhar próprio de lá). page.set_clipboard
+    # tinha sido removido (v2.18) suspeitando de não funcionar, mas isso
+    # foi durante a investigação de um bug que depois descobrimos ser
+    # outra coisa (_item() com largura errada, v2.25) — não relacionado
+    # a clipboard. Trazendo de volta com essa ressalva.
+
+    def _copiar_app(e):
+        page.set_clipboard(APP_URL)
+        page.open(ft.SnackBar(ft.Text("Link copiado! Cole numa mensagem para compartilhar."), duration=2000))
+
+    def _abrir_video(e):
+        page.launch_url(VIDEO_URL)
 
     share_section = ft.Container(
         content=ft.Column(controls=[
             _title("📤 Compartilhar o Onion Payroll"),
-            _p("Envie o link para um colega peelar o próprio contracheque também (toque e segure para copiar):"),
+            _p("Copie o link e envie por mensagem para um colega peelar o próprio contracheque também:"),
             ft.Row(controls=[
                 ft.Text(APP_URL, size=12, color=ACCENT_LITE, selectable=True,
                         weight=ft.FontWeight.W_600),
             ], alignment=ft.MainAxisAlignment.CENTER),
-            _p("Vídeo de apresentação (30s):"),
+            ft.TextButton("📋 Copiar Link do App", on_click=_copiar_app),
+            _p("Vídeo de apresentação (30s) — abra e compartilhe direto do YouTube:"),
             ft.Row(controls=[
                 ft.Text(VIDEO_URL, size=12, color=ACCENT_LITE, selectable=True,
                         weight=ft.FontWeight.W_600),
             ], alignment=ft.MainAxisAlignment.CENTER),
+            ft.TextButton("🔗 Abrir Vídeo", on_click=_abrir_video),
         ], spacing=8, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
         padding=12, bgcolor=BG_CARD, border_radius=12,
         margin=ft.Padding(left=0, right=0, top=0, bottom=10),
@@ -3869,16 +3900,33 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
                             color="#FFB74D", weight=ft.FontWeight.W_700),
                     ft.Text(
                         "Os valores exibidos são estimativas baseadas nas "
-                        "configurações inseridas pelo usuário. Este aplicativo "
-                        "não substitui o holerite oficial emitido pela empresa. "
-                        "Consulte o departamento de RH para esclarecimentos "
-                        "sobre sua remuneração.",
+                        "configurações inseridas por você. Este aplicativo NÃO "
+                        "substitui o holerite oficial emitido pela empresa e não "
+                        "é elaborado por advogado, contador ou despachante "
+                        "trabalhista. Consulte o RH ou um profissional "
+                        "qualificado para esclarecimentos oficiais.\n\n"
+                        "O app é gratuito, sem fins lucrativos, 100% offline, e "
+                        "fornecido \"como está\", sem garantias — o desenvolvedor "
+                        "não se responsabiliza por decisões tomadas com base nos "
+                        "valores calculados.",
                         size=11, color="#A0A0A0",
                     ),
                     ft.Text(
-                        "Estimated values. This app does not replace the official "
-                        "payslip issued by your employer.",
+                        "Estimated values, provided \"as is\" without warranties. "
+                        "This app does not replace the official payslip issued "
+                        "by your employer.",
                         size=10, color="#757575", italic=True,
+                    ),
+                    ft.Container(height=6),
+                    ft.Text(
+                        f"✅ Você aceitou estes termos em: "
+                        f"{state.get('settings', {}).get('disclaimer_accepted_at') or '—'}",
+                        size=10, color="#00D2C6",
+                    ),
+                    ft.Text(
+                        "Projeto de código aberto sob Licença MIT — veja o "
+                        "arquivo LICENSE no repositório do GitHub.",
+                        size=10, color="#757575",
                     ),
                 ], spacing=6, tight=True),
                 bgcolor="#2A2A2A", border_radius=10,
@@ -3990,145 +4038,225 @@ async def main(page: ft.Page):
         "holidays_corp": load_json(page, "onion_holidays_corp", {}),
     }
 
-    # Logo — desktop usa caminho absoluto, web usa src relativo (assets/)
-    import os as _os
-    _assets_dir = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "assets")
-    _logo_abs   = _os.path.join(_assets_dir, "logo_icon.png")
-    _is_web     = hasattr(page, "web") and page.web
+    def _iniciar_app():
+        """Constrói e mostra a interface principal do app."""
+        # Logo — desktop usa caminho absoluto, web usa src relativo (assets/)
+        import os as _os
+        _assets_dir = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "assets")
+        _logo_abs   = _os.path.join(_assets_dir, "logo_icon.png")
+        _is_web     = hasattr(page, "web") and page.web
 
-    if _is_web:
-        # No modo web/PWA o Flet serve assets/ automaticamente
-        logo = ft.Image(src="logo_icon.png",
-                        width=scaled(72), height=scaled(72), fit="contain")
-    elif _os.path.exists(_logo_abs):
-        logo = ft.Image(src=_logo_abs,
-                        width=scaled(72), height=scaled(72), fit="contain")
-    else:
-        logo = ft.Text("🧅", size=36)
-    title_col = ft.Column(
-        controls=[
-            ft.Row(
-                controls=[
-                    ft.Text("ONION ", size=scaled(17), weight=ft.FontWeight.W_900,
-                            color="#FFFFFF",
-                            style=ft.TextStyle(letter_spacing=2.0)),
-                    ft.Text("PAYROLL", size=scaled(17), weight=ft.FontWeight.W_900,
-                            color=ACCENT,
-                            style=ft.TextStyle(letter_spacing=2.0)),
-                ],
-                spacing=0, tight=True,
-            ),
-            ft.Row([
-                ft.Text("PEEL YOUR PAYCHECK", size=scaled(8), color=TEXT_SECONDARY,
-                        style=ft.TextStyle(letter_spacing=2.5)),
-                ft.Text(f"#{BUILD_ID}", size=scaled(7), color="#444444",
-                        style=ft.TextStyle(letter_spacing=1.0)),
-            ], spacing=6, tight=True),
-        ],
-        spacing=2, tight=True,
-    )
-    header = ft.Container(
-        content=ft.Row(controls=[ft.Row([logo, ft.Container(width=10), title_col])]),
-        gradient=ft.LinearGradient(
-            begin=ft.Alignment(-1, 0),
-            end=ft.Alignment(1, 0),
-            colors=[HEADER_BG, "#0A1A18"],
-        ),
-        padding=ft.Padding(left=16, right=16, top=10, bottom=10),
-        border=ft.Border(bottom=ft.BorderSide(2, ACCENT)),
-    )
-
-    content_area = ft.Container(
-        expand=True,
-        bgcolor=BG_DEEP,
-        padding=ft.Padding(left=scaled(12), right=scaled(12), top=scaled(8), bottom=scaled(8)),
-    )
-
-    tab_defs = [
-        ("Calendário", "📅"),
-        ("Holerite",   "📋"),
-        ("Histórico",  "🕐"),
-        ("Feriados",   "🏭"),
-        ("Config.",    "⚙️"),
-        ("Ajuda",      "❓"),
-    ]
-    nav_buttons = []
-
-    def _make_nav(idx, lbl, icon):
-        def _tap(_):
-            state["active_tab"] = idx
-            refresh_all()
-        return ft.GestureDetector(
-            on_tap=_tap,
-            content=ft.Container(
-                content=ft.Column(
-                    controls=[ft.Text(icon, size=22), ft.Text(lbl, size=10)],
-                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                    spacing=2, tight=True,
+        if _is_web:
+            # No modo web/PWA o Flet serve assets/ automaticamente
+            logo = ft.Image(src="logo_icon.png",
+                            width=scaled(72), height=scaled(72), fit="contain")
+        elif _os.path.exists(_logo_abs):
+            logo = ft.Image(src=_logo_abs,
+                            width=scaled(72), height=scaled(72), fit="contain")
+        else:
+            logo = ft.Text("🧅", size=36)
+        title_col = ft.Column(
+            controls=[
+                ft.Row(
+                    controls=[
+                        ft.Text("ONION ", size=scaled(17), weight=ft.FontWeight.W_900,
+                                color="#FFFFFF",
+                                style=ft.TextStyle(letter_spacing=2.0)),
+                        ft.Text("PAYROLL", size=scaled(17), weight=ft.FontWeight.W_900,
+                                color=ACCENT,
+                                style=ft.TextStyle(letter_spacing=2.0)),
+                    ],
+                    spacing=0, tight=True,
                 ),
-                alignment=ft.Alignment(0, 0),
-                expand=True,
-                padding=ft.Padding(left=0, right=0, top=4, bottom=4),
+                ft.Row([
+                    ft.Text("PEEL YOUR PAYCHECK", size=scaled(8), color=TEXT_SECONDARY,
+                            style=ft.TextStyle(letter_spacing=2.5)),
+                    ft.Text(f"#{BUILD_ID}", size=scaled(7), color="#444444",
+                            style=ft.TextStyle(letter_spacing=1.0)),
+                ], spacing=6, tight=True),
+            ],
+            spacing=2, tight=True,
+        )
+        header = ft.Container(
+            content=ft.Row(controls=[ft.Row([logo, ft.Container(width=10), title_col])]),
+            gradient=ft.LinearGradient(
+                begin=ft.Alignment(-1, 0),
+                end=ft.Alignment(1, 0),
+                colors=[HEADER_BG, "#0A1A18"],
             ),
+            padding=ft.Padding(left=16, right=16, top=10, bottom=10),
+            border=ft.Border(bottom=ft.BorderSide(2, ACCENT)),
+        )
+
+        content_area = ft.Container(
+            expand=True,
+            bgcolor=BG_DEEP,
+            padding=ft.Padding(left=scaled(12), right=scaled(12), top=scaled(8), bottom=scaled(8)),
+        )
+
+        tab_defs = [
+            ("Calendário", "📅"),
+            ("Holerite",   "📋"),
+            ("Histórico",  "🕐"),
+            ("Feriados",   "🏭"),
+            ("Config.",    "⚙️"),
+            ("Ajuda",      "❓"),
+        ]
+        nav_buttons = []
+
+        def _make_nav(idx, lbl, icon):
+            def _tap(_):
+                state["active_tab"] = idx
+                refresh_all()
+            return ft.GestureDetector(
+                on_tap=_tap,
+                content=ft.Container(
+                    content=ft.Column(
+                        controls=[ft.Text(icon, size=22), ft.Text(lbl, size=10)],
+                        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                        spacing=2, tight=True,
+                    ),
+                    alignment=ft.Alignment(0, 0),
+                    expand=True,
+                    padding=ft.Padding(left=0, right=0, top=4, bottom=4),
+                ),
+                expand=True,
+            )
+
+        for i, (lbl, ico) in enumerate(tab_defs):
+            nav_buttons.append(_make_nav(i, lbl, ico))
+
+        nav_bar = ft.Container(
+            content=ft.Row(
+                controls=nav_buttons,
+                alignment=ft.MainAxisAlignment.SPACE_AROUND,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+            bgcolor=NAV_BG,
+            height=scaled(65),
+            padding=ft.Padding(left=8, right=0, top=0, bottom=0),
+            border=ft.Border(top=ft.BorderSide(2, NAV_BORDER)),
+        )
+
+        def refresh_all():
+            tab = state["active_tab"]
+            # Usar settings do _mem_cache — preserva mudanças feitas via __setitem__
+            _cached = _mem_cache.get(KEY_SETTINGS)
+            if _cached and isinstance(_cached, dict):
+                state["settings"] = _cached
+            # Sempre ler diretamente do _mem_cache para garantir o dado mais
+            # recente, evitando qualquer inconsistência de closures antigas
+            state["history"]   = _mem_cache.get(KEY_HISTORY,   [])
+            state["overrides"] = _mem_cache.get(KEY_OVERRIDES, {})
+            state["holidays"]  = _mem_cache.get(KEY_HOLIDAYS,  {})
+
+            builders = [build_calendar_tab, build_holerite_tab,
+                        build_history_tab,  build_holidays_tab,
+                        build_settings_tab, build_help_tab]
+            inner = builders[tab](page, state, refresh_all)
+
+            if isinstance(inner, ft.Column):
+                inner.expand = True
+
+            content_area.content = inner
+
+            for i, btn in enumerate(nav_buttons):
+                try:
+                    col = btn.content.content  # Container → Column
+                    active = (i == tab)
+                    col.controls[0].color = ACCENT if active else TEXT_MUTED
+                    col.controls[1].color = ACCENT if active else "#475569"
+                    col.controls[1].weight = ft.FontWeight.W_700 if active else ft.FontWeight.NORMAL
+                except Exception:
+                    pass
+
+            page.update()
+
+        main_layout = ft.Column(
+            controls=[header, content_area, nav_bar],
+            spacing=0,
             expand=True,
         )
 
-    for i, (lbl, ico) in enumerate(tab_defs):
-        nav_buttons.append(_make_nav(i, lbl, ico))
+        page.add(main_layout)
+        refresh_all()
 
-    nav_bar = ft.Container(
-        content=ft.Row(
-            controls=nav_buttons,
-            alignment=ft.MainAxisAlignment.SPACE_AROUND,
-            vertical_alignment=ft.CrossAxisAlignment.CENTER,
-        ),
-        bgcolor=NAV_BG,
-        height=scaled(65),
-        padding=ft.Padding(left=8, right=0, top=0, bottom=0),
-        border=ft.Border(top=ft.BorderSide(2, NAV_BORDER)),
-    )
+    # ── Disclaimer de primeiro uso (v2.29) ─────────────────────
+    # "Clickwrap": só mostra 1 vez, salvo em settings. Recusar
+    # bloqueia o app nesta sessão (recarregar a página = nova chance,
+    # sem travar o usuário definitivamente sem saída).
+    if settings.get("disclaimer_accepted"):
+        _iniciar_app()
+        return
 
-    def refresh_all():
-        tab = state["active_tab"]
-        # Usar settings do _mem_cache — preserva mudanças feitas via __setitem__
-        _cached = _mem_cache.get(KEY_SETTINGS)
-        if _cached and isinstance(_cached, dict):
-            state["settings"] = _cached
-        # Sempre ler diretamente do _mem_cache para garantir o dado mais
-        # recente, evitando qualquer inconsistência de closures antigas
-        state["history"]   = _mem_cache.get(KEY_HISTORY,   [])
-        state["overrides"] = _mem_cache.get(KEY_OVERRIDES, {})
-        state["holidays"]  = _mem_cache.get(KEY_HOLIDAYS,  {})
+    def _aceitar_disclaimer(e):
+        settings["disclaimer_accepted"] = True
+        settings["disclaimer_accepted_at"] = datetime.now().isoformat(timespec="seconds")
+        _mem_cache[KEY_SETTINGS] = settings
+        save_json(page, KEY_SETTINGS, settings)
+        page.clean()
+        _iniciar_app()
 
-        builders = [build_calendar_tab, build_holerite_tab,
-                    build_history_tab,  build_holidays_tab,
-                    build_settings_tab, build_help_tab]
-        inner = builders[tab](page, state, refresh_all)
-
-        if isinstance(inner, ft.Column):
-            inner.expand = True
-
-        content_area.content = inner
-
-        for i, btn in enumerate(nav_buttons):
-            try:
-                col = btn.content.content  # Container → Column
-                active = (i == tab)
-                col.controls[0].color = ACCENT if active else TEXT_MUTED
-                col.controls[1].color = ACCENT if active else "#475569"
-                col.controls[1].weight = ft.FontWeight.W_700 if active else ft.FontWeight.NORMAL
-            except Exception:
-                pass
-
+    def _recusar_disclaimer(e):
+        page.clean()
+        page.add(
+            ft.Container(
+                content=ft.Column(controls=[logo_disclaimer], alignment=ft.MainAxisAlignment.CENTER,
+                                   horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                alignment=ft.alignment.center, expand=True, bgcolor=BG_DEEP,
+            )
+        )
         page.update()
 
-    main_layout = ft.Column(
-        controls=[header, content_area, nav_bar],
-        spacing=0,
-        expand=True,
+    logo_disclaimer = ft.Image(src="logo_icon.png", width=100, height=100, fit="contain")
+    page.add(
+        ft.Container(
+            expand=True, bgcolor=BG_DEEP,
+            padding=ft.Padding(left=20, right=20, top=40, bottom=20),
+            content=ft.Column(
+                scroll=ft.ScrollMode.AUTO,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                controls=[
+                    ft.Image(src="logo_icon.png", width=80, height=80, fit="contain"),
+                    ft.Container(height=12),
+                    ft.Text("🧅 Onion Payroll", size=22, weight=ft.FontWeight.W_800, color="#FFFFFF"),
+                    ft.Text("Antes de continuar", size=13, color=TEXT_SECONDARY),
+                    ft.Container(height=16),
+                    ft.Container(
+                        bgcolor=BG_CARD, border_radius=12, padding=16,
+                        content=ft.Column(spacing=8, controls=[
+                            ft.Text("⚠️ Aviso Legal", size=14, weight=ft.FontWeight.W_700, color=WARNING),
+                            ft.Text(
+                                "Os valores exibidos são estimativas baseadas nas "
+                                "configurações inseridas por você. Este aplicativo "
+                                "NÃO substitui o holerite oficial emitido pela empresa "
+                                "e não é elaborado por advogado, contador ou despachante "
+                                "trabalhista. Consulte o departamento de RH ou um "
+                                "profissional qualificado para esclarecimentos oficiais "
+                                "sobre sua remuneração.\n\n"
+                                "O app é gratuito, sem fins lucrativos, 100% offline "
+                                "(nenhum dado sai do seu dispositivo) e fornecido "
+                                "\"como está\", sem garantias — o desenvolvedor não se "
+                                "responsabiliza por decisões tomadas com base nos "
+                                "valores calculados.",
+                                size=12, color=TEXT_PRIMARY,
+                            ),
+                        ]),
+                    ),
+                    ft.Container(height=20),
+                    ft.FilledButton(
+                        "Aceitar e Continuar", on_click=_aceitar_disclaimer,
+                        style=ft.ButtonStyle(bgcolor=ACCENT, color="#121212"),
+                        width=280,
+                    ),
+                    ft.Container(height=8),
+                    ft.TextButton(
+                        "Recusar", on_click=_recusar_disclaimer,
+                        style=ft.ButtonStyle(color=TEXT_MUTED),
+                    ),
+                ],
+            ),
+        )
     )
-
-    page.add(main_layout)
-    refresh_all()
 
 ft.app(target=main, assets_dir="assets")

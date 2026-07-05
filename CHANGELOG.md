@@ -1,5 +1,136 @@
 # Changelog — Onion Payroll
 
+## [2.30] — 2026-07-04 — LICENÇA MIT E INDICAÇÃO DE ACEITE
+
+### 🟢 Adicionado — arquivo `LICENSE` (MIT)
+
+**Pedido do usuário**, completando uma lacuna identificada na conversa
+sobre robustez jurídica: o `LICENSE` MIT tinha sido sugerido antes, mas
+nunca foi de fato criado nem referenciado na tela de aceite (v2.29).
+Adicionado agora na raiz do projeto — texto padrão, sem modificações
+(a Licença MIT é um modelo feito pra ser reutilizado literalmente,
+diferente de conteúdo autoral).
+
+### 🟢 Adicionado — indicação de quando o usuário aceitou os termos
+
+**Confirmado o critério de aceite:** é exclusivamente o clique no botão
+"Aceitar e Continuar" (`disclaimer_accepted=True`) — não há nenhuma
+lógica que infira aceite a partir de dados já registrados ou qualquer
+outro comportamento indireto. Verificado linha por linha no código.
+
+**Novo:** o momento exato do clique agora é registrado
+(`disclaimer_accepted_at`, timestamp ISO) e exibido em dois lugares:
+- ⚙️ Config → nova seção "TERMOS E LICENÇA" ("✅ Termos aceitos em: ...")
+- ❓ Ajuda → seção "⚠️ Aviso Legal", junto com a referência ao `LICENSE`
+
+**Validado:** as 6 abas e o boot completo do `main()` testados de novo
+via stub, sem erro.
+
+---
+
+## [2.29] — 2026-07-04 — TELA DE ACEITE NO PRIMEIRO USO (DISCLAIMER)
+
+### 🟢 Adicionado — consentimento explícito ("clickwrap") no primeiro acesso
+
+**Sugestão do usuário**, em resposta a uma discussão sobre robustez
+jurídica do disclaimer: em vez de só um aviso passivo no README (que a
+pessoa pode nunca ler), adicionar uma tela de aceite obrigatória antes
+de abrir o app pela primeira vez — padrão usado por apps comerciais
+para consentimento informado, mais defensável do que um aviso "browsewrap".
+
+**Como funciona:**
+- Antes de qualquer aba abrir, mostra logo + Aviso Legal completo +
+  botões "Aceitar e Continuar" / "Recusar"
+- **Aceitar** → grava a escolha (`disclaimer_accepted=True`), abre o
+  app normalmente, nunca mais pergunta
+- **Recusar** → tela fica só com a logo, sem nenhum botão ou conteúdo
+  — recarregar a página dá uma nova chance (não é um bloqueio
+  permanente e sem saída, o que criaria uma armadilha sem acesso ao
+  "Apagar Dados" em Config)
+
+**Reforço em mais 2 lugares**, com a mesma linguagem mais robusta
+("como está", sem garantias, não é advogado/contador):
+- Rodapé da aba Holerite (já existia desde v2.6, atualizado)
+- Seção "⚠️ Aviso Legal" completa no manual (aba ❓ Ajuda)
+
+### 🔴 Bug de teste corrigido durante o desenvolvimento (infraestrutura)
+
+Ao construir o teste do fluxo de clique (Aceitar/Recusar) com o stub de
+Flet falso, descoberto que o `__getattr__` de fallback do stub fazia
+`hasattr()` sempre retornar `True` — isso impedia o loop que deveria
+salvar os kwargs reais (como `on_click`) de rodar, fazendo os testes de
+clique "passarem" chamando um Mock vazio em vez da função real. Só
+percebido porque o valor esperado (`disclaimer_accepted=True` após o
+clique) não mudava de fato — reforça a lição de sempre verificar o
+*efeito* de um teste, não só a ausência de erro. Corrigido no stub
+(não afeta o app em si).
+
+**Validado:** `main()` completo testado via `asyncio.run()` com o stub,
+nos cenários: disclaimer já aceito (vai direto pro app), disclaimer
+novo (mostra a tela), clique em Aceitar (abre o app de verdade), clique
+em Recusar (mostra só a logo) — todos sem erro.
+
+---
+
+## [2.26] — 2026-07-04 — VARREDURA COMPLETA: MESMO BUG EM OUTRO HELPER
+
+### 🟡 Encontrado preventivamente — `_color_legend()` tinha a mesma vulnerabilidade do `_item()`
+
+**Pedido do usuário:** depois de corrigir o `_item()` (v2.25), verificar
+se o mesmo padrão de bug (campo sem largura definida roubando espaço do
+vizinho `expand=True`) acontecia em outro lugar do manual.
+
+**Encontrado:** `_color_legend()` (usado na seção "🎨 Cores do
+Calendário") tinha a coluna de texto (label+desc) **sem `expand=True`**
+— o mesmo problema estrutural do `_item()` antes da correção, só que
+ainda sem ter gerado uma reclamação visível (o vizinho fixo, um quadrado
+de cor 14×14px, é pequeno demais pra "roubar" espaço perceptível, mas o
+risco estrutural era o mesmo).
+
+**Correção:** `expand=True` adicionado à coluna. Conferidos também
+`_rule()` (já tinha `expand` nos dois lados — seguro) e `_title()`/
+`_sec()`/`_p()` (texto único, sem Row — sem risco).
+
+### 🟡 Limpeza — 5 chamadas de `_item()` com conteúdo mais longo que os vizinhos
+
+Mesmo já protegidas pela largura fixa da v2.25, essas 5 chamadas
+ficariam "enroladas" em várias linhas sem necessidade. Encurtadas,
+movendo a informação de cor da célula para a descrição (que tem espaço
+de sobra) — mantém consistência visual com os itens vizinhos na mesma
+seção.
+
+---
+
+## [2.25] — 2026-07-04 — CRÍTICO: TEXTO ESPREMIDO NUMA COLUNA ESTREITA NA AJUDA
+
+### 🔴 Bug corrigido — descrição virava uma coluna de 1 palavra por linha
+
+**Reportado pelo usuário** (com print): a descrição de um item específico
+na seção de Yukyu aparecia espremida numa faixa vertical estreitíssima
+no canto direito da tela, uma palavra por linha, com um vazio enorme à
+esquerda — mesmo depois de dar zoom.
+
+**Causa raiz:** `_item(icon, label, desc)` espera um ícone/rótulo CURTO
+no primeiro parâmetro — mas a chamada da seção de Yukyu passou uma
+frase inteira ali ("Se o dia marcado não tiver saldo disponível", 44
+caracteres). Esse campo é um `ft.Text` simples, sem `expand` nem largura
+definida — quando o conteúdo é longo, ele reivindica a maior parte da
+largura da linha pra si mesmo, sobrando um fiapo de espaço pra coluna de
+descrição (que aí sim tem `expand=True`, mas não tinha mais espaço
+nenhum pra usar).
+
+**Correção — duas camadas:**
+1. Conteúdo da chamada específica corrigido (frase longa movida para o
+   `desc`, ícone virou um rótulo curto, igual aos itens vizinhos)
+2. `_item()` endurecido: o campo de ícone agora tem `width=100` fixo —
+   mesmo que outro texto longo demais escape ali no futuro, fica
+   confinado à própria coluna, sem roubar espaço da descrição
+
+**Nota:** essa correção provavelmente também resolve o "espaço vazio ao
+dar zoom" relatado junto — era o mesmo elemento vazando largura.
+
+---
+
 ## [2.24] — 2026-07-04 — TEXTO DA AJUDA ESTOURAVA A LARGURA DA TELA
 
 ### 🔴 Bug corrigido — precisava de zoom de 50% pra ler o conteúdo

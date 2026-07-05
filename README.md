@@ -238,7 +238,13 @@ Onion Payroll/
 
 ## ⚠️ Aviso Legal
 
-Os valores exibidos são estimativas baseadas nas configurações inseridas pelo usuário. Este aplicativo não substitui o holerite oficial emitido pela empresa. Consulte o departamento de RH para esclarecimentos sobre sua remuneração.
+Os valores exibidos são estimativas baseadas nas configurações inseridas por você. Este aplicativo NÃO substitui o holerite oficial emitido pela empresa e não é elaborado por advogado, contador ou despachante trabalhista. Consulte o RH ou um profissional qualificado para esclarecimentos oficiais sobre sua remuneração.
+
+O app é gratuito, sem fins lucrativos, 100% offline, e fornecido "como está", sem garantias — o desenvolvedor não se responsabiliza por decisões tomadas com base nos valores calculados.
+
+**Tela de aceite no primeiro uso:** antes de abrir o app pela primeira vez, esse aviso aparece por completo com botões "Aceitar e Continuar" / "Recusar". Recusar mostra só a logo, sem acesso ao app — recarregar a página dá uma nova chance. A escolha de aceitar fica salva (com data e hora), não pergunta de novo depois disso. O critério de aceite é exclusivamente esse clique — não há inferência a partir de dados já registrados.
+
+**Licença:** projeto de código aberto sob [Licença MIT](LICENSE) — gratuito, sem garantias, uso e modificação livres.
 
 ---
 
