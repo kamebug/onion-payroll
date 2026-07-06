@@ -487,28 +487,42 @@ def calculate_shift_pay(
     premium_jikyuu = jikyuu + addon_per_hour
     night_jikyuu   = jikyuu + addon_per_hour + night_addon_extra
 
-    result["base_pay"] = shisha_gofuuu(jikyuu_per_min * net_min)
-
     # IMPORTANTE: a taxa por HORA é arredondada pro yen mais próximo ANTES
     # de multiplicar pelas horas trabalhadas — não o valor total no final.
     # Confirmado com planilha de referência do usuário e validado contra
     # 5 holerites reais (2 jikyuu diferentes, 2 anos diferentes): bate
     # exato. Arredondar só no final (como antes) deixava um resíduo de
     # ~0,03%-0,14%, que parecia ruído mas era essa regra específica.
+    #
+    # v2.39: CORRIGIDO — base_pay usava net_min (horas regulares + horas
+    # de hora extra somadas), com overtime_pay mostrando só o incremento
+    # de 25%. Isso dava um TOTAL certo, mas a DIVISÃO entre "Salário
+    # Base" e "Hora Extra" saía bem diferente do holerite real, que
+    # separa 所定内 (só horas regulares) de 所定外 (só horas de hora
+    # extra, à taxa CHEIA de 1,25x) como categorias sem sobreposição.
+    # Mesma lógica pra domingo/feriado: 公出手当 no holerite real é a
+    # taxa CHEIA (1,35x) sobre as horas trabalhadas nesse dia — nenhuma
+    # dessas horas aparece em 基本給. Comparado direto contra os 5
+    # holerites reais (fev/mar/abr 2026): confirma ¥0 de diferença tanto
+    # no total quanto em cada rubrica individual, agora sim.
     if is_holiday:
-        # Validado com holerites reais: trabalho em domingo/feriado
-        # (法定休出) usa SOMENTE +35% sobre o total de horas trabalhadas —
-        # NÃO acumula adicional noturno nem hora extra por cima.
-        holiday_rate_per_hour  = shisha_gofuuu(premium_jikyuu * holiday_premium)
-        result["overtime_pay"] = 0
-        result["night_pay"]    = 0
-        result["holiday_pay"]  = shisha_gofuuu(holiday_rate_per_hour * (net_min / 60.0))
+        # Todas as horas trabalhadas em domingo/feriado vão pra
+        # holiday_pay, à taxa CHEIA — nenhuma parcela fica "escondida"
+        # em base_pay a taxa normal.
+        holiday_rate_full       = shisha_gofuuu(premium_jikyuu * (1.0 + holiday_premium))
+        result["base_pay"]      = 0
+        result["overtime_pay"]  = 0
+        result["night_pay"]     = 0
+        result["holiday_pay"]   = shisha_gofuuu(holiday_rate_full * (net_min / 60.0))
     else:
-        ot_rate_per_hour       = shisha_gofuuu(premium_jikyuu * 0.25)
-        night_rate_per_hour    = shisha_gofuuu(night_jikyuu * 0.25)
-        result["overtime_pay"] = shisha_gofuuu(ot_rate_per_hour * (ot_min / 60.0))
-        result["night_pay"]    = shisha_gofuuu(night_rate_per_hour * (night_min / 60.0))
-        result["holiday_pay"]  = 0
+        # base_pay cobre SÓ as horas regulares — hora extra é 100%
+        # coberta por overtime_pay à taxa cheia, sem sobreposição.
+        result["base_pay"]      = shisha_gofuuu(jikyuu_per_min * result["regular_minutes"])
+        ot_rate_full            = shisha_gofuuu(premium_jikyuu * 1.25)
+        night_rate_increment    = shisha_gofuuu(night_jikyuu * 0.25)
+        result["overtime_pay"]  = shisha_gofuuu(ot_rate_full * (ot_min / 60.0))
+        result["night_pay"]     = shisha_gofuuu(night_rate_increment * (night_min / 60.0))
+        result["holiday_pay"]   = 0
     result["total_gross"]  = (result["base_pay"] + result["overtime_pay"]
                                + result["night_pay"] + result["holiday_pay"])
     return result
@@ -809,16 +823,16 @@ def compute_monthly_forecast(
         # ── Regras por STATUS (o que foi salvo no day_overrides) ──────
         #
         # "absent"  → falta → pular (¥0)
-        # "yukyu"   → férias → 8h fixo sem OT/noturno
-        # "holiday" → trabalho em feriado → +35%
-        # "legal"   → trabalho no domingo → +35%
+        # "yukyu"   → férias → jornada normal configurada, sem OT/noturno
+        # "holiday" → trabalho em feriado → taxa cheia 1,35x
+        # "legal"   → trabalho no domingo → taxa cheia 1,35x
         # "normal"  → depende do ciclo e do dia da semana:
-        #             ciclo=work + domingo → +35% automático
+        #             ciclo=work + domingo → taxa cheia 1,35x automático
         #             ciclo=work           → turno normal
-        #             ciclo=off + horário  → +35% (trabalhou na folga)
+        #             ciclo=off + horário  → taxa cheia 1,35x (trabalhou na folga)
         #             ciclo=off + yukyu_hol→ yukyu
         #             ciclo=off            → não trabalhou → pular
-        #             feriado + horário    → +35%
+        #             feriado + horário    → taxa cheia 1,35x
         #             feriado              → não trabalhou → pular
 
         if status == "absent":
@@ -1154,7 +1168,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607060528"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607010336"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -2988,7 +3002,7 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
                         size=10, color=ACCENT, weight=ft.FontWeight.W_700),
                 ft.Text("• Entrada → Início 残業: horas normais (salário base)",
                         size=10, color=TEXT_SECONDARY),
-                ft.Text("• Início 残業 → Saída: hora extra +25%",
+                ft.Text("• Início 残業 → Saída: hora extra à taxa de 1,25x",
                         size=10, color=TEXT_SECONDARY),
                 ft.Text("• No modo Alternado, a semana define automaticamente dia ou noite",
                         size=10, color=TEXT_MUTED),
@@ -3985,7 +3999,7 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
                           "Grupo identifica sua equipe. Turno define os horários padrão: entrada, saída, intervalo e início de hora extra. Todos os dias sem registro usam esses horários."),
 
                     _title("📅 Domingo — 法定休日 Folga Legal"),
-                    _p("Domingo é folga legal obrigatória pela lei japonesa. Se trabalhou, o app aplica +35% automaticamente. Sem registro de horário = não trabalhado."),
+                    _p("Domingo é folga legal obrigatória pela lei japonesa. Se trabalhou, o app aplica a taxa cheia de 1,35x sobre essas horas (não soma em cima da base). Sem registro de horário = não trabalhado."),
 
             # ── Tipos de Ciclo ─────────────────────────────────────────
             _title("🔄 Tipos de Ciclo de Trabalho"),
@@ -4030,13 +4044,13 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
             # ── Adicionais (Lei Trabalhista Japonesa) ────────────────
             _title("💴 Adicionais (Lei Trabalhista 労働基準法)"),
             _rule("残業手当 Hora Extra", "Horas após o limite do turno",
-                  "+25% sobre base"),
+                  "Taxa cheia 1,25x (separado da base)"),
             _rule("深夜手当 Adicional Noturno", "Minutos entre 22:00 e 05:00",
                   "+25% sobre base"),
             _rule("休出手当・法定休出 Folga/Feriado/Domingo",
                   "Trabalhou em dia de folga, feriado ou domingo",
-                  "+35% sobre base (único adicional)"),
-            _p("⚠️ Domingo e feriado trabalhado recebem APENAS +35% sobre a base — não soma noturno nem hora extra por cima, mesmo que o horário caia na madrugada. Validado com holerites reais da empresa."),
+                  "Taxa cheia 1,35x (único adicional)"),
+            _p("⚠️ Domingo e feriado trabalhado recebem 1,35x sobre as horas trabalhadas nesse dia — essas horas não aparecem separadamente em 'Salário Base', e não soma noturno nem hora extra por cima, mesmo que o horário caia na madrugada. Mesma lógica para hora extra: as horas de 残業 saem 100% da linha 'Salário Base' e vão para 'Hora Extra' à taxa cheia de 1,25x — nunca as duas linhas juntas para a mesma hora. Validado com holerites reais da empresa."),
             _p("Arredondamento: 四捨五入 — frações < 0.5 descartadas, ≥ 0.5 arredondadas para cima. Todos os valores em ¥ inteiro."),
 
             # ── Exemplo: arredondamento da taxa por hora ────────────────
@@ -4064,18 +4078,18 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
             _title("📅 Registrando o Ponto"),
             _item("Trabalho Normal", "Nenhuma alteração",
                   "Deixe em branco → usa o horário configurado em ⚙️ Config."),
-            _item("有休 Yukyu", "Célula laranja — 8h fixo, sem extra/noturno",
-                  "Com horário → paga as horas efetivas. Sem horário → 8h fixo."),
+            _item("有休 Yukyu", "Célula laranja — jornada normal, sem extra/noturno",
+                  "Com horário → paga as horas efetivas. Sem horário → usa a jornada normal configurada em ⚙️ Config (entrada até o início da hora extra, menos intervalo) — não é mais um valor fixo de 8h."),
             _item("欠勤 Falta — Célula Roxa", "¥0 — não remunerada",
                   "O campo horário é ignorado. Falta = sem pagamento."),
             _item("Saída Antecipada", "Célula verde-azulado",
                   "Preencha o horário de saída real. Hora extra = 0 se saiu antes do limite configurado."),
             _item("延長 Min. Extras", "Campo numérico no modal",
-                  "Minutos além do turno que a empresa pediu. Calculado separadamente com +25%."),
+                  "Minutos além do turno que a empresa pediu. Calculado separadamente à taxa cheia de 1,25x."),
             _item("Abono / Vale / Bico extra (¥)", "Campo numérico no modal",
                   "Qualquer ganho extra do dia: vale, arubaito (バイト), gorjeta, ajuda de custo. Acumulado no holerite separadamente."),
             _item("Trabalho em Folga/Feriado", "Preencha Entrada e Saída",
-                  "+35% automático. Vale para folga, feriado e domingo."),
+                  "Taxa cheia 1,35x sobre essas horas. Vale para folga, feriado e domingo."),
             _item("有休 em Feriado Corporativo",
                   "Ative o toggle 有休 em Feriado",
                   "Injeta 8h base fixo mesmo sendo feriado da empresa."),
@@ -4107,7 +4121,7 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
             _color_legend(OFF_COLOR, "Azul — Folga",
                           "Dias de descanso do ciclo"),
             _color_legend(CAL_SUNDAY_WORK, "Vermelho Escuro — Domingo Trabalhado",
-                          "+35% automático quando o ciclo marca domingo como trabalho"),
+                          "Taxa cheia 1,35x quando o ciclo marca domingo como trabalho"),
             _color_legend(CAL_CORP, "Amarelo — Feriado",
                           "Feriados nacionais embutidos ou marcados na aba 🏭 Feriados"),
             _color_legend("#FF6D00", "Laranja — 有休 Yukyu",

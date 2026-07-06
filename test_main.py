@@ -965,6 +965,66 @@ class TestEngineLinhaDoTempo(unittest.TestCase):
         self.assertEqual(trabalhados, r["net_minutes"])
 
 
+class TestBaseExtraDomingoSeparados(unittest.TestCase):
+    """Trava a correção da v2.39 — base_pay usava net_min (horas
+    regulares + horas de hora extra somadas), com overtime_pay/
+    holiday_pay mostrando só o incremento (+25%/+35%), em vez da taxa
+    CHEIA. Dava um total aproximadamente certo, mas a divisão entre
+    'Salário Base' e 'Hora Extra'/'Domingo' saía muito diferente do
+    holerite real, que separa essas categorias sem sobreposição.
+
+    Validado contra o holerite real de fev/2026 (jikyuu=1590, turno
+    20:30-08:35, intervalo 65min, OT 06:35, taxa calibrada 2720/144):
+    16 dias normais + 2 domingos → Base=¥228.960 e Domingo=¥47.784,
+    batendo ¥0 de diferença."""
+
+    def setUp(self):
+        self.jikyuu = 1590
+        self.addon = 2720
+        self.std_hours = 144
+        self.night_extra = 3168/144 - 2720/144
+
+    def _dia(self, is_holiday=False):
+        return calculate_shift_pay(
+            self.jikyuu, "night", base_shift="night",
+            start_str="20:30", end_str="08:35", break_min=65,
+            ot_start_str="06:35", is_holiday=is_holiday,
+            fixed_allowances_monthly=self.addon,
+            standard_monthly_hours=self.std_hours,
+            night_addon_extra=self.night_extra,
+        )
+
+    def test_base_pay_usa_so_horas_regulares_nao_net_min(self):
+        r = self._dia()
+        # regular_minutes=540 (9h) — base_pay NÃO deve incluir as 2h de
+        # hora extra (net_minutes=660) dentro desse valor
+        self.assertEqual(r["base_pay"], round(self.jikyuu / 60 * 540))
+        self.assertNotEqual(r["base_pay"], round(self.jikyuu / 60 * r["net_minutes"]))
+
+    def test_overtime_pay_usa_taxa_cheia_nao_incremento(self):
+        r = self._dia()
+        premium = self.jikyuu + self.addon / self.std_hours
+        taxa_cheia = round(premium * 1.25)
+        self.assertEqual(r["overtime_pay"], taxa_cheia * 2)  # 2h de OT
+
+    def test_holiday_pay_usa_taxa_cheia_e_zera_base_pay(self):
+        r = self._dia(is_holiday=True)
+        premium = self.jikyuu + self.addon / self.std_hours
+        taxa_cheia_domingo = round(premium * 1.35)
+        self.assertEqual(r["base_pay"], 0)
+        self.assertEqual(r["overtime_pay"], 0)
+        self.assertEqual(r["night_pay"], 0)
+        self.assertEqual(r["holiday_pay"], taxa_cheia_domingo * 11)  # 660min=11h
+
+    def test_fevereiro_2026_16_dias_normais_2_domingos_bate_holerite_real(self):
+        r_normal = self._dia()
+        r_domingo = self._dia(is_holiday=True)
+        base_total = r_normal["base_pay"] * 16 + r_domingo["base_pay"] * 2
+        domingo_total = r_normal["holiday_pay"] * 16 + r_domingo["holiday_pay"] * 2
+        self.assertEqual(base_total, 228960)
+        self.assertEqual(domingo_total, 47784)
+
+
 if __name__ == "__main__":
     print("=" * 60)
     print("ONION PAYROLL — SUITE DE TESTES AUTOMATIZADOS")
