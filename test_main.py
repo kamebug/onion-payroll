@@ -1025,6 +1025,42 @@ class TestBaseExtraDomingoSeparados(unittest.TestCase):
         self.assertEqual(domingo_total, 47784)
 
 
+class TestYukyuEmFeriadoUsaJornadaConfigurada(unittest.TestCase):
+    """Trava a correção da v2.40 — o toggle 'yukyu_on_holiday' (有休 em
+    Feriado Corporativo) usava sempre jikyuu×8 fixo, inconsistente com
+    o resto do sistema, que já usa a jornada normal configurada em todo
+    lugar (v2.32). Reportado pelo usuário: 'não tem mais nada fixo pois
+    depende da configuração do usuário'."""
+
+    def test_toggle_usa_jornada_normal_nao_8h_fixo(self):
+        r = calculate_shift_pay(
+            1590, "holiday", base_shift="night",
+            is_holiday=True, yukyu_on_holiday=True,
+            break_min=65, ot_start_str="06:35",
+            cfg_start_str="20:30", cfg_end_str="08:35",
+        )
+        self.assertEqual(r["net_minutes"], 540)  # 9h, não 480 (8h)
+        self.assertEqual(r["base_pay"], round(1590 / 60 * 540))
+
+    def test_toggle_e_yukyu_normal_dao_o_mesmo_resultado(self):
+        # Mesma jornada configurada — o toggle "em feriado" e o status
+        # "yukyu" comum devem dar exatamente o mesmo valor, já que os
+        # dois usam a mesma lógica de jornada normal agora
+        r_toggle = calculate_shift_pay(
+            1590, "holiday", base_shift="night",
+            is_holiday=True, yukyu_on_holiday=True,
+            break_min=65, ot_start_str="06:35",
+            cfg_start_str="20:30", cfg_end_str="08:35",
+        )
+        r_normal = calculate_shift_pay(
+            1590, "yukyu", base_shift="night",
+            break_min=65, ot_start_str="06:35",
+            cfg_start_str="20:30", cfg_end_str="08:35",
+        )
+        self.assertEqual(r_toggle["base_pay"], r_normal["base_pay"])
+        self.assertEqual(r_toggle["net_minutes"], r_normal["net_minutes"])
+
+
 if __name__ == "__main__":
     print("=" * 60)
     print("ONION PAYROLL — SUITE DE TESTES AUTOMATIZADOS")

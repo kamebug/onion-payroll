@@ -320,11 +320,14 @@ def calculate_shift_pay(
     if shift_type == "absent":
         return result
 
+    # v2.40: o toggle "有休 em Feriado Corporativo" também usa a jornada
+    # normal configurada, igual ao Yukyu comum — nada mais fica com um
+    # valor fixo hardcoded (nem 8h, nem qualquer outro), tudo depende da
+    # configuração real do usuário (entrada, saída, intervalo, início da
+    # hora extra). Antes calculava sempre jikyuu×8, inconsistente com o
+    # resto do sistema, que já usa a jornada configurada em todo lugar.
     if yukyu_on_holiday and is_holiday:
-        # Toggle 有休 em feriado: sempre 8h base fixo
-        result["base_pay"] = shisha_gofuuu(jikyuu * 8)
-        result["total_gross"] = result["base_pay"]
-        return result
+        shift_type = "yukyu"
 
     # Determinar o turno EFETIVO para horários/limiar de OT — calculado
     # ANTES do branch de Yukyu, pra podermos usar a JORNADA NORMAL
@@ -793,7 +796,8 @@ def compute_monthly_forecast(
     _break        = cfg_break if cfg_break else 65
     _ot           = cfg_ot    if cfg_ot    else ("06:35" if _stype == "night" else "18:35")
     total_base = total_ot = total_night = total_holiday = total_legal = total_abono = 0
-    days_normal = days_holiday = days_legal = 0
+    total_yukyu = 0
+    days_normal = days_holiday = days_legal = days_yukyu = 0
 
     for day_num, cycle_status in cycle.items():
         # No modo alternado (semanal ou mensal), o turno do dia muda
@@ -906,6 +910,14 @@ def compute_monthly_forecast(
         elif status == "holiday" or (is_holiday and not is_sunday):
             total_holiday += pay["total_gross"]
             days_holiday  += 1
+        elif shift_type == "yukyu":
+            # Separado de total_base — sem isso, o valor do Yukyu ficava
+            # misturado com dias normais de trabalho em "Salário Base",
+            # sem como comparar com o holerite real (que mostra Yukyu
+            # como rubrica própria, com dias e horas separados).
+            total_yukyu += pay["base_pay"]
+            if pay["base_pay"] > 0:
+                days_yukyu += 1
         else:
             total_base  += pay["base_pay"]
             total_ot    += pay["overtime_pay"]
@@ -916,6 +928,7 @@ def compute_monthly_forecast(
 
     applied_odd = odd_month_bonus if month % 2 == 1 else 0
     gross       = (total_base + total_ot + total_night + total_holiday + total_legal
+                   + total_yukyu
                    + applied_odd + extra_bonus + total_abono + fixed_monthly_bonus)
     deductions  = (fixed_deduction if deduction_mode == "fixed"
                    else shisha_gofuuu(gross * history_avg_pct / 100))
@@ -923,6 +936,7 @@ def compute_monthly_forecast(
     return {
         "base_pay": total_base, "overtime_pay": total_ot, "night_pay": total_night,
         "holiday_pay": total_holiday, "legal_holiday_pay": total_legal,
+        "yukyu_pay": total_yukyu, "days_yukyu": days_yukyu,
         "odd_bonus": applied_odd, "extra_bonus": extra_bonus,
         "gross": gross, "deductions": deductions, "net": gross - deductions,
         "days_normal": days_normal, "days_holiday": days_holiday, "days_legal": days_legal,
@@ -1168,7 +1182,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607060932"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607010336"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -1336,9 +1350,9 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
             ("normal",  "Normal",             "",       "Trabalho Normal"),
             ("early",   "Saída Antecipada",   "",       "Saída Antecipada — horário real"),
             ("absent",  "Falta",              "欠勤",    "Falta 欠勤"),
-            ("yukyu",   "Folga Remunerada",   "有休",    "有休 Yukyu — 8h sem 残業/noturno"),
-            ("holiday", "Feriado +35%",       "休出",    "休出 Trabalho em Feriado (+35%)"),
-            ("legal",   "Domingo +35%",       "法定休出", "法定休出 Domingo/Folga Legal (+35%)"),
+            ("yukyu",   "Folga Remunerada",   "有休",    "有休 Yukyu — jornada normal, sem 残業/noturno"),
+            ("holiday", "Feriado 1,35x",      "休出",    "休出 Trabalho em Feriado (taxa cheia 1,35x)"),
+            ("legal",   "Domingo 1,35x",      "法定休出", "法定休出 Domingo/Folga Legal (taxa cheia 1,35x)"),
         ]
         status_desc = ft.Text(
             next((d for k, _, _, d in STATUS_OPCOES if k == status_dd.value), ""),
@@ -2053,6 +2067,8 @@ def build_holerite_tab(page: ft.Page, state: dict, refresh_all):
                 section_header("支給 VENCIMENTOS"),
                 pay_row(f"Salário Base 基本給 ({data.get('days_normal',0)}d)",
                         data["base_pay"]),
+                pay_row(f"Yukyu 有給休暇 ({data.get('days_yukyu',0)}d)",
+                        data.get("yukyu_pay", 0),     color="#FFB74D",   small=True),
                 pay_row("Hora Extra 残業手当",
                         data["overtime_pay"],       color=WARNING,     small=True),
                 pay_row("Adicional Noturno 深夜手当",
@@ -2202,9 +2218,9 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
         f_kihon     = _tf("基本給 Salário Base", val=_v("kihon"))
         f_shonai_k  = _tf("所定内金額 Val.Normal", val=_v("shonai_k"))
         f_shogai_k  = _tf("所定外手当 HE Padrão", val=_v("shogai_k"))
-        f_zangyo    = _tf("残業手当 Hora Extra +25%", val=_v("zangyo"))
+        f_zangyo    = _tf("残業手当 Hora Extra 1,25x", val=_v("zangyo"))
         f_yakin     = _tf("深夜手当 Ad.Noturno +25%", val=_v("yakin"))
-        f_kyushu    = _tf("休出手当 Trab.Feriado +35%", val=_v("kyushutsu"))
+        f_kyushu    = _tf("休出手当 Trab.Feriado 1,35x", val=_v("kyushutsu"))
         f_kanri     = _tf("管理手当 Ad.Gestão", val=_v("kanri"))
         f_gijutsu   = _tf("技術手当 Ad.Técnico", val=_v("gijutsu"))
         f_leader    = _tf("リーダー手当 Ad.Líder", val=_v("leader"))
@@ -4091,8 +4107,8 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
             _item("Trabalho em Folga/Feriado", "Preencha Entrada e Saída",
                   "Taxa cheia 1,35x sobre essas horas. Vale para folga, feriado e domingo."),
             _item("有休 em Feriado Corporativo",
-                  "Ative o toggle 有休 em Feriado",
-                  "Injeta 8h base fixo mesmo sendo feriado da empresa."),
+                  "Ative o toggle 有休 em Feriado, sem preencher horário",
+                  "Usa a jornada normal configurada (igual ao Yukyu comum) — não injeta mais 8h fixo. Se preencher Entrada/Saída, conta como trabalho no feriado (taxa cheia), não Yukyu."),
 
             # ── Direito a Yukyu ──────────────────────────────────────
             _title("🌴 Direito a Yukyu (有給休暇)"),
