@@ -356,30 +356,42 @@ def calculate_shift_pay(
     _ot_final = ot_start_str if ot_start_str else _default_ot
 
     if shift_type == "yukyu":
+        # Jornada normal configurada (do início do turno até o início da
+        # hora extra, descontando intervalo) — usada tanto como valor
+        # padrão (sem horário informado) quanto como TETO máximo (com
+        # horário informado). Sem esse teto, informar o horário do turno
+        # INTEIRO (ex: 20:30-08:35, igual a um dia normal) contava até a
+        # janela de hora extra também, pagando mais do que a jornada
+        # normal — inconsistente com o Art. 39 §9: Yukyu paga o salário
+        # do dia normal de trabalho, nunca mais que isso.
+        _yk_start_dt = parse_hhmm(default_start)
+        _yk_ot_dt    = parse_hhmm(_ot_final)
+        if _yk_start_dt and _yk_ot_dt:
+            _yk_gross_min = minutes_between(_yk_start_dt, _yk_ot_dt)
+            _jornada_normal_min = max(0, truncate_minutes(_yk_gross_min - break_min, block, round_mode))
+        else:
+            _jornada_normal_min = None
+
         if start_str and end_str:
-            # Yukyu parcial: calcular pelo horário real, SEM OT e SEM noturno
+            # Yukyu parcial: calcular pelo horário real, SEM OT e SEM
+            # noturno — mas nunca mais que a jornada normal (teto acima).
             start_dt = parse_hhmm(start_str)
             end_dt   = parse_hhmm(end_str)
             if start_dt and end_dt:
                 gross_min = minutes_between(start_dt, end_dt)
                 net_min   = max(0, truncate_minutes(gross_min - break_min, block, round_mode))
+                if _jornada_normal_min is not None:
+                    net_min = min(net_min, _jornada_normal_min)
                 result["net_minutes"] = net_min
                 result["base_pay"]    = shisha_gofuuu((jikyuu / 60.0) * net_min)
                 result["total_gross"] = result["base_pay"]
                 return result
-        # Sem horário: usar a JORNADA NORMAL configurada (do início do
-        # turno até o início da hora extra, descontando intervalo) — não
-        # mais um valor fixo de 8h. Reflete o que a pessoa realmente
-        # ganharia num dia comum de trabalho (Art. 39 §9 da Lei
-        # Trabalhista: Yukyu paga o salário do dia normal de trabalho,
-        # que pode ser 9h, 8h, ou outro valor, conforme o turno real).
-        _yk_start_dt = parse_hhmm(default_start)
-        _yk_ot_dt    = parse_hhmm(_ot_final)
-        if _yk_start_dt and _yk_ot_dt:
-            _yk_gross_min = minutes_between(_yk_start_dt, _yk_ot_dt)
-            _yk_net_min   = max(0, truncate_minutes(_yk_gross_min - break_min, block, round_mode))
-            result["net_minutes"] = _yk_net_min
-            result["base_pay"]    = shisha_gofuuu((jikyuu / 60.0) * _yk_net_min)
+        # Sem horário (ou horário inválido): jornada normal cheia. Não
+        # mais um valor fixo de 8h — reflete o que a pessoa realmente
+        # ganharia num dia comum de trabalho.
+        if _jornada_normal_min is not None:
+            result["net_minutes"] = _jornada_normal_min
+            result["base_pay"]    = shisha_gofuuu((jikyuu / 60.0) * _jornada_normal_min)
         else:
             # Fallback final (não deveria ocorrer com horários válidos)
             result["base_pay"] = shisha_gofuuu(jikyuu * 8)
@@ -1182,7 +1194,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607061031"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607010336"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 

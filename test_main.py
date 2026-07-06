@@ -1061,6 +1061,50 @@ class TestYukyuEmFeriadoUsaJornadaConfigurada(unittest.TestCase):
         self.assertEqual(r_toggle["net_minutes"], r_normal["net_minutes"])
 
 
+class TestYukyuComHorarioLimitadoPelaJornadaNormal(unittest.TestCase):
+    """Trava a correção reportada pelo usuário: '9 horas vezes 1590 é
+    igual a 14310. O cálculo me dá 17490.' — informar o horário
+    INTEIRO do turno (ex: 20:30-08:35, igual a um dia normal) no Yukyu
+    contava até a janela de hora extra também (11h), pagando mais do
+    que a jornada normal (9h) permitiria. Corrigido com um teto: nunca
+    paga mais que a jornada normal, mesmo com horário informado."""
+
+    def test_horario_igual_ao_turno_inteiro_e_limitado_a_9h(self):
+        r = calculate_shift_pay(
+            1590, "yukyu", base_shift="night",
+            start_str="20:30", end_str="08:35", break_min=65,
+            ot_start_str="06:35", cfg_start_str="20:30", cfg_end_str="08:35",
+        )
+        self.assertEqual(r["net_minutes"], 540)  # 9h, não 660 (11h)
+        self.assertEqual(r["base_pay"], 14310)   # não 17490
+
+    def test_horario_genuinamente_parcial_nao_e_afetado(self):
+        # 4h reais, bem menor que a jornada normal de 9h — não deve
+        # ser limitado nem inflado, paga exatamente as 4h informadas
+        r = calculate_shift_pay(
+            1590, "yukyu", base_shift="night",
+            start_str="20:30", end_str="00:30", break_min=0,
+            ot_start_str="06:35", cfg_start_str="20:30", cfg_end_str="08:35",
+        )
+        self.assertEqual(r["net_minutes"], 240)  # 4h
+        self.assertEqual(r["base_pay"], 6360)
+
+    def test_sem_horario_continua_igual_ao_com_horario_no_teto(self):
+        # Sem horário (jornada normal cheia) e com horário igual ao
+        # turno inteiro devem dar exatamente o mesmo resultado agora
+        r_sem = calculate_shift_pay(
+            1590, "yukyu", base_shift="night", break_min=65,
+            ot_start_str="06:35", cfg_start_str="20:30", cfg_end_str="08:35",
+        )
+        r_com = calculate_shift_pay(
+            1590, "yukyu", base_shift="night",
+            start_str="20:30", end_str="08:35", break_min=65,
+            ot_start_str="06:35", cfg_start_str="20:30", cfg_end_str="08:35",
+        )
+        self.assertEqual(r_sem["base_pay"], r_com["base_pay"])
+        self.assertEqual(r_sem["net_minutes"], r_com["net_minutes"])
+
+
 if __name__ == "__main__":
     print("=" * 60)
     print("ONION PAYROLL — SUITE DE TESTES AUTOMATIZADOS")
