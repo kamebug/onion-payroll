@@ -62,7 +62,7 @@ Write-Host "Copiando para docs/..." -ForegroundColor Cyan
 New-Item -ItemType Directory -Path "$ROOT\docs" -Force | Out-Null
 Copy-Item -Path "$ROOT\build_src\build\web\*" -Destination "$ROOT\docs\" -Recurse -Force
 
-# 7. Adicionar Analytics + meta tags anti-cache no index.html
+# 7. Adicionar Analytics + meta tags anti-cache + pop-up de instalação no index.html
 $headInjection = @"
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
@@ -75,6 +75,115 @@ $headInjection = @"
     gtag('js', new Date());
     gtag('config', 'G-2Z4173R5NS');
   </script>
+  <!-- Pop-up customizado de instalacao PWA (igual ao NetMikuji) -->
+  <style>
+    #onion-install-banner {
+      position: fixed; left: 12px; right: 12px; bottom: 12px;
+      max-width: 420px; margin: 0 auto;
+      background: #1E1E1E; border: 1px solid #00A896;
+      border-radius: 14px; padding: 14px;
+      display: flex; align-items: center; gap: 12px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+      z-index: 99999; font-family: sans-serif;
+      animation: onion-slide-up 0.3s ease-out;
+    }
+    @keyframes onion-slide-up {
+      from { transform: translateY(80px); opacity: 0; }
+      to   { transform: translateY(0);    opacity: 1; }
+    }
+    #onion-install-banner img {
+      width: 48px; height: 48px; border-radius: 10px; flex-shrink: 0;
+    }
+    #onion-install-banner .onion-install-text {
+      flex: 1; display: flex; flex-direction: column; gap: 2px;
+    }
+    #onion-install-banner .onion-install-text strong {
+      color: #F0F0F0; font-size: 14px;
+    }
+    #onion-install-banner .onion-install-text span {
+      color: #A0A0A0; font-size: 11px; line-height: 1.3;
+    }
+    #onion-install-banner .onion-install-buttons {
+      display: flex; flex-direction: column; gap: 6px; flex-shrink: 0;
+    }
+    #onion-install-banner button {
+      border: none; border-radius: 8px; padding: 7px 12px;
+      font-size: 12px; font-weight: 600; cursor: pointer;
+      white-space: nowrap;
+    }
+    #onion-install-btn { background: #00A896; color: #121212; }
+    #onion-install-dismiss { background: transparent; color: #757575; }
+  </style>
+  <script>
+    (function () {
+      var deferredPrompt = null;
+      window.addEventListener('beforeinstallprompt', function (e) {
+        e.preventDefault();
+        deferredPrompt = e;
+        if (localStorage.getItem('onion_install_dismissed') === '1') return;
+        if (document.getElementById('onion-install-banner')) return;
+
+        var banner = document.createElement('div');
+        banner.id = 'onion-install-banner';
+        banner.innerHTML =
+          '<img src="icons/apple-touch-icon-192.png" alt="Onion Payroll">' +
+          '<div class="onion-install-text">' +
+            '<strong>Instalar Onion Payroll</strong>' +
+            '<span>Acesse direto da tela inicial, sem abrir o navegador.</span>' +
+          '</div>' +
+          '<div class="onion-install-buttons">' +
+            '<button id="onion-install-btn">Instalar</button>' +
+            '<button id="onion-install-dismiss">Agora não</button>' +
+          '</div>';
+        document.body.appendChild(banner);
+
+        document.getElementById('onion-install-btn').addEventListener('click', function () {
+          banner.remove();
+          if (deferredPrompt) {
+            deferredPrompt.prompt();
+            deferredPrompt.userChoice.then(function () { deferredPrompt = null; });
+          }
+        });
+        document.getElementById('onion-install-dismiss').addEventListener('click', function () {
+          banner.remove();
+          localStorage.setItem('onion_install_dismissed', '1');
+        });
+      });
+
+      // iOS/Safari nao dispara beforeinstallprompt - instalacao so pelo
+      // menu Compartilhar, entao mostramos instrucoes manuais em vez de
+      // um botao "Instalar" (nao existe API programatica no iOS).
+      function isIos() {
+        return /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase());
+      }
+      function isStandalone() {
+        return ('standalone' in window.navigator) && window.navigator.standalone;
+      }
+      window.addEventListener('load', function () {
+        if (!isIos() || isStandalone()) return;
+        if (localStorage.getItem('onion_ios_install_dismissed') === '1') return;
+        if (document.getElementById('onion-install-banner')) return;
+
+        var banner = document.createElement('div');
+        banner.id = 'onion-install-banner';
+        banner.innerHTML =
+          '<img src="icons/apple-touch-icon-192.png" alt="Onion Payroll">' +
+          '<div class="onion-install-text">' +
+            '<strong>Instalar Onion Payroll</strong>' +
+            '<span>Toque em Compartilhar 📤 e depois em "Adicionar à Tela de Início".</span>' +
+          '</div>' +
+          '<div class="onion-install-buttons">' +
+            '<button id="onion-ios-install-dismiss">Entendi</button>' +
+          '</div>';
+        document.body.appendChild(banner);
+
+        document.getElementById('onion-ios-install-dismiss').addEventListener('click', function () {
+          banner.remove();
+          localStorage.setItem('onion_ios_install_dismissed', '1');
+        });
+      });
+    })();
+  </script>
 "@
 $html = Get-Content "$ROOT\docs\index.html" -Raw
 $html = $html -replace "</head>", "$headInjection`n</head>"
@@ -86,7 +195,7 @@ $html = $html -replace "</head>", "$headInjection`n</head>"
 $html = $html -replace ',\s*maximum-scale=1\.0,\s*user-scalable=no', ''
 
 $html | Set-Content "$ROOT\docs\index.html" -Encoding UTF8
-Write-Host "Analytics, meta tags anti-cache e zoom liberado no index.html" -ForegroundColor Green
+Write-Host "Analytics, meta tags anti-cache, zoom liberado e pop-up de instalacao no index.html" -ForegroundColor Green
 
 # 8. Limpar build_src
 Set-Location $ROOT
