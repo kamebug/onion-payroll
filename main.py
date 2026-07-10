@@ -1245,7 +1245,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607101031"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607010336"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -4242,8 +4242,16 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
             ]),
             _item("Limiar configurável", "⚙️ Config, Etapa 4",
                   "Cada empresa define o próprio percentual mínimo — não existe um valor padrão da lei. Ajuste pro que a sua empresa usa (o app não sabe esse número sozinho)."),
-            _item("O que conta como falta", "Nesta versão: só falta de dia inteiro",
-                  "Algumas empresas também descontam atraso ou saída antecipada — isso ainda não está implementado. Se for o seu caso, o percentual mostrado pode ficar mais otimista que o real da sua empresa."),
+            _item("Interpretação de falta é sua", "O app não define isso sozinho",
+                  "Cada empresa trata 'falta' de um jeito diferente, e o app não tenta adivinhar as regras da sua empresa — ele só conta o que VOCÊ marcar como Falta no calendário. Vale confirmar com o RH o que conta oficialmente antes de marcar, principalmente se sua empresa também descontar atraso ou saída antecipada (isso o app ainda não rastreia)."),
+            _item("O total de dias muda todo mês", "Não é um número fixo",
+                  "O cálculo usa os dias programados DAQUELE mês específico, que variam com feriados e o seu ciclo de trabalho — então a mesma 1 falta pesa diferente dependendo do mês."),
+            _example("Exemplo — a mesma 1 falta em meses diferentes:", [
+                "20 dias programados:",
+                "  19/20 = 95,0%",
+                "15 dias programados:",
+                "  14/15 = 93,3%",
+            ]),
             _item("Yukyu não desconta", "Art. 136 da Lei Trabalhista",
                   "Usar férias remuneradas não pode ser tratado como falta pra esse adicional — protegido por lei, mesmo esse sendo um benefício opcional da empresa."),
             _item("Feriado da empresa", "Não entra no cálculo",
