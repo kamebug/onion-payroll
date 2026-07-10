@@ -1245,7 +1245,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607101042"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607010336"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -4059,7 +4059,7 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
 
     # ── Seções do manual ─────────────────────────────────────────────
     APP_URL = "https://kamebug.github.io/onion-payroll/"
-    VIDEO_URL = "https://youtube.com/shorts/gOclnXQZ5SM"  # v3 do roteiro, frases hedged
+    VIDEO_URL = "https://youtube.com/shorts/PrwumZLHVxM"  # atualizado 09/07/2026
     # v2.37: trocado ft.Text(selectable=True) por ft.TextField(read_only=True)
     # — sugestão do usuário, ainda não testada antes nesta conversa.
     # TextField é widget de INPUT nativo (usado em dezenas de lugares
