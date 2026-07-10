@@ -43,6 +43,7 @@ def carregar_funcoes_de_calculo():
 
 FUNCS = carregar_funcoes_de_calculo()
 calculate_shift_pay        = FUNCS["calculate_shift_pay"]
+calcular_presenca_mensal   = FUNCS["calcular_presenca_mensal"]
 night_minutes_worked       = FUNCS["night_minutes_worked"]
 night_minutes_in_range     = FUNCS["night_minutes_in_range"]
 parse_hhmm                 = FUNCS["parse_hhmm"]
@@ -1103,6 +1104,51 @@ class TestYukyuComHorarioLimitadoPelaJornadaNormal(unittest.TestCase):
         )
         self.assertEqual(r_sem["base_pay"], r_com["base_pay"])
         self.assertEqual(r_sem["net_minutes"], r_com["net_minutes"])
+
+
+class TestPresencaMensal(unittest.TestCase):
+    """Valida o cálculo de % de presença pro 精皆勤手当 (adicional de
+    assiduidade opcional por empresa) — isolado do motor de pagamento,
+    só falta de dia inteiro desconta (confirmado pelo usuário)."""
+
+    def setUp(self):
+        self.cycle = generate_4x2_calendar(date(2026, 6, 1), 2026, 3, "B")
+        self.dias_trabalho = [d for d, s in self.cycle.items() if s == "work"]
+
+    def test_sem_falta_100_por_cento(self):
+        r = calcular_presenca_mensal(self.cycle, {})
+        self.assertEqual(r["percentual"], 100.0)
+        self.assertEqual(r["faltas"], 0)
+
+    def test_uma_falta_desconta_proporcionalmente(self):
+        dia = self.dias_trabalho[0]
+        r = calcular_presenca_mensal(self.cycle, {str(dia): {"status": "absent"}})
+        self.assertEqual(r["faltas"], 1)
+        esperado = (r["dias_programados"] - 1) / r["dias_programados"] * 100
+        self.assertAlmostEqual(r["percentual"], esperado)
+
+    def test_yukyu_nao_desconta(self):
+        dia = self.dias_trabalho[0]
+        r = calcular_presenca_mensal(self.cycle, {str(dia): {"status": "yukyu"}})
+        self.assertEqual(r["percentual"], 100.0)
+        self.assertEqual(r["faltas"], 0)
+
+    def test_domingo_feriado_trabalhado_nao_desconta(self):
+        dia = self.dias_trabalho[0]
+        r = calcular_presenca_mensal(self.cycle, {str(dia): {"status": "legal"}})
+        self.assertEqual(r["percentual"], 100.0)
+
+    def test_feriado_da_empresa_nao_entra_no_denominador(self):
+        dia = self.dias_trabalho[0]
+        r_sem_feriado = calcular_presenca_mensal(self.cycle, {})
+        r_com_feriado = calcular_presenca_mensal(self.cycle, {}, month_holidays=[dia])
+        self.assertEqual(r_com_feriado["dias_programados"],
+                          r_sem_feriado["dias_programados"] - 1)
+
+    def test_mes_sem_dias_programados_retorna_100(self):
+        r = calcular_presenca_mensal({}, {})
+        self.assertEqual(r["percentual"], 100.0)
+        self.assertEqual(r["dias_programados"], 0)
 
 
 if __name__ == "__main__":

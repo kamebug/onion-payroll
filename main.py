@@ -253,6 +253,56 @@ def build_timeline_segments(shift_start: datetime, shift_end: datetime,
     return segmentos
 
 
+def calcular_presenca_mensal(cycle: dict, day_overrides: dict,
+                              month_holidays: list = None) -> dict:
+    """Calcula a % de presença do mês, pro adicional de assiduidade
+    opcional da empresa (精皆勤手当) — DIFERENTE da regra legal dos 80%
+    do Yukyu (essa é sempre por período de 6 meses/1 ano, nunca mensal).
+
+    Totalmente ISOLADA do motor de cálculo de pagamento — só lê o mesmo
+    ciclo/overrides que compute_monthly_forecast já usa, sem alterar
+    nenhum valor de holerite.
+
+    Confirmado pelo usuário: só falta de dia inteiro (status="absent")
+    desconta da porcentagem — dias de Yukyu, domingo/feriado trabalhado,
+    e qualquer outro status contam como presença normalmente. Dias que
+    são feriado da empresa também não entram no denominador (não é dia
+    que a pessoa "deveria" comparecer).
+
+    `cycle`: dict {dia: "work"|"off"} — o mesmo gerado por
+        generate_4x2_calendar/generate_weekly_calendar/etc.
+    `day_overrides`: dict {dia_str: {"status": ...}} — overrides do mês.
+    `month_holidays`: lista de dias (int) que são feriado da empresa
+        nesse mês — excluídos do denominador.
+
+    Retorna: {"percentual", "dias_programados", "faltas", "presentes"}.
+    Se não há dias programados no mês (ex: mês todo de folga), retorna
+    100% — sem dias pra faltar, não há o que descontar.
+    """
+    month_holidays = month_holidays or []
+    dias_programados = 0
+    faltas = 0
+    for day_num, cycle_status in cycle.items():
+        if cycle_status != "work":
+            continue
+        if day_num in month_holidays:
+            continue
+        dias_programados += 1
+        ov = day_overrides.get(str(day_num), {})
+        if isinstance(ov, dict) and ov.get("status") == "absent":
+            faltas += 1
+
+    if dias_programados == 0:
+        return {"percentual": 100.0, "dias_programados": 0, "faltas": 0, "presentes": 0}
+
+    presentes = dias_programados - faltas
+    percentual = (presentes / dias_programados) * 100
+    return {
+        "percentual": percentual, "dias_programados": dias_programados,
+        "faltas": faltas, "presentes": presentes,
+    }
+
+
 def calculate_shift_pay(
     jikyuu: int, shift_type: str, start_str: str = "", end_str: str = "",
     break_min: int = 65, block: int = 1, is_holiday: bool = False,
@@ -1078,6 +1128,7 @@ DEFAULT_SETTINGS = {
     "disclaimer_accepted_at": None,  # timestamp ISO de quando o usuário clicou Aceitar
     "break_periods_enabled": False,   # recurso avançado opcional (v2.33)
     "break_periods_detailed": [],     # lista de {"start":"HH:MM","end":"HH:MM"}
+    "seikaikin_threshold_pct": 100,   # limiar do 精皆勤手当 (adicional de assiduidade, opcional por empresa)
     "shift_type": "night", "shift_start": "20:35", "shift_end": "08:35",
     "shift_break": 65, "shift_ot": "06:35", "extra_bonus": 0,
     "fixed_monthly_bonus": 0,  # adicional fixo todo mês (ex: liderança)
@@ -1194,7 +1245,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607091134"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607010336"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -1932,8 +1983,39 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
             margin=ft.Padding(left=0, right=0, top=0, bottom=4),
         )
 
+    # Barra de presença — 精皆勤手当 (adicional de assiduidade opcional
+    # por empresa). Recalculada a cada renderização, então atualiza
+    # sozinha assim que o modal do dia salva uma falta (o app já chama
+    # refresh_all() depois de salvar, sem precisar de nada especial aqui).
+    _presenca      = calcular_presenca_mensal(cycle, month_overrides, month_holidays)
+    _limiar_pct    = float(settings.get("seikaikin_threshold_pct") or 100)
+    _pct_atual     = _presenca["percentual"]
+    _cor_presenca  = "#2ECC71" if _pct_atual >= _limiar_pct else "#E74C3C"
+    _pct_int       = max(0, min(100, round(_pct_atual)))
+    presenca_bar = ft.Container(
+        content=ft.Column(controls=[
+            ft.Row(controls=[
+                ft.Text("📋 Assiduidade do Mês", size=11, color=TEXT_SECONDARY,
+                        weight=ft.FontWeight.W_600, expand=True),
+                ft.Text(f"{_pct_atual:.1f}% (limite {_limiar_pct:.0f}%)",
+                        size=11, color=_cor_presenca, weight=ft.FontWeight.W_700),
+            ]),
+            ft.Container(
+                height=10, border_radius=5, bgcolor="#333333",
+                content=ft.Row(controls=[
+                    ft.Container(bgcolor=_cor_presenca, border_radius=5, expand=_pct_int),
+                    ft.Container(expand=(100 - _pct_int)),
+                ], spacing=0),
+            ),
+        ], spacing=4, tight=True),
+        padding=ft.Padding(left=8, right=8, top=6, bottom=6),
+        bgcolor="#1A1A1A", border_radius=6,
+        margin=ft.Padding(left=0, right=0, top=0, bottom=4),
+    )
+
     return ft.Column(
-        controls=[nav_row, *([group_badge] if group_badge else []), legend,
+        controls=[nav_row, *([group_badge] if group_badge else []),
+                  presenca_bar, legend,
                   ft.Container(height=2), header_row,
                   ft.Container(height=2), *weeks],
         spacing=4,
@@ -3177,6 +3259,14 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
         ),
         hire_date_field,
         yukyu_summary,
+        mk_field("Limiar 精皆勤手当 — Assiduidade (%)", "seikaikin_threshold_pct"),
+        ft.Text(
+            "Percentual mínimo de presença no mês pra manter o adicional "
+            "de assiduidade da sua empresa (opcional, cada empresa define "
+            "o seu — não é exigência de lei). Só falta de dia inteiro "
+            "desconta. Mostrado como barra na aba Calendário.",
+            size=9, color=TEXT_MUTED,
+        ),
     ], spacing=12, tight=True))
     step4_salario_container.visible = _cur_cycle_confirmed
 
@@ -4141,6 +4231,24 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
             _item("Uso sem saldo disponível", "Aparece um aviso ⚠️ no resumo",
                   "Acontece se você marcar Yukyu antes de completar 6 meses, ou além do que já foi concedido — confira o histórico nesses casos."),
             _p("⚠️ Duas limitações desta versão: (1) não verifica a regra de 80% de presença no período aquisitivo — assume que você tem direito; (2) cobre só a tabela cheia (5+ dias/semana) — não calcula o proporcional (比例付与) de quem trabalha part-time."),
+
+            # ── Assiduidade mensal (精皆勤手当) ─────────────────────────
+            _title("📋 Assiduidade do Mês (精皆勤手当)"),
+            _p("Diferente da regra dos 80% do Yukyu (que é por período de 6 meses/1 ano, nunca mensal), o 精皆勤手当 é um adicional OPCIONAL que cada empresa decide se paga — não existe exigência de lei. Por isso o limiar (ex: 94%) e o que conta como falta variam de empresa pra empresa."),
+            _example("Fórmula usada nesta versão:", [
+                "presença = trabalhados",
+                "  ÷ programados no mês",
+                "  × 100",
+            ]),
+            _item("Limiar configurável", "⚙️ Config, Etapa 4",
+                  "Cada empresa define o próprio percentual mínimo — não existe um valor padrão da lei. Ajuste pro que a sua empresa usa (o app não sabe esse número sozinho)."),
+            _item("O que conta como falta", "Nesta versão: só falta de dia inteiro",
+                  "Algumas empresas também descontam atraso ou saída antecipada — isso ainda não está implementado. Se for o seu caso, o percentual mostrado pode ficar mais otimista que o real da sua empresa."),
+            _item("Yukyu não desconta", "Art. 136 da Lei Trabalhista",
+                  "Usar férias remuneradas não pode ser tratado como falta pra esse adicional — protegido por lei, mesmo esse sendo um benefício opcional da empresa."),
+            _item("Feriado da empresa", "Não entra no cálculo",
+                  "Dias de feriado corporativo não contam nem como dia programado nem como falta — não é um dia que você deveria comparecer de qualquer forma."),
+            _p("📅 A barra de progresso fica na aba Calendário, no topo — fica verde quando está dentro do limiar configurado, vermelha quando fica abaixo."),
 
             # ── Cores do calendário ──────────────────────────────────
             _title("🎨 Cores do Calendário"),
