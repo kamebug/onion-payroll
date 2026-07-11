@@ -1298,8 +1298,8 @@ ACCENT_LITE    = "#5EEAD4"   # Turquesa claro (sobre escuro)
 ACCENT_DARK    = "#007A6E"   # Turquesa escuro
 
 # CALENDÁRIO — cores dos dias
-WORK_COLOR     = "#1a3d2b"   # Trabalho — verde escuro saturado
-OFF_COLOR      = "#1e2e4a"   # Folga — azul escuro saturado
+WORK_COLOR     = "#0F9D58"   # Trabalho — verde escuro saturado
+OFF_COLOR      = "#4285F4"   # Folga — azul escuro saturado
 HOL_COLOR      = "#4a1a1a"   # Feriado nacional — vermelho escuro
 
 # TEXTO (sobre fundo escuro #2c2c2a)
@@ -1322,14 +1322,14 @@ NAV_BORDER     = "#00C2A8"   # Linha turquesa separadora
 CAL_YUKYU      = "#4a2800"   # Yukyu — laranja escuro
 CAL_CORP       = "#3d2000"   # Feriado corp — marrom escuro
 CAL_MODIF      = "#2d1a4a"   # Modificado — roxo escuro
-CAL_TEXT_WORK  = "#86efac"   # verde claro
-CAL_TEXT_OFF   = "#93c5fd"   # azul claro
+CAL_TEXT_WORK  = "#C8F7DC"   # verde claro
+CAL_TEXT_OFF   = "#DBEAFE"   # azul claro
 CAL_TEXT_HOL   = "#fca5a5"   # vermelho claro
 CAL_TEXT_CORP  = "#fdba74"   # laranja claro
 CAL_TEXT_YUKYU = "#fb923c"   # laranja médio
 CAL_TEXT_MODIF = "#c4b5fd"   # lilás claro
-CAL_BORDER_WORK= "#22c55e"   # verde médio
-CAL_BORDER_OFF = "#60a5fa"   # azul médio
+CAL_BORDER_WORK= "#7ade9f"   # verde médio
+CAL_BORDER_OFF = "#a0c3ed"   # azul médio
 
 
 def card(content, padding=16, margin=8):
@@ -1745,7 +1745,7 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
     C_TODAY_B = "#00C2A8"     # borda turquesa hoje
     C_WHITE   = "#F9F9F9"     # texto claro sobre fundo escuro
     C_RED     = "#FF5252"     # domingo — vermelho brilhante
-    C_BLUE    = "#40C4FF"     # sábado — azul brilhante
+    C_BLUE    = "#90CAF9"     # sábado — azul brilhante
 
     # ── Day cell ─────────────────────────────────────────────────────
     def day_cell(day_num: int):
@@ -1845,7 +1845,7 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
         if is_today:
             border = ft.Border.all(2, "#00D2C6")
         else:
-            border = ft.Border.all(1, "#D0D0D0")
+            border = ft.Border.all(1, "#E5E7EB")
 
         # No 0.85 o GestureDetector precisa de expand=True ou o Container
         # precisa de on_click direto. Usamos um ElevatedButton sem estilo
