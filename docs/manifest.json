@@ -1,10 +1,10 @@
 {
     "name": "Onion Payroll",
-    "short_name": "onion_payroll",
+    "short_name": "Onion Payroll",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#FFFFFF",
-    "theme_color": "#0175C2",
+    "background_color": "#2c2c2a",
+    "theme_color": "#00C2A8",
     "description": "",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
