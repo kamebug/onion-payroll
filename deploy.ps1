@@ -133,7 +133,7 @@ $headInjection = @"
           '</div>' +
           '<div class="onion-install-buttons">' +
             '<button id="onion-install-btn">Instalar</button>' +
-            '<button id="onion-install-dismiss">Agora não</button>' +
+            '<button id="onion-install-dismiss">Agora n&atilde;o</button>' +
           '</div>';
         document.body.appendChild(banner);
 
@@ -170,7 +170,7 @@ $headInjection = @"
           '<img src="icons/apple-touch-icon-192.png" alt="Onion Payroll">' +
           '<div class="onion-install-text">' +
             '<strong>Instalar Onion Payroll</strong>' +
-            '<span>Toque em Compartilhar 📤 e depois em "Adicionar à Tela de Início".</span>' +
+            '<span>Toque em Compartilhar 📤 e depois em "Adicionar &agrave; Tela de In&iacute;cio".</span>' +
           '</div>' +
           '<div class="onion-install-buttons">' +
             '<button id="onion-ios-install-dismiss">Entendi</button>' +
