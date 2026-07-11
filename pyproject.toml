@@ -1,13 +1,42 @@
+[project]
+name = "onion-payroll"
+version = "2.42.0"
+description = "Sistema de folha de pagamento para trabalhadores brasileiros no Japão"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "flet",
+]
+
+[tool.flet]
+org = "com.kamebug"
+product = "Onion Payroll"
+short_name = "OnionPayroll"
+description = "Sistema de folha de pagamento para trabalhadores brasileiros no Japão"
+
 [tool.flet.web]
-# Excluir pacotes pesados desnecessários para reduzir app.zip
+base_url = "/onion-payroll"
+
+[tool.flet.app]
+path = "."
+module = "main"
+
+[tool.flet.template]
 exclude = [
-    "numpy",
-    "pandas",
-    "scipy",
-    "matplotlib",
-    "PIL",
-    "cv2",
-    "sklearn",
-    "tensorflow",
-    "torch",
+    "build",
+    "docs",
+    ".git",
+    ".github",
+    "__pycache__",
+    "*.pyc",
+    ".venv",
+    "venv",
+    "android",
+    "ios",
+    "linux",
+    "macos",
+    "windows",
+    ".dart_tool",
+    "*.lock",
+    "*.orig",
 ]
