@@ -1,5 +1,47 @@
 # Changelog — Onion Payroll
 
+## [2.44.0] — 2026-07-12 — NOME DO PWA INSTALADO E CORES DA SPLASH SCREEN
+
+### 🟢 Corrigido — nome do app instalado aparecia como "onion_payroll"
+
+**Sintoma:** ao instalar o PWA, o ícone ficava com o nome
+`onion_payroll` (minúsculo, com underscore) em vez de "Onion Payroll",
+mesmo com `[tool.flet] short_name = "OnionPayroll"` já declarado no
+`pyproject.toml`.
+
+**Causa raiz:** o campo `short_name` **não é reconhecido pelo `flet
+build web`** dentro de `[tool.flet]` — só existe para o comando
+`flet publish` (diferente do que o `deploy.ps1` usa). O campo `product`
+funciona normalmente (`name` no `manifest.json` gerado saía certo,
+"Onion Payroll"), mas não existe equivalente reconhecido para
+`short_name` nesse fluxo de build — o valor "onion_payroll" era gerado
+automaticamente a partir do nome do projeto, sem meio de sobrescrever
+via `pyproject.toml`.
+
+**Corrigido:** criado `assets/manifest.json` customizado — o Flet usa
+esse arquivo (se presente) em vez de gerar um novo do zero, sobrepondo
+qualquer valor derivado automaticamente. `short_name` agora fixado como
+`"Onion Payroll"`, idêntico ao `name`.
+
+### 🟢 Corrigido — splash screen branca, incoerente com o tema escuro
+
+Aproveitando o `manifest.json` customizado: `background_color` (era
+`#FFFFFF`, branco) e `theme_color` (era `#0175C2`, azul padrão do
+Flutter) causavam um "flash" claro na tela de splash ao abrir o PWA
+instalado, antes do app carregar — destoando do tema escuro Neo
+Petronas do resto do app. Ajustados para `#2c2c2a` (`BG_DEEP`) e
+`#00C2A8` (`ACCENT`), batendo com a paleta do app.
+
+**Importante para desenvolvedores:** `docs/manifest.json` é gerado
+automaticamente a cada deploy — nunca editar esse arquivo diretamente,
+as mudanças se perdem no próximo build. A fonte de verdade agora é
+`assets/manifest.json`.
+
+**Validado:** JSON validado (`python -m json.tool`), deploy feito,
+app desinstalado e reinstalado — nome e splash screen corretos.
+
+---
+
 ## [2.43.0] — 2026-07-12 — CRÍTICO: APP NÃO ABRIA (DEPENDÊNCIA SEM VERSÃO TRAVADA) + AJUSTES DE LOGO
 
 ### 🔴 Corrigido — CRÍTICO: tela cinza sem erro nenhum, app não abria

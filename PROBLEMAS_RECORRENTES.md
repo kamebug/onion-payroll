@@ -120,6 +120,7 @@ carregamento, seguindo exatamente o que está declarado em
 | Problema | Causa raiz | Versão corrigida | Como foi descoberto |
 |---|---|---|---|
 | **App travava numa tela cinza, sem NENHUM erro no console** | `pyproject.toml` tinha `dependencies = ["flet"]` sem versão travada — o build de produção baixava a versão mais recente do Flet disponível no momento, que silenciosamente mudou o comportamento de `page.shared_preferences` (API de storage), travando o `await` de carregamento inicial sem lançar exceção visível | **2.43 (crítico)** | Processo de eliminação: sem erro no Console, sem erro no Network, funcionava igual em aba anônima (não era cache) — só ficou claro ao ler o log linha por linha e notar que parava logo após o aviso de depreciação do `shared_preferences`, sem nenhuma linha depois |
+| **Nome do PWA instalado saía "onion_payroll"** em vez de "Onion Payroll" | `[tool.flet] short_name = "..."` no `pyproject.toml` **não é um campo reconhecido** pelo `flet build web` (só existe para o comando `flet publish`, diferente) — `product` funciona normalmente, mas não há equivalente para `short_name` nesse fluxo; o valor errado era gerado automaticamente a partir do nome do projeto | **2.44** | Comparação manual do `manifest.json` gerado em `docs/` com o que estava declarado no `pyproject.toml` — os valores não batiam, apesar de `product` funcionar corretamente |
 
 **Processo recomendado a partir de agora:**
 - **Nunca deixar `dependencies` sem versão travada** no `pyproject.toml`
@@ -188,6 +189,15 @@ carregamento, seguindo exatamente o que está declarado em
     conferir com `grep -n "NOME_DA_VARIAVEL ="` se ela aparece mais de
     uma vez, e editar **todas** as ocorrências — não só a primeira que
     aparecer ao rolar o arquivo
+13. **Nem todo campo do `pyproject.toml` é garantidamente lido pelo
+    `flet build web`** — alguns existem só para `flet publish` (comando
+    diferente). Depois de configurar algo em `[tool.flet]` que afeta o
+    PWA (nome, cores, ícones), **conferir o arquivo gerado de verdade**
+    (`docs/manifest.json`) em vez de assumir que o campo "pegou" só
+    porque o deploy terminou sem erro. Se um campo não for respeitado,
+    a solução é colocar um `manifest.json` próprio em `assets/` — o
+    Flet usa esse arquivo no lugar de gerar um novo, sobrepondo
+    qualquer valor automático
 
 ---
 
