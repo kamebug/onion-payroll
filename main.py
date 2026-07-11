@@ -3259,7 +3259,7 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
         ),
         hire_date_field,
         yukyu_summary,
-        mk_field("Limiar 精皆勤手当 — Assiduidade (%)", "seikaikin_threshold_pct"),
+        mk_field("Limiar Assiduidade — seikaikin teate (%)", "seikaikin_threshold_pct"),
         ft.Text(
             "Percentual mínimo de presença no mês pra manter o adicional "
             "de assiduidade da sua empresa (opcional, cada empresa define "
@@ -4233,8 +4233,8 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
             _p("⚠️ Duas limitações desta versão: (1) não verifica a regra de 80% de presença no período aquisitivo — assume que você tem direito; (2) cobre só a tabela cheia (5+ dias/semana) — não calcula o proporcional (比例付与) de quem trabalha part-time."),
 
             # ── Assiduidade mensal (精皆勤手当) ─────────────────────────
-            _title("📋 Assiduidade do Mês (精皆勤手当)"),
-            _p("Diferente da regra dos 80% do Yukyu (que é por período de 6 meses/1 ano, nunca mensal), o 精皆勤手当 é um adicional OPCIONAL que cada empresa decide se paga — não existe exigência de lei. Por isso o limiar (ex: 94%) e o que conta como falta variam de empresa pra empresa."),
+            _title("📋 Assiduidade do Mês (精皆勤手当 — seikaikin teate)"),
+            _p("Diferente da regra dos 80% do Yukyu (que é por período de 6 meses/1 ano, nunca mensal), o seikaikin teate (精皆勤手当) é um adicional OPCIONAL que cada empresa decide se paga — não existe exigência de lei. Por isso o limiar (ex: 94%) e o que conta como falta variam de empresa pra empresa."),
             _example("Fórmula usada nesta versão:", [
                 "presença = trabalhados",
                 "  ÷ programados no mês",
@@ -4482,13 +4482,26 @@ async def main(page: ft.Page):
         _logo_abs   = _os.path.join(_assets_dir, "logo_icon.png")
         _is_web     = hasattr(page, "web") and page.web
 
+        _logo_box = scaled(72)
+
+        def _wrap_logo(img_src: str) -> ft.Container:
+            """Envolve a logo num Container com cantos arredondados e um
+            fundo levemente mais claro que o header, para suavizar o
+            contraste contra imagens com fundo transparente."""
+            return ft.Container(
+                content=ft.Image(src=img_src, width=_logo_box - 12,
+                                  height=_logo_box - 12, fit="contain"),
+                width=_logo_box, height=_logo_box,
+                border_radius=14, bgcolor=BG_CARD,
+                alignment=ft.alignment.center,
+                clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
+            )
+
         if _is_web:
             # No modo web/PWA o Flet serve assets/ automaticamente
-            logo = ft.Image(src="logo_icon.png",
-                            width=scaled(72), height=scaled(72), fit="contain")
+            logo = _wrap_logo("logo_icon.png")
         elif _os.path.exists(_logo_abs):
-            logo = ft.Image(src=_logo_abs,
-                            width=scaled(72), height=scaled(72), fit="contain")
+            logo = _wrap_logo(_logo_abs)
         else:
             logo = ft.Text("🧅", size=36)
         title_col = ft.Column(
@@ -4644,7 +4657,11 @@ async def main(page: ft.Page):
         )
         page.update()
 
-    logo_disclaimer = ft.Image(src="logo_icon.png", width=100, height=100, fit="contain")
+    logo_disclaimer = ft.Container(
+        content=ft.Image(src="logo_icon.png", width=88, height=88, fit="contain"),
+        width=100, height=100, border_radius=20, bgcolor=BG_CARD,
+        alignment=ft.alignment.center, clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
+    )
     page.add(
         ft.Container(
             expand=True, bgcolor=BG_DEEP,
@@ -4653,7 +4670,11 @@ async def main(page: ft.Page):
                 scroll=ft.ScrollMode.AUTO,
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                 controls=[
-                    ft.Image(src="logo_icon.png", width=80, height=80, fit="contain"),
+                    ft.Container(
+                        content=ft.Image(src="logo_icon.png", width=70, height=70, fit="contain"),
+                        width=80, height=80, border_radius=18, bgcolor=BG_CARD,
+                        alignment=ft.alignment.center, clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
+                    ),
                     ft.Container(height=12),
                     ft.Text("🧅 Onion Payroll", size=22, weight=ft.FontWeight.W_800, color="#FFFFFF"),
                     ft.Text("Antes de continuar", size=13, color=TEXT_SECONDARY),
