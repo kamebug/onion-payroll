@@ -1245,7 +1245,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607120329"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607111713"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -4493,7 +4493,7 @@ async def main(page: ft.Page):
                                   height=_logo_box - 12, fit="contain"),
                 width=_logo_box, height=_logo_box,
                 border_radius=14, bgcolor=BG_CARD,
-                alignment=ft.alignment.center,
+                alignment=ft.Alignment(0, 0),
                 clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
             )
 
@@ -4652,7 +4652,7 @@ async def main(page: ft.Page):
             ft.Container(
                 content=ft.Column(controls=[logo_disclaimer], alignment=ft.MainAxisAlignment.CENTER,
                                    horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-                alignment=ft.alignment.center, expand=True, bgcolor=BG_DEEP,
+                alignment=ft.Alignment(0, 0), expand=True, bgcolor=BG_DEEP,
             )
         )
         page.update()
@@ -4660,7 +4660,7 @@ async def main(page: ft.Page):
     logo_disclaimer = ft.Container(
         content=ft.Image(src="logo_icon.png", width=88, height=88, fit="contain"),
         width=100, height=100, border_radius=20, bgcolor=BG_CARD,
-        alignment=ft.alignment.center, clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
+        alignment=ft.Alignment(0, 0), clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
     )
     page.add(
         ft.Container(
@@ -4673,7 +4673,7 @@ async def main(page: ft.Page):
                     ft.Container(
                         content=ft.Image(src="logo_icon.png", width=70, height=70, fit="contain"),
                         width=80, height=80, border_radius=18, bgcolor=BG_CARD,
-                        alignment=ft.alignment.center, clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
+                        alignment=ft.Alignment(0, 0), clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
                     ),
                     ft.Container(height=12),
                     ft.Text("🧅 Onion Payroll", size=22, weight=ft.FontWeight.W_800, color="#FFFFFF"),
