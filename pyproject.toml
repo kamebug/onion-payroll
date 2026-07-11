@@ -5,7 +5,7 @@ description = "Sistema de folha de pagamento para trabalhadores brasileiros no J
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "flet",
+    "flet==0.85.3",
 ]
 
 [tool.flet]
