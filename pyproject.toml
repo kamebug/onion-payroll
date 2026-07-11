@@ -1,6 +1,6 @@
 [project]
 name = "onion-payroll"
-version = "2.42.0"
+version = "2.43.0"
 description = "Sistema de folha de pagamento para trabalhadores brasileiros no Japão"
 readme = "README.md"
 requires-python = ">=3.10"

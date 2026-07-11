@@ -92,6 +92,7 @@ fazem, já que `unittest` só testa o motor de cálculo, não as funções
 |---|---|---|---|
 | **Aba Config não abria** (crash total) | `hidden_advanced_container` (v2.14) referenciava `block_label`/`premium_switch`/etc. antes delas serem definidas na função — `UnboundLocalError` | **2.17 (crítico)** | Stub de teste (ver abaixo) rodando `build_settings_tab()` de verdade |
 | **Aba Ajuda não abria** (crash total) | Botões novos (v2.16) usavam `ft.Icons.COPY`/`ft.Icons.PLAY_CIRCLE_OUTLINE`, divergindo do padrão já validado no resto do app (`icon="upload"`, string minúscula) | **2.17 (crítico)** | Mesmo stub, rodando `build_help_tab()` |
+| **App inteiro não abria** (`AttributeError: module 'flet.controls.alignment' has no attribute 'center'`) | `ft.alignment.center` usado em `Container`s novos da logo — esse atalho não existe no Flet 0.85.3, só `ft.Alignment(0, 0)` (padrão já usado no resto do código) | **2.43 (crítico)** | Traceback completo no Console do navegador (`main.dart.mjs` [stderr]) após deploy em produção — não pego pelo stub local porque o stub de Flet falso não valida atributos reais do módulo |
 
 **Metodologia criada para pegar isso no futuro:** um módulo `flet` "falso"
 (`unittest.mock.MagicMock` respondendo a qualquer atributo/chamada),
@@ -107,7 +108,36 @@ em `build_settings_tab()`, `build_help_tab()`, ou qualquer outra função
 
 ---
 
-## 📋 Processo recomendado para novos problemas
+## 📦 Bugs de versionamento de dependência (só aparecem no build de produção, não localmente)
+
+Categoria distinta das anteriores: esses bugs **não existem no ambiente
+de desenvolvimento local** (onde o Flet já está instalado numa versão
+fixa) — só se manifestam no build de produção do GitHub Pages, porque
+o navegador baixa os pacotes Python via `micropip` no momento do
+carregamento, seguindo exatamente o que está declarado em
+`pyproject.toml`/`requirements.txt`.
+
+| Problema | Causa raiz | Versão corrigida | Como foi descoberto |
+|---|---|---|---|
+| **App travava numa tela cinza, sem NENHUM erro no console** | `pyproject.toml` tinha `dependencies = ["flet"]` sem versão travada — o build de produção baixava a versão mais recente do Flet disponível no momento, que silenciosamente mudou o comportamento de `page.shared_preferences` (API de storage), travando o `await` de carregamento inicial sem lançar exceção visível | **2.43 (crítico)** | Processo de eliminação: sem erro no Console, sem erro no Network, funcionava igual em aba anônima (não era cache) — só ficou claro ao ler o log linha por linha e notar que parava logo após o aviso de depreciação do `shared_preferences`, sem nenhuma linha depois |
+
+**Processo recomendado a partir de agora:**
+- **Nunca deixar `dependencies` sem versão travada** no `pyproject.toml`
+  — sempre `"flet==X.Y.Z"`, confirmando a versão com `pip show flet` no
+  ambiente local antes de travar
+- Depois de qualquer mudança em `pyproject.toml` (mesmo que pareça não
+  afetar o Flet diretamente, como a correção do bug "build_src"),
+  **testar o deploy de produção com o Console do navegador aberto**,
+  não só rodar `deploy.ps1` e assumir que terminou "limpo" — terminar
+  sem erro no terminal PowerShell não garante que o app abre no
+  navegador
+- Se a tela ficar travada sem erro nenhum no Console: não é
+  necessariamente cache. Testar em aba anônima primeiro; se persistir
+  mesmo assim, suspeitar de dependência sem versão travada antes de
+  suspeitar do próprio código
+
+---
+
 
 1. **Se for de cálculo** (números errados, lógica de negócio) →
    adicionar teste em `test_main.py` na classe apropriada

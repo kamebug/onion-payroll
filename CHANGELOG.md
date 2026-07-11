@@ -1,6 +1,56 @@
 # Changelog — Onion Payroll
 
-## [2.30] — 2026-07-04 — LICENÇA MIT E INDICAÇÃO DE ACEITE
+## [2.43.0] — 2026-07-12 — CRÍTICO: APP NÃO ABRIA (DEPENDÊNCIA SEM VERSÃO TRAVADA) + AJUSTES DE LOGO
+
+### 🔴 Corrigido — CRÍTICO: tela cinza sem erro nenhum, app não abria
+
+**Causa raiz nº1:** `pyproject.toml` tinha `dependencies = ["flet"]` **sem
+versão travada**. Cada deploy passava a baixar a versão mais recente do
+Flet disponível no momento do build, em vez da versão testada
+(0.85.3). Isso silenciosamente trocou o comportamento de
+`page.shared_preferences` (API de storage, depreciada desde a 0.80.0),
+travando o `await` de carregamento inicial (`boot_load_storage`) sem
+lançar nenhuma exceção visível — o app ficava preso numa tela cinza,
+sem nada no console.
+
+**Corrigido:** `dependencies = ["flet==0.85.3"]` — versão travada,
+confirmada contra o ambiente local (`pip show flet`).
+
+**Causa raiz nº2** (introduzida ao corrigir a nº1, mesma sessão):
+depois de travar a versão, um novo erro real apareceu no traceback:
+`AttributeError: module 'flet.controls.alignment' has no attribute
+'center'`. O atalho `ft.alignment.center` não existe no Flet 0.85.3 —
+usado por engano em 4 `Container`s novos da logo (ver abaixo). Todo o
+resto do código já usava corretamente `ft.Alignment(0, 0)`.
+Padronizado em todas as ocorrências.
+
+**Lição de processo:** depois desse episódio, qualquer mudança em
+`pyproject.toml` que envolva a versão do Flet deve ser seguida de teste
+real no navegador (Console aberto) antes de considerar o deploy
+concluído — nem `py_compile` nem o stub de renderização local pegam
+esse tipo de bug, porque a versão instalada localmente nunca muda
+sozinha; só o build de produção (via micropip, no navegador) é afetado.
+
+### 🟢 Adicionado — logo com cantos arredondados e fundo suavizado
+
+Logo do cabeçalho e das duas telas de disclaimer (aceite/recusa) agora
+dentro de um `Container` com `border_radius` e `bgcolor=BG_CARD` —
+suaviza o contraste da imagem de fundo transparente contra o fundo
+escuro do header. Nova imagem 1024×1024 com fundo transparente
+substituindo `assets/logo_icon.png`.
+
+### 🟢 Adicionado — romaji nas menções ao 精皆勤手当 (Ajuda e Config)
+
+Título e primeiro parágrafo da seção de assiduidade em ❓ Ajuda, e o
+label do campo de limiar em ⚙️ Config, agora incluem "seikaikin teate"
+ao lado do kanji — legível por quem não lê japonês.
+
+**Validado:** `py_compile` limpo, deploy testado em aba anônima após a
+correção, app abrindo normalmente.
+
+---
+
+
 
 ### 🟢 Adicionado — arquivo `LICENSE` (MIT)
 
