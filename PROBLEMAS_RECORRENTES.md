@@ -138,6 +138,7 @@ carregamento, seguindo exatamente o que está declarado em
 
 ---
 
+## 📋 Processo recomendado para novos problemas
 
 1. **Se for de cálculo** (números errados, lógica de negócio) →
    adicionar teste em `test_main.py` na classe apropriada
@@ -180,6 +181,13 @@ carregamento, seguindo exatamente o que está declarado em
     é mais larga que proporcional por caractere, e não há garantia de
     quebra automática — mais seguro encurtar o conteúdo do que confiar
     no comportamento de wrap do Flet sem poder testar ao vivo
+12. **`main.py` tem dois blocos de definição de cor (TOKENS)** — as
+    mesmas variáveis (`WORK_COLOR`, `OFF_COLOR`, `HEADER_BG`, etc.) são
+    declaradas duas vezes no arquivo; a segunda declaração sempre
+    vence, silenciosamente, sem erro. Ao alterar qualquer cor do tema,
+    conferir com `grep -n "NOME_DA_VARIAVEL ="` se ela aparece mais de
+    uma vez, e editar **todas** as ocorrências — não só a primeira que
+    aparecer ao rolar o arquivo
 
 ---
 

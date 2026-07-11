@@ -31,6 +31,30 @@ concluído — nem `py_compile` nem o stub de renderização local pegam
 esse tipo de bug, porque a versão instalada localmente nunca muda
 sozinha; só o build de produção (via micropip, no navegador) é afetado.
 
+### 🟢 Adicionado — cores do calendário nos tons oficiais do Google Calendar
+
+**Pedido antigo, finalmente aplicado:** os tons verde/azul do calendário
+(dias de trabalho/folga) já tinham sido pedidos para usar a paleta
+oficial do Google Calendar antes, mas a mudança nunca tinha "pegado" —
+o valor certo estava sendo editado, só que numa variável que não era a
+efetivamente aplicada no cálculo dos elementos de calendário.
+
+```
+WORK_COLOR       #1a3d2b → #0F9D58   (verde Google — Sage)
+OFF_COLOR        #1e2e4a → #4285F4   (azul Google — Peacock)
+CAL_TEXT_WORK    #86efac → #C8F7DC   (texto, ajustado p/ contraste)
+CAL_TEXT_OFF     #93c5fd → #DBEAFE   (texto, ajustado p/ contraste)
+CAL_BORDER_WORK  #22c55e → #7ade9f   (borda, ajustada p/ contraste)
+CAL_BORDER_OFF   #60a5fa → #a0c3ed   (borda, ajustada p/ contraste)
+C_BLUE           #40C4FF → #90CAF9   (letra de sábado, mais suave)
+borda genérica   #D0D0D0 → #E5E7EB   (célula do calendário)
+```
+
+Os tons de texto/borda precisaram de ajuste fino depois da troca das
+cores de fundo principais, para manter contraste legível — as cores
+mais vibrantes do Google exigem texto/borda mais claros do que a
+paleta dessaturada anterior.
+
 ### 🟢 Adicionado — logo com cantos arredondados e fundo suavizado
 
 Logo do cabeçalho e das duas telas de disclaimer (aceite/recusa) agora
@@ -50,7 +74,7 @@ correção, app abrindo normalmente.
 
 ---
 
-
+## [2.30] — 2026-07-04 — LICENÇA MIT E INDICAÇÃO DE ACEITE
 
 ### 🟢 Adicionado — arquivo `LICENSE` (MIT)
 
