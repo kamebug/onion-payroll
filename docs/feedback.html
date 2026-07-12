@@ -283,6 +283,15 @@
     return { encontrou: encontrou, texto: resultado };
   }
 
+  // ---- detecção de links (bloqueio total, sem censura/confirmação) ----
+  // Cobre http(s)://, www. e domínios comuns terminando em extensão
+  // conhecida (evita bloquear frases inocentes tipo "vou.marcar isso").
+  const REGEX_LINK = /(https?:\/\/\S+|www\.\S+|\b[a-z0-9-]+\.(com|net|org|io|co|gov|edu|info|biz|me|app|dev|br)\b\S*)/i;
+
+  function contemLink(texto) {
+    return REGEX_LINK.test(texto);
+  }
+
   const form = document.getElementById("feedbackForm");
   const statusBox = document.getElementById("status");
   const btnEnviar = document.getElementById("btnEnviar");
@@ -342,6 +351,18 @@
     const tentativaEl = document.getElementById("tentativa");
     const erroEl = document.getElementById("erro");
     const emailValor = document.getElementById("email").value.trim();
+
+    // Links são bloqueados totalmente — não tem confirmação, precisa
+    // remover o link e reenviar. Diferente do palavrão, que só censura.
+    if (contemLink(tentativaEl.value) || contemLink(erroEl.value)) {
+      mostrarStatus(
+        '<div class="msg error">' +
+        "🔗 Não é possível enviar links nesse formulário. Remova o " +
+        "endereço/link do texto e envie de novo." +
+        "</div>"
+      );
+      return;
+    }
 
     const rTentativa = censurar(tentativaEl.value);
     const rErro = censurar(erroEl.value);
