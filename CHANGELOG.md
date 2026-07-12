@@ -1,5 +1,50 @@
 # Changelog — Onion Payroll
 
+## [2.45.0] — 2026-07-13 — SISTEMA DE FEEDBACK/RELATO DE BUG
+
+### 🟢 Adicionado — botão "Relatar Problema" em ❓ Ajuda
+
+Nova página `feedback.html` (fora do app Flet, HTML/JS puro), com dois
+campos guiados ("O que você estava tentando fazer?" / "O que aconteceu
+de errado?") + e-mail opcional. Envia via Formspree, sem servidor
+próprio. Inclui:
+- Filtro de baixo calão em JS: detecta, censura automaticamente
+  (`p****`), mostra prévia censurada e exige confirmação antes de
+  enviar (não bloqueia, não deixa passar batido)
+- Honeypot anti-spam
+- `BUILD_ID` capturado automaticamente via `?build=` na URL, viajando
+  junto no envio — identifica a versão exata onde o bug apareceu, sem
+  precisar perguntar pro usuário
+
+### 🔴 Corrigido — botão não fazia nada ao tocar (TypeError silencioso)
+
+**Sintoma:** botão "Relatar Problema" não abria nada — sem erro visível
+na tela, só um clique morto.
+
+**Causa raiz:** `page.run_task(page.launch_url, FEEDBACK_URL)` —
+passar o método `page.launch_url` diretamente pro `run_task` não
+funciona nessa versão do Flet. O decorator de depreciação que embrulha
+esse método (`launch_url` está deprecado desde 0.80.0, removido na
+0.90.0) faz o `inspect.iscoroutinefunction()` interno do `run_task` não
+reconhecer o método como coroutine, lançando `TypeError: handler must
+be a coroutine function`.
+
+**Corrigido:** envolvido numa função `async def` própria
+(`_abrir_feedback_task`), que por sua vez chama `await
+page.launch_url(...)` — mesmo padrão já usado nos outros 3 lugares do
+código que chamam `page.run_task()` (`_persist`, `_remove`,
+`_do_diag`). **Nunca passar um método do Flet direto pro `run_task` —
+sempre embrulhar numa função `async def` criada no próprio código.**
+
+**Contexto:** esse é mais um episódio do padrão recorrente de "botão
+não funciona" já visto antes (v2.10, v2.11, v2.18 — Dropdown resetando
+seleção, botões de Copiar Link removidos por não funcionar de forma
+confiável). Motivo raiz diferente dessa vez (API assíncrona do Flet,
+não Dropdown), mas mesmo sintoma: interação que só quebra em runtime
+real, nunca em `py_compile`.
+
+---
+
 ## [2.44.0] — 2026-07-12 — NOME DO PWA INSTALADO E CORES DA SPLASH SCREEN
 
 ### 🟢 Corrigido — nome do app instalado aparecia como "onion_payroll"

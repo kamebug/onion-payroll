@@ -93,6 +93,7 @@ fazem, já que `unittest` só testa o motor de cálculo, não as funções
 | **Aba Config não abria** (crash total) | `hidden_advanced_container` (v2.14) referenciava `block_label`/`premium_switch`/etc. antes delas serem definidas na função — `UnboundLocalError` | **2.17 (crítico)** | Stub de teste (ver abaixo) rodando `build_settings_tab()` de verdade |
 | **Aba Ajuda não abria** (crash total) | Botões novos (v2.16) usavam `ft.Icons.COPY`/`ft.Icons.PLAY_CIRCLE_OUTLINE`, divergindo do padrão já validado no resto do app (`icon="upload"`, string minúscula) | **2.17 (crítico)** | Mesmo stub, rodando `build_help_tab()` |
 | **App inteiro não abria** (`AttributeError: module 'flet.controls.alignment' has no attribute 'center'`) | `ft.alignment.center` usado em `Container`s novos da logo — esse atalho não existe no Flet 0.85.3, só `ft.Alignment(0, 0)` (padrão já usado no resto do código) | **2.43 (crítico)** | Traceback completo no Console do navegador (`main.dart.mjs` [stderr]) após deploy em produção — não pego pelo stub local porque o stub de Flet falso não valida atributos reais do módulo |
+| **Botão "Relatar Problema" não fazia nada ao tocar** (clique morto, sem erro visível na tela) | `page.run_task(page.launch_url, url)` — passar um método do Flet direto pro `run_task` não funciona; o decorator de depreciação que embrulha `launch_url` faz o `inspect.iscoroutinefunction()` interno não reconhecer como coroutine, gerando `TypeError: handler must be a coroutine function` | **2.45** | Traceback completo no Console do navegador — mesma metodologia do item acima (produção, não local) |
 
 **Metodologia criada para pegar isso no futuro:** um módulo `flet` "falso"
 (`unittest.mock.MagicMock` respondendo a qualquer atributo/chamada),
@@ -198,6 +199,14 @@ carregamento, seguindo exatamente o que está declarado em
     a solução é colocar um `manifest.json` próprio em `assets/` — o
     Flet usa esse arquivo no lugar de gerar um novo, sobrepondo
     qualquer valor automático
+14. **`page.run_task()` nunca aceita um método do Flet direto**
+    (ex: `page.run_task(page.launch_url, url)` quebra com `TypeError:
+    handler must be a coroutine function`). Sempre criar uma função
+    `async def` própria que faz o `await` internamente, e passar essa
+    função pro `run_task` — é o padrão já usado em `_persist`,
+    `_remove` e `_do_diag`. Vale pra qualquer método do Flet marcado
+    como `@deprecated` (comum a partir da 0.80.0) — o decorator quebra
+    a detecção de coroutine que o `run_task` depende
 
 ---
 
