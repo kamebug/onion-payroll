@@ -138,6 +138,20 @@
     margin-top: 12px;
   }
 
+  .voltar-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--accent-lite);
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 16px;
+  }
+
+  .voltar-link:hover { color: var(--accent); }
+  .voltar-link:focus-visible { outline: 2px solid var(--accent-lite); outline-offset: 2px; }
+
   /* ---- estados de mensagem ---- */
   #status { display: none; }
 
@@ -201,6 +215,8 @@
 </head>
 <body>
 <main>
+  <a href="https://kamebug.github.io/onion-payroll/" class="voltar-link">← Voltar para o app</a>
+
   <header>
     <span class="emoji">🐛</span>
     <h1>Relatar Problema</h1>
@@ -297,6 +313,11 @@
           '<div class="msg success">' +
           '✅ Relato enviado! Obrigado por ajudar a melhorar o app — ' +
           'assim que possível eu vou olhar com calma.' +
+          '<div class="msg-actions">' +
+          '<a href="https://kamebug.github.io/onion-payroll/" class="voltar-link" ' +
+          'style="justify-content:center;flex:1;background:var(--accent);' +
+          'color:#06231f;padding:10px;border-radius:8px;">Voltar para o app</a>' +
+          "</div>" +
           "</div>"
         );
       } else {
