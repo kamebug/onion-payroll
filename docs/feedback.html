@@ -320,6 +320,7 @@
 
     const tentativaEl = document.getElementById("tentativa");
     const erroEl = document.getElementById("erro");
+    const emailValor = document.getElementById("email").value.trim();
 
     const rTentativa = censurar(tentativaEl.value);
     const rErro = censurar(erroEl.value);
@@ -327,10 +328,15 @@
     const dados = {
       "O que estava tentando fazer": rTentativa.texto,
       "O que aconteceu de errado": rErro.texto,
-      "email": document.getElementById("email").value || "(não informado)",
       "build_id": document.getElementById("build_id").value,
       "_gotcha": document.querySelector('[name="_gotcha"]').value
     };
+    // Só inclui o campo "email" se preenchido — o Formspree valida
+    // automaticamente qualquer campo com esse nome como endereço real,
+    // e rejeita (422) se vier vazio ou com texto tipo "não informado".
+    if (emailValor) {
+      dados["email"] = emailValor;
+    }
 
     if (rTentativa.encontrou || rErro.encontrou) {
       mostrarStatus(
