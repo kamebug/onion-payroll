@@ -1245,7 +1245,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607120917"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607111713"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -4060,6 +4060,10 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
     # ── Seções do manual ─────────────────────────────────────────────
     APP_URL = "https://kamebug.github.io/onion-payroll/"
     VIDEO_URL = "https://youtube.com/shorts/PrwumZLHVxM"  # atualizado 09/07/2026
+    FEEDBACK_URL = APP_URL + "feedback.html?build=" + BUILD_ID
+
+    def _abrir_feedback(e):
+        page.run_task(page.launch_url, FEEDBACK_URL)
     # v2.37: trocado ft.Text(selectable=True) por ft.TextField(read_only=True)
     # — sugestão do usuário, ainda não testada antes nesta conversa.
     # TextField é widget de INPUT nativo (usado em dezenas de lugares
@@ -4091,6 +4095,16 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
     sections = ft.Column(
         controls=[
             share_section,
+
+            # ── Relatar Problema ──────────────────────────────────────
+            _title("🐛 Encontrou um Problema?"),
+            _p("Se algo não funcionou como esperado — cálculo estranho, tela travando, ou qualquer coisa fora do lugar — me conta. Isso ajuda a corrigir mais rápido."),
+            ft.FilledButton(
+                "Relatar Problema",
+                icon="bug_report",
+                on_click=_abrir_feedback,
+                style=ft.ButtonStyle(bgcolor=ACCENT_DARK),
+            ),
 
             # ── Início rápido ────────────────────────────────────────
             _title("🚀 Início Rápido"),

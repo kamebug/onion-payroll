@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Relatar Problema — Onion Payroll</title>
+<style>
+  :root {
+    --bg-deep: #2c2c2a;
+    --bg-card: #404040;
+    --accent: #00C2A8;
+    --accent-lite: #5EEAD4;
+    --accent-dark: #007A6E;
+    --text-primary: #F9F9F9;
+    --text-secondary: #BDBDBD;
+    --header-bg: #212121;
+    --danger: #F4B400;
+    --danger-text: #212121;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg-deep);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    display: flex;
+    justify-content: center;
+    padding: 24px 16px 48px;
+  }
+
+  main {
+    width: 100%;
+    max-width: 480px;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 28px;
+  }
+
+  header .emoji {
+    font-size: 40px;
+    display: block;
+    margin-bottom: 8px;
+  }
+
+  header h1 {
+    font-size: 20px;
+    margin: 0 0 4px;
+    font-weight: 700;
+  }
+
+  header p {
+    color: var(--text-secondary);
+    font-size: 13px;
+    margin: 0;
+    line-height: 1.5;
+  }
+
+  .card {
+    background: var(--bg-card);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+
+  label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: var(--text-primary);
+  }
+
+  label .opt {
+    font-weight: 400;
+    color: var(--text-secondary);
+  }
+
+  textarea, input[type="email"] {
+    width: 100%;
+    background: var(--bg-deep);
+    border: 1.5px solid transparent;
+    border-radius: 10px;
+    color: var(--text-primary);
+    padding: 12px;
+    font-size: 14px;
+    font-family: inherit;
+    resize: vertical;
+    margin-bottom: 16px;
+  }
+
+  textarea { min-height: 88px; }
+
+  textarea:focus, input[type="email"]:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  textarea::placeholder, input::placeholder {
+    color: #7a7a78;
+  }
+
+  /* honeypot — invisível para humanos, visível para bots */
+  .hp-field {
+    position: absolute;
+    left: -9999px;
+    opacity: 0;
+    height: 0;
+    pointer-events: none;
+  }
+
+  button[type="submit"] {
+    width: 100%;
+    background: var(--accent);
+    color: #06231f;
+    border: none;
+    border-radius: 10px;
+    padding: 14px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+
+  button[type="submit"]:hover { background: var(--accent-lite); }
+  button[type="submit"]:active { background: var(--accent-dark); }
+  button[type="submit"]:focus-visible { outline: 3px solid var(--accent-lite); outline-offset: 2px; }
+  button[type="submit"]:disabled { opacity: 0.6; cursor: default; }
+
+  .build-tag {
+    text-align: center;
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 12px;
+  }
+
+  /* ---- estados de mensagem ---- */
+  #status { display: none; }
+
+  .msg {
+    border-radius: 12px;
+    padding: 16px;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  .msg.warn {
+    background: #4a3a00;
+    border: 1.5px solid var(--danger);
+    color: #FDE68A;
+  }
+
+  .msg.success {
+    background: #0d3a2f;
+    border: 1.5px solid var(--accent);
+    color: var(--accent-lite);
+  }
+
+  .msg.error {
+    background: #4a1616;
+    border: 1.5px solid #f87171;
+    color: #fca5a5;
+  }
+
+  .msg-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 14px;
+  }
+
+  .msg-actions button {
+    flex: 1;
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 13px;
+    font-weight: 700;
+    border: none;
+    cursor: pointer;
+  }
+
+  #btnCancelar { background: transparent; border: 1.5px solid var(--text-secondary); color: var(--text-primary); }
+  #btnConfirmar { background: var(--danger); color: var(--danger-text); }
+
+  .censura-preview {
+    background: rgba(0,0,0,0.2);
+    border-radius: 8px;
+    padding: 10px;
+    margin-top: 10px;
+    font-size: 12.5px;
+    white-space: pre-wrap;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    button { transition: none; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <span class="emoji">🐛</span>
+    <h1>Relatar Problema</h1>
+    <p>Encontrou algo que não funcionou como esperado? Conta pra mim<br>o que aconteceu — isso ajuda a corrigir mais rápido.</p>
+  </header>
+
+  <form id="feedbackForm" class="card">
+    <label for="tentativa">O que você estava tentando fazer?</label>
+    <textarea id="tentativa" name="tentativa" required
+      placeholder="Ex: Estava marcando um dia de Yukyu no calendário..."></textarea>
+
+    <label for="erro">O que aconteceu de errado?</label>
+    <textarea id="erro" name="erro" required
+      placeholder="Ex: O saldo não descontou / a tela travou / o valor ficou errado..."></textarea>
+
+    <label for="email">Seu e-mail <span class="opt">(opcional — só se quiser resposta)</span></label>
+    <input type="email" id="email" name="email" placeholder="seuemail@exemplo.com">
+
+    <!-- honeypot anti-spam: bots costumam preencher isso, humanos não veem -->
+    <input type="text" name="_gotcha" class="hp-field" tabindex="-1" autocomplete="off">
+
+    <!-- preenchido via JS a partir de ?build= na URL -->
+    <input type="hidden" id="build_id" name="build_id" value="">
+
+    <button type="submit" id="btnEnviar">Enviar Relato</button>
+    <p class="build-tag" id="buildTag"></p>
+  </form>
+
+  <div id="status"></div>
+</main>
+
+<script>
+(function () {
+  const FORMSPREE_ENDPOINT = "https://formspree.io/f/xpqvagjd";
+
+  // ---- captura o BUILD_ID vindo da URL (?build=XXXX) ----
+  const params = new URLSearchParams(window.location.search);
+  const buildId = params.get("build") || "não informado";
+  document.getElementById("build_id").value = buildId;
+  document.getElementById("buildTag").textContent = "Versão do app: " + buildId;
+
+  // ---- lista de palavras filtradas (baixo calão, PT-BR) ----
+  // Lista enxuta e comum — cada entrada é checada como palavra inteira
+  // (não como substring), para reduzir falso positivo.
+  const PALAVRAS_FILTRADAS = [
+    "porra","caralho","merda","puta","putas","puto","foda","fodase",
+    "foda-se","fdp","filho da puta","viado","viadinho","corno","cuzao",
+    "cuzão","cu","bosta","arrombado","arrombada","desgraca","desgraça",
+    "otario","otário","idiota","imbecil","retardado","babaca"
+  ];
+
+  function censurar(texto) {
+    let encontrou = false;
+    let resultado = texto;
+    PALAVRAS_FILTRADAS.forEach(function (palavra) {
+      const regexOriginal = new RegExp("\\b" + palavra.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&") + "\\b", "gi");
+      if (regexOriginal.test(resultado)) {
+        encontrou = true;
+        resultado = resultado.replace(regexOriginal, function (match) {
+          return match[0] + "*".repeat(Math.max(match.length - 1, 1));
+        });
+      }
+    });
+    return { encontrou: encontrou, texto: resultado };
+  }
+
+  const form = document.getElementById("feedbackForm");
+  const statusBox = document.getElementById("status");
+  const btnEnviar = document.getElementById("btnEnviar");
+
+  function mostrarStatus(html) {
+    statusBox.innerHTML = html;
+    statusBox.style.display = "block";
+    statusBox.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  function esconderStatus() {
+    statusBox.style.display = "none";
+    statusBox.innerHTML = "";
+  }
+
+  async function enviarFormulario(dadosCensurados) {
+    btnEnviar.disabled = true;
+    btnEnviar.textContent = "Enviando...";
+    try {
+      const resp = await fetch(FORMSPREE_ENDPOINT, {
+        method: "POST",
+        headers: { "Accept": "application/json", "Content-Type": "application/json" },
+        body: JSON.stringify(dadosCensurados)
+      });
+      if (resp.ok) {
+        form.style.display = "none";
+        mostrarStatus(
+          '<div class="msg success">' +
+          '✅ Relato enviado! Obrigado por ajudar a melhorar o app — ' +
+          'assim que possível eu vou olhar com calma.' +
+          "</div>"
+        );
+      } else {
+        throw new Error("Formspree retornou erro");
+      }
+    } catch (e) {
+      mostrarStatus(
+        '<div class="msg error">' +
+        '⚠️ Não consegui enviar agora. Verifique sua conexão e tente ' +
+        "de novo em alguns instantes." +
+        "</div>"
+      );
+      btnEnviar.disabled = false;
+      btnEnviar.textContent = "Enviar Relato";
+    }
+  }
+
+  form.addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    esconderStatus();
+
+    const tentativaEl = document.getElementById("tentativa");
+    const erroEl = document.getElementById("erro");
+
+    const rTentativa = censurar(tentativaEl.value);
+    const rErro = censurar(erroEl.value);
+
+    const dados = {
+      "O que estava tentando fazer": rTentativa.texto,
+      "O que aconteceu de errado": rErro.texto,
+      "email": document.getElementById("email").value || "(não informado)",
+      "build_id": document.getElementById("build_id").value,
+      "_gotcha": document.querySelector('[name="_gotcha"]').value
+    };
+
+    if (rTentativa.encontrou || rErro.encontrou) {
+      mostrarStatus(
+        '<div class="msg warn">' +
+        "⚠️ Detectei conteúdo de baixo calão no texto. As palavras foram " +
+        "censuradas automaticamente — veja como vai ficar abaixo. Quer " +
+        "enviar mesmo assim?" +
+        '<div class="censura-preview"><strong>O que estava tentando fazer:</strong>\n' + rTentativa.texto +
+        '\n\n<strong>O que aconteceu de errado:</strong>\n' + rErro.texto + "</div>" +
+        '<div class="msg-actions">' +
+        '<button type="button" id="btnCancelar">Cancelar</button>' +
+        '<button type="button" id="btnConfirmar">Enviar Mesmo Assim</button>' +
+        "</div>" +
+        "</div>"
+      );
+      document.getElementById("btnCancelar").addEventListener("click", esconderStatus);
+      document.getElementById("btnConfirmar").addEventListener("click", function () {
+        enviarFormulario(dados);
+      });
+    } else {
+      enviarFormulario(dados);
+    }
+  });
+})();
+</script>
+</body>
+</html>
