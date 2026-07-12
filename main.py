@@ -1245,7 +1245,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607130346"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607111713"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -4062,8 +4062,11 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
     VIDEO_URL = "https://youtube.com/shorts/PrwumZLHVxM"  # atualizado 09/07/2026
     FEEDBACK_URL = APP_URL + "feedback.html?build=" + BUILD_ID
 
+    async def _abrir_feedback_task():
+        await page.launch_url(FEEDBACK_URL)
+
     def _abrir_feedback(e):
-        page.run_task(page.launch_url, FEEDBACK_URL)
+        page.run_task(_abrir_feedback_task)
     # v2.37: trocado ft.Text(selectable=True) por ft.TextField(read_only=True)
     # — sugestão do usuário, ainda não testada antes nesta conversa.
     # TextField é widget de INPUT nativo (usado em dezenas de lugares
