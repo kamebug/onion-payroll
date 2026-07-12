@@ -62,6 +62,15 @@ Write-Host "Copiando para docs/..." -ForegroundColor Cyan
 New-Item -ItemType Directory -Path "$ROOT\docs" -Force | Out-Null
 Copy-Item -Path "$ROOT\build_src\build\web\*" -Destination "$ROOT\docs\" -Recurse -Force
 
+# 6b. Copiar feedback.html (nao faz parte do build do Flet, precisa
+# ser copiado manualmente toda vez que docs/ e recriado do zero)
+if (Test-Path "$ROOT\feedback.html") {
+    Copy-Item "$ROOT\feedback.html" "$ROOT\docs\feedback.html" -Force
+    Write-Host "feedback.html copiado para docs/" -ForegroundColor Green
+} else {
+    Write-Host "AVISO: feedback.html nao encontrado na raiz do projeto - pulado." -ForegroundColor Yellow
+}
+
 # 7. Adicionar Analytics + meta tags anti-cache + pop-up de instalação no index.html
 $headInjection = @"
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -208,7 +217,7 @@ Write-Host ""
 $MSG = Read-Host "Mensagem do commit (Enter = Deploy $BUILD_ID)"
 if ([string]::IsNullOrWhiteSpace($MSG)) { $MSG = "Deploy $BUILD_ID" }
 
-git add docs\ main.py
+git add docs\ main.py feedback.html
 git commit -m $MSG
 git push
 
