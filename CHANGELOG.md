@@ -1,5 +1,43 @@
 # Changelog — Onion Payroll
 
+## [2.46.0] — 2026-07-13 — AJUSTES NO SISTEMA DE FEEDBACK
+
+### 🔴 Corrigido — envio falhava com erro 422 (Unprocessable Entity)
+
+**Causa raiz:** o campo `email` do formulário mandava o texto
+`"(não informado)"` quando ficava vazio. O Formspree valida
+automaticamente qualquer campo chamado `email` como endereço real —
+um texto qualquer nesse campo é rejeitado com 422, mesmo com o resto
+do formulário correto.
+
+**Corrigido:** o campo `email` só é incluído no envio se for
+preenchido de verdade. Vazio = campo omitido, não mais um texto
+placeholder inválido.
+
+### 🟢 Adicionado — link para voltar ao app
+
+A página `feedback.html` abre numa aba separada (via `page.launch_url`),
+sem histórico de navegação natural pra voltar. Adicionado link "←
+Voltar para o app" fixo no topo da página, e um botão destacado
+"Voltar para o app" na mensagem de sucesso depois do envio.
+
+### 🟢 Adicionado — bloqueio de links no texto do relato
+
+Diferente do filtro de palavrão (que censura e permite confirmar o
+envio mesmo assim), texto contendo link (`http://`, `https://`,
+`www.`, ou domínio tipo `.com`/`.io`/`.com.br`) **bloqueia o envio
+por completo** — precisa remover o link e reenviar, sem opção de
+confirmar. Motivo: link no texto tende a ser sinal de spam/bot, não
+de usuário legítimo relatando um problema. Como efeito colateral
+esperado, e-mails digitados dentro do texto livre (não no campo
+dedicado) também são bloqueados, já que batem no mesmo padrão de
+domínio.
+
+**Validado:** testado em produção com e sem e-mail preenchido, e com
+link no texto — os três cenários funcionando como esperado.
+
+---
+
 ## [2.45.0] — 2026-07-13 — SISTEMA DE FEEDBACK/RELATO DE BUG
 
 ### 🟢 Adicionado — botão "Relatar Problema" em ❓ Ajuda

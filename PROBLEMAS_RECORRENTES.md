@@ -207,6 +207,12 @@ carregamento, seguindo exatamente o que está declarado em
     `_remove` e `_do_diag`. Vale pra qualquer método do Flet marcado
     como `@deprecated` (comum a partir da 0.80.0) — o decorator quebra
     a detecção de coroutine que o `run_task` depende
+15. **Formspree valida automaticamente qualquer campo chamado
+    `email`** como endereço real, mesmo em formulários AJAX/JSON — um
+    texto qualquer (ex: placeholder tipo "não informado") é rejeitado
+    com 422. Se o campo for opcional, **omitir a chave inteira** do
+    JSON quando vazio, nunca mandar um valor placeholder nesse nome
+    específico de campo
 
 ---
 
