@@ -1245,7 +1245,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607120501"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607111713"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -1320,12 +1320,12 @@ NAV_BORDER     = "#00C2A8"   # Linha turquesa separadora
 
 # CALENDÁRIO — texto e bordas
 CAL_YUKYU      = "#4a2800"   # Yukyu — laranja escuro
-CAL_CORP       = "#3d2000"   # Feriado corp — marrom escuro
+CAL_CORP       = "#F4B400"   # Feriado corp — amarelo Google (Banana)
 CAL_MODIF      = "#2d1a4a"   # Modificado — roxo escuro
 CAL_TEXT_WORK  = "#C8F7DC"   # verde claro
 CAL_TEXT_OFF   = "#DBEAFE"   # azul claro
 CAL_TEXT_HOL   = "#fca5a5"   # vermelho claro
-CAL_TEXT_CORP  = "#fdba74"   # laranja claro
+CAL_TEXT_CORP  = "#212121"   # escuro sobre amarelo (legibilidade)
 CAL_TEXT_YUKYU = "#fb923c"   # laranja médio
 CAL_TEXT_MODIF = "#c4b5fd"   # lilás claro
 CAL_BORDER_WORK= "#7ade9f"   # verde médio
