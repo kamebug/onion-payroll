@@ -1245,7 +1245,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607141108"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607111713"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -4693,7 +4693,13 @@ async def main(page: ft.Page):
                         alignment=ft.Alignment(0, 0), clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
                     ),
                     ft.Container(height=12),
-                    ft.Text("🧅 Onion Payroll", size=22, weight=ft.FontWeight.W_800, color="#FFFFFF"),
+                    ft.Row(
+                        controls=[
+                            ft.Image(src="logo_icon.png", width=26, height=26, fit="contain"),
+                            ft.Text("Onion Payroll", size=22, weight=ft.FontWeight.W_800, color="#FFFFFF"),
+                        ],
+                        spacing=8, alignment=ft.MainAxisAlignment.CENTER,
+                    ),
                     ft.Text("Antes de continuar", size=13, color=TEXT_SECONDARY),
                     ft.Container(height=16),
                     ft.Container(

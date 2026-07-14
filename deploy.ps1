@@ -139,7 +139,7 @@ $headInjection = @"
         var banner = document.createElement('div');
         banner.id = 'onion-install-banner';
         banner.innerHTML =
-          '<img src="icons/apple-touch-icon-192.png" alt="Onion Payroll">' +
+          '<img src="icons/Icon-192.png" alt="Onion Payroll">' +
           '<div class="onion-install-text">' +
             '<strong>Instalar Onion Payroll</strong>' +
             '<span>Acesse direto da tela inicial, sem abrir o navegador.</span>' +
@@ -180,7 +180,7 @@ $headInjection = @"
         var banner = document.createElement('div');
         banner.id = 'onion-install-banner';
         banner.innerHTML =
-          '<img src="icons/apple-touch-icon-192.png" alt="Onion Payroll">' +
+          '<img src="icons/Icon-192.png" alt="Onion Payroll">' +
           '<div class="onion-install-text">' +
             '<strong>Instalar Onion Payroll</strong>' +
             '<span>Toque em Compartilhar 📤 e depois em "Adicionar &agrave; Tela de In&iacute;cio".</span>' +
