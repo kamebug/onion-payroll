@@ -1245,7 +1245,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607130511"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607141038"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -4059,14 +4059,20 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
 
     # ── Seções do manual ─────────────────────────────────────────────
     APP_URL = "https://kamebug.github.io/onion-payroll/"
-    VIDEO_URL = "https://youtube.com/shorts/PrwumZLHVxM"  # atualizado 09/07/2026
     FEEDBACK_URL = APP_URL + "feedback.html?build=" + BUILD_ID
+    COMPARTILHAR_URL = APP_URL + "compartilhar.html"
 
     async def _abrir_feedback_task():
         await page.launch_url(FEEDBACK_URL)
 
     def _abrir_feedback(e):
         page.run_task(_abrir_feedback_task)
+
+    async def _abrir_compartilhar_task():
+        await page.launch_url(COMPARTILHAR_URL)
+
+    def _abrir_compartilhar(e):
+        page.run_task(_abrir_compartilhar_task)
     # v2.37: trocado ft.Text(selectable=True) por ft.TextField(read_only=True)
     # — sugestão do usuário, ainda não testada antes nesta conversa.
     # TextField é widget de INPUT nativo (usado em dezenas de lugares
@@ -4074,22 +4080,16 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
     # integrar melhor com o menu nativo de Copiar/Selecionar do sistema
     # operacional (Android/iOS) do que um Text simplesmente selecionável.
 
-    def _link_readonly_field(valor):
-        return ft.TextField(
-            value=valor, read_only=True,
-            text_align=ft.TextAlign.CENTER,
-            bgcolor="#2A2A2A", color=ACCENT_LITE,
-            border_color="#333333", focused_border_color="#00D2C6",
-            text_size=12,
-        )
-
     share_section = ft.Container(
         content=ft.Column(controls=[
             _title("📤 Compartilhar o Onion Payroll"),
-            _p("Toque e segure o campo abaixo para copiar o link e enviar por mensagem para um colega peelar o próprio contracheque também:"),
-            _link_readonly_field(APP_URL),
-            _p("Vídeo de apresentação (30s) — abra e compartilhe direto do YouTube:"),
-            _link_readonly_field(VIDEO_URL),
+            _p("Indique pra um colega peelar o próprio contracheque também — link do app e vídeo de apresentação (30s), com botão de copiar de verdade."),
+            ft.FilledButton(
+                "Compartilhar",
+                icon="share",
+                on_click=_abrir_compartilhar,
+                style=ft.ButtonStyle(bgcolor=ACCENT_DARK),
+            ),
         ], spacing=8, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
         padding=12, bgcolor=BG_CARD, border_radius=12,
         margin=ft.Padding(left=0, right=0, top=0, bottom=10),
