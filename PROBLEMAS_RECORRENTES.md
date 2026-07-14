@@ -213,6 +213,16 @@ carregamento, seguindo exatamente o que está declarado em
     com 422. Se o campo for opcional, **omitir a chave inteira** do
     JSON quando vazio, nunca mandar um valor placeholder nesse nome
     específico de campo
+16. **Referências de arquivo dentro do HTML injetado pelo `deploy.ps1`**
+    (banner de instalação, tags `<img>`, etc.) **não são conferidas em
+    lugar nenhum automaticamente** — um nome de arquivo digitado errado
+    (ex: `apple-touch-icon-192.png`, que nunca existiu; o Flet gera
+    `Icon-192.png`) só aparece como ícone genérico quebrado, sem
+    nenhum erro, warning, ou aviso no deploy. Depois de qualquer
+    mudança em referência de ícone/imagem no `deploy.ps1`, **conferir
+    visualmente em produção** (não só que o deploy "terminou sem
+    erro") — mesma lição do item #13, mas pra HTML customizado em vez
+    de `pyproject.toml`
 
 ---
 

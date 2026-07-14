@@ -1,5 +1,61 @@
 # Changelog — Onion Payroll
 
+## [2.47.0] — 2026-07-14 — PÁGINA DE COMPARTILHAMENTO + ÍCONE QUEBRADO NO BANNER
+
+### 🟢 Adicionado — botão "Compartilhar" com página dedicada
+
+Substituídos os dois campos de texto selecionável (link do app + link
+do vídeo, copiados com "toque e segure") por um único botão
+"Compartilhar" em ❓ Ajuda, que abre `compartilhar.html` — mesmo padrão
+já validado no botão de feedback (`page.launch_url` + `async def` +
+`page.run_task`).
+
+**Motivo da troca:** o balão de seleção de texto do Flutter Web
+(usado pelos campos antigos) demorava muito pra aparecer, exigindo
+várias tentativas pra conseguir copiar — limitação conhecida da
+simulação de seleção de texto dentro do motor de renderização
+Flutter/Skia, não é comportamento nativo do navegador.
+
+Na página nova, o botão "Copiar Link" usa `navigator.clipboard.writeText()`
+— API real do navegador, fora do Flutter/Pyodide, sem essa lentidão.
+Inclui também:
+- QR code do link do app (otimizado de 720KB → ~18KB, paleta reduzida)
+- Botão "Abrir Vídeo" (abre direto, além de copiar o link)
+- Link "← Voltar para o app" no topo
+
+**Lição de arquitetura:** os textos dos links (`LINK_APP`/`LINK_VIDEO`)
+existem como constante única no JavaScript, com o texto exibido na
+tela preenchido a partir delas — evita repetir o mesmo padrão de bug
+dos blocos de cor duplicados no `main.py` (fonte única, sem
+duplicação silenciosa).
+
+`deploy.ps1` — passo de cópia de arquivos extras generalizado (antes
+só cobria `feedback.html`, agora é uma lista `$arquivosExtras` que
+inclui `compartilhar.html` e `qr-app.png` também).
+
+### 🔴 Corrigido — ícone genérico (quebrado) no banner de instalação
+
+**Sintoma:** o banner customizado "Instalar Onion Payroll" (Android/
+iOS) mostrava um ícone genérico de seta, não a logo do app.
+
+**Causa raiz:** `deploy.ps1` referenciava `icons/apple-touch-icon-192.png`
+— arquivo que **nunca existiu**. O Flet gera os ícones como
+`Icon-192.png`/`Icon-512.png` (conforme `manifest.json`), não com esse
+nome. 404 silencioso, navegador caía no ícone de fallback.
+
+**Corrigido:** referência trocada pra `icons/Icon-192.png` — arquivo
+que já existe, sem necessidade de gerar/enviar nenhuma imagem nova.
+
+### 🟢 Corrigido — emoji genérico no título da tela de aviso
+
+Título "🧅 Onion Payroll" na tela de disclaimer usava o emoji padrão
+🧅 (amarelo), inconsistente com a logo roxa real já exibida 12px acima
+no mesmo card. Trocado por uma versão pequena (26×26px) da própria
+`logo_icon.png`, ao lado do texto — reaproveitando o arquivo existente,
+sem asset novo.
+
+---
+
 ## [2.46.0] — 2026-07-13 — AJUSTES NO SISTEMA DE FEEDBACK
 
 ### 🔴 Corrigido — envio falhava com erro 422 (Unprocessable Entity)
