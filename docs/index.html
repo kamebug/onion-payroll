@@ -164,6 +164,26 @@
     #onion-install-btn { background: #00A896; color: #121212; }
     #onion-install-dismiss { background: transparent; color: #757575; }
   </style>
+  <!-- Tela de carregamento instantanea (HTML/CSS puro, nao depende do Flutter/Pyodide) -->
+  <style>
+    #onion-splash {
+      position: fixed; inset: 0; z-index: 999999;
+      background: #2c2c2a;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      transition: opacity 0.4s ease;
+    }
+    #onion-splash img {
+      width: 160px; height: 160px;
+    }
+    #onion-splash p {
+      color: #BDBDBD; font-family: sans-serif;
+      font-size: 13px; margin-top: 4px;
+    }
+    #onion-splash.onion-splash-hide {
+      opacity: 0; pointer-events: none;
+    }
+  </style>
   <script>
     (function () {
       var deferredPrompt = null;
@@ -237,6 +257,22 @@
 </head>
 
 <body>
+<div id="onion-splash">
+  <img src="logo-loading.gif" alt="Carregando Onion Payroll">
+  <p>Carregando...</p>
+</div>
+<script>
+  (function () {
+    function esconderSplash() {
+      var splash = document.getElementById('onion-splash');
+      if (!splash) return;
+      splash.classList.add('onion-splash-hide');
+      setTimeout(function () { splash.remove(); }, 500);
+    }
+    window.addEventListener('flutter-first-frame', esconderSplash);
+    setTimeout(esconderSplash, 8000); // fallback de seguranca
+  })();
+</script>
   <picture id="splash">
       <source srcset="splash/img/light-1x.png 1x, splash/img/light-2x.png 2x, splash/img/light-3x.png 3x, splash/img/light-4x.png 4x" media="(prefers-color-scheme: light)">
       <source srcset="splash/img/dark-1x.png 1x, splash/img/dark-2x.png 2x, splash/img/dark-3x.png 3x, splash/img/dark-4x.png 4x" media="(prefers-color-scheme: dark)">
