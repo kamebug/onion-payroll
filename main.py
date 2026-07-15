@@ -1245,7 +1245,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607151119"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607111713"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -4074,7 +4074,6 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
                 "Compartilhar",
                 icon="share",
                 url=COMPARTILHAR_URL,
-                url_target=ft.UrlTarget.BLANK,
                 style=ft.ButtonStyle(bgcolor=ACCENT_DARK),
             ),
         ], spacing=8, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
@@ -4093,7 +4092,6 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
                 "Relatar Problema",
                 icon="bug_report",
                 url=FEEDBACK_URL,
-                url_target=ft.UrlTarget.BLANK,
                 style=ft.ButtonStyle(bgcolor=ACCENT_DARK),
             ),
 
