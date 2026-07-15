@@ -1,5 +1,68 @@
 # Changelog — Onion Payroll
 
+## [2.48.0] — 2026-07-14 — MÉDIA HISTÓRICA EM IENES + TELA DE CARREGAMENTO + FIX SAFARI/FIREFOX
+
+### 🔴 Corrigido — Média Histórica inflava o desconto (porcentagem vs. valor fixo)
+
+**Causa raiz:** o desconto médio era calculado como porcentagem
+(desconto ÷ bruto × 100) e depois reaplicado sobre o **bruto
+previsto** do mês (`gross * history_avg_pct / 100`). Isso inflava o
+valor em meses com bruto maior (hora extra, bônus), já que o desconto
+real (INSS/imposto/etc.) tende a variar pouco em valor absoluto entre
+holerites — não é proporcional ao bruto.
+
+**Corrigido:** a Média Histórica agora é a **média simples dos valores
+em ¥** já registrados (`entry["deductions"]`), aplicada diretamente,
+sem multiplicar por nada. Parâmetro renomeado em todo o código:
+`history_avg_pct` → `history_avg_deduction`.
+
+**Textos atualizados:** "Média histórica: X%" → "Média histórica: ¥X"
+(aba Holerite); "Taxa Média de Desconto" → "Desconto Médio" (aba
+Histórico); badge de porcentagem removido dos cards do histórico (já
+mostravam o valor em ¥ embaixo, ficava duplicado).
+
+### 🟢 Alterado — só 1 campo obrigatório no registro de holerite
+
+Como o cálculo agora depende só do valor de desconto, `総支給額 Total
+Bruto` e `差引支給額 Salário Líquido` deixaram de ser obrigatórios —
+viraram uma seção "💰 TOTAIS (opcional)". Só `控除合計 Total Desconto`
+continua na caixa "⭐ OBRIGATÓRIO". Textos de aviso atualizados (3
+campos → 1 campo) em `main.py` e em 2 pontos da aba Ajuda.
+`README.md` — seção "Registro de Holerite Real" reescrita.
+
+**Validado:** 94 testes automatizados passando (`test_main.py`,
+corrigido para o novo nome do parâmetro).
+
+### 🟢 Adicionado — tela de carregamento com logo animada
+
+GIF gerado a partir da própria logo (efeito de respiração, ~65KB),
+exibido instantaneamente via HTML/CSS puro logo após `<body>` —
+aparece antes de qualquer script do Flutter/Pyodide rodar, e some
+sozinho quando o evento `flutter-first-frame` dispara (com timeout de
+segurança de 8s). Substitui a tela em branco que aparecia durante o
+boot do Pyodide, especialmente notável na primeira visita (sem cache).
+
+### 🔴 Corrigido — botões "Compartilhar" e "Relatar Problema" não abriam no Safari/Firefox
+
+**Causa raiz:** bug conhecido e documentado do próprio Flet (issue
+#1105) — Safari bloqueia `launch_url()` quando há qualquer atraso
+assíncrono entre o clique e a abertura da aba. Nosso `page.run_task()`
+introduzia exatamente esse atraso.
+
+**Corrigido:** trocado `on_click` + `page.run_task` + `page.launch_url`
+pelo parâmetro nativo `url=` + `url_target=ft.UrlTarget.BLANK` direto
+no botão — vira um link nativo de verdade, confirmado pelo próprio
+criador do Flet como 100% confiável no Safari. Bônus: mais simples e
+mais compatível em geral, não só um caso especial.
+
+### 🟢 Corrigido — espaçamento da tela de disclaimer
+
+Reduzidos os espaçamentos verticais (padding da tela, espaço entre
+logo/título/aviso/botões) para o botão "Recusar" caber na tela sem
+precisar rolar, sem alterar fonte ou texto.
+
+---
+
 ## [2.47.0] — 2026-07-14 — PÁGINA DE COMPARTILHAMENTO + ÍCONE QUEBRADO NO BANNER
 
 ### 🟢 Adicionado — botão "Compartilhar" com página dedicada

@@ -71,7 +71,7 @@ def base_forecast(**overrides):
         holiday_days=[], day_overrides={},
         odd_month_bonus=0, extra_bonus=0,
         deduction_mode="fixed", fixed_deduction=0,
-        history_avg_pct=0, block=1,
+        history_avg_deduction=0, block=1,
         shift_type_cfg="night", cfg_start="20:35",
         cfg_end="08:35", cfg_break=65, cfg_ot="06:35",
         cycle_type="4x2",
@@ -285,13 +285,13 @@ class TestDesconto(unittest.TestCase):
     def test_desconto_fixo_usa_valor_exato(self):
         resultado = base_forecast(
             deduction_mode="fixed", fixed_deduction=45000,
-            history_avg_pct=99.0,  # não deve ser usado
+            history_avg_deduction=99.0,  # não deve ser usado
         )
         self.assertEqual(resultado["deductions"], 45000)
 
     def test_desconto_historico_ignora_valor_fixo(self):
         resultado = base_forecast(
-            deduction_mode="historical", history_avg_pct=25.0,
+            deduction_mode="historical", history_avg_deduction=25.0,
             fixed_deduction=999999,  # não deve ser usado
         )
         self.assertNotEqual(resultado["deductions"], 999999)
@@ -411,7 +411,7 @@ class TestAdicionalFixoMensal(unittest.TestCase):
             holiday_days=[], day_overrides={},
             odd_month_bonus=0, extra_bonus=0,
             deduction_mode="fixed", fixed_deduction=0,
-            history_avg_pct=0, block=1,
+            history_avg_deduction=0, block=1,
             shift_type_cfg="night", cfg_start="20:35",
             cfg_end="08:35", cfg_break=65, cfg_ot="06:35",
             cycle_type="4x2", fixed_monthly_bonus=8000,

@@ -223,6 +223,15 @@ carregamento, seguindo exatamente o que está declarado em
     visualmente em produção** (não só que o deploy "terminou sem
     erro") — mesma lição do item #13, mas pra HTML customizado em vez
     de `pyproject.toml`
+17. **Testes automatizados validam consistência interna, não
+    correção de negócio.** O bug da Média Histórica (porcentagem
+    aplicada sobre o bruto previsto, inflando o desconto) passou pelo
+    `py_compile` e por todos os 94 testes automatizados sem disparar
+    nenhum alerta — os testes só conferiam que a fórmula fazia o que
+    ela dizia fazer, não que o resultado batia com a realidade de um
+    holerite de verdade. Reforça a regra do item #3: qualquer fórmula
+    nova envolvendo dinheiro precisa ser validada contra pelo menos 1
+    holerite real antes de confiar nela, mesmo com testes verdes
 
 ---
 
