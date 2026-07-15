@@ -1245,7 +1245,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607151110"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607111713"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -2460,7 +2460,7 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
         content = ft.Column(
             controls=[
                 ft.Container(month_f,
-                    padding=ft.Padding(left=0, right=14, top=0, bottom=0)),
+                    padding=ft.Padding(left=0, right=14, top=6, bottom=0)),
 
                 # ── Campo obrigatório PRIMEIRO — sem precisar rolar ────────
                 ft.Container(
