@@ -817,7 +817,7 @@ def calcular_yukyu(hire_date: date, today: date, usage_dates: list) -> dict:
 def compute_monthly_forecast(
     year: int, month: int, jikyuu: int, anchor_date: date, group: str,
     holiday_days: list, day_overrides: dict, odd_month_bonus: int, extra_bonus: int,
-    deduction_mode: str, fixed_deduction: int, history_avg_pct: float, block: int,
+    deduction_mode: str, fixed_deduction: int, history_avg_deduction: float, block: int,
     shift_type_cfg: str = "", cfg_start: str = "", cfg_end: str = "",
     cfg_break: int = 65, cfg_ot: str = "",
     cycle_type: str = "4x2",
@@ -993,7 +993,7 @@ def compute_monthly_forecast(
                    + total_yukyu
                    + applied_odd + extra_bonus + total_abono + fixed_monthly_bonus)
     deductions  = (fixed_deduction if deduction_mode == "fixed"
-                   else shisha_gofuuu(gross * history_avg_pct / 100))
+                   else shisha_gofuuu(history_avg_deduction))
 
     return {
         "base_pay": total_base, "overtime_pay": total_ot, "night_pay": total_night,
@@ -1245,7 +1245,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607151029"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607111713"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -2037,9 +2037,9 @@ def build_holerite_tab(page: ft.Page, state: dict, refresh_all):
     view_year  = state.get("hol_year",  today.year)
     view_month = state.get("hol_month", today.month)
 
-    ratios   = [e.get("ratio", 0) for e in history if e.get("ratio", 0) > 0]
-    hist_avg = sum(ratios) / len(ratios) if ratios else 0.0
-    hist_sem_dados = len(ratios) == 0
+    deducoes_hist = [e.get("deductions", 0) for e in history if e.get("deductions", 0) > 0]
+    hist_avg = sum(deducoes_hist) / len(deducoes_hist) if deducoes_hist else 0.0
+    hist_sem_dados = len(deducoes_hist) == 0
 
     try:
         anchor = date.fromisoformat(settings["anchor_date"])
@@ -2063,7 +2063,7 @@ def build_holerite_tab(page: ft.Page, state: dict, refresh_all):
             extra_bonus=int(settings.get("extra_bonus") or 0),
             deduction_mode=settings.get("deduction_mode", "historical"),
             fixed_deduction=int(settings.get("fixed_deduction") or 0),
-            history_avg_pct=hist_avg,
+            history_avg_deduction=hist_avg,
             block=int(settings.get("block") or 1),
             shift_type_cfg=settings.get("shift_type", ""),
             cfg_start=settings.get("shift_start", ""),
@@ -2149,7 +2149,7 @@ def build_holerite_tab(page: ft.Page, state: dict, refresh_all):
         if hist_sem_dados:
             deduction_note = "Histórico: sem dados — desconto = ¥0"
         else:
-            deduction_note = f"Média histórica: {hist_avg:.1f}%"
+            deduction_note = f"Média histórica: {yen(round(hist_avg))}"
 
     # Bônus lidos das configurações — editáveis em ⚙️ Config
     # sem campos duplicados aqui
@@ -2335,9 +2335,9 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
         f_ta_kojo   = _tf("他控除 Outros Desc.", val=_v("ta_kojo"))
 
         # ── Totais ───────────────────────────────────────────────────
-        f_gross     = _tf_obrigatorio("総支給額 Total Bruto", val=_v("gross"))
+        f_gross     = _tf("総支給額 Total Bruto", val=_v("gross"))
         f_ded       = _tf_obrigatorio("控除合計 Total Desc.", val=_v("deductions"))
-        f_net       = _tf_obrigatorio("差引支給額 Salário Líq.", val=_v("net"))
+        f_net       = _tf("差引支給額 Salário Líq.", val=_v("net"))
 
         ov_ref = [None]
 
@@ -2380,7 +2380,6 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
                 "month":        _month_val,
                 "gross": g, "deductions": d,
                 "net":   _vi(f_net),
-                "ratio": round(d/g*100, 2) if g else 0.0,
                 # Frequência
                 "dias_uteis":    _vi(f_dias),
                 "dias_kyujitsu": _vi(f_kyujitsu),
@@ -2463,12 +2462,13 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
                 ft.Container(month_f,
                     padding=ft.Padding(left=0, right=14, top=0, bottom=0)),
 
-                # ── Campos obrigatórios PRIMEIRO — sem precisar rolar ──────
+                # ── Campo obrigatório PRIMEIRO — sem precisar rolar ────────
                 ft.Container(
                     content=ft.Column(controls=[
-                        ft.Text("⭐ OBRIGATÓRIOS — necessários para o cálculo",
+                        ft.Text("⭐ OBRIGATÓRIO — necessário para o cálculo",
                                 size=10, color=ACCENT, weight=ft.FontWeight.W_700),
-                        _padded_row(f_gross, f_ded, f_net),
+                        ft.Container(f_ded,
+                            padding=ft.Padding(left=0, right=14, top=0, bottom=0)),
                     ], spacing=4, tight=True),
                     bgcolor="#1A2E2C",
                     border_radius=10,
@@ -2485,6 +2485,8 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
                     padding=ft.Padding(left=0, right=0, top=0, bottom=6),
                 ),
 
+                _sec("💰 TOTAIS (opcional)"),
+                _padded_row(f_gross, f_net),
                 _sec("勤怠 FREQUÊNCIA / DIAS"),
                 _padded_row(f_dias, f_kyujitsu, f_hokyujitsu),
                 _padded_row(f_kekkin, f_yukyu, f_tokyu),
@@ -2526,7 +2528,7 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
                     ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
                     ft.Container(
                         content=ft.Text(
-                            "⭐ Campos com estrela são obrigatórios para calcular o desconto histórico. "
+                            "⭐ Só o Total de Desconto é obrigatório para calcular o desconto histórico. "
                             "Os demais são opcionais — apenas para seu registro pessoal.",
                             size=10, color=TEXT_MUTED,
                         ),
@@ -2573,14 +2575,13 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
         page.overlay.append(bg)
         page.update()
 
-    ratios    = [e.get("ratio", 0) for e in state["history"] if e.get("ratio", 0) > 0]
-    avg_ratio = sum(ratios) / len(ratios) if ratios else None
+    deducoes    = [e.get("deductions", 0) for e in state["history"] if e.get("deductions", 0) > 0]
+    avg_deducao = sum(deducoes) / len(deducoes) if deducoes else None
 
     def _history_card(e):
         g  = e.get("gross", 0)
         d  = e.get("deductions", 0)
         n  = e.get("net", g - d)
-        rt = e.get("ratio", 0)
         subs = []
         for key, lbl in [("zangyo","残業"), ("yakin","深夜"),
                           ("kyushutsu","休出"), ("kihon","基本給")]:
@@ -2592,10 +2593,7 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
                 ft.Row(controls=[
                     ft.Text(e.get("month",""), size=13,
                             color=ACCENT_LITE, weight=ft.FontWeight.W_700),
-                    ft.Row(controls=[
-                        ft.Text(f"Desc: {rt:.1f}%", size=11, color=TEXT_MUTED),
-                        ft.Text("✏️", size=12, color=TEXT_MUTED),
-                    ], spacing=6),
+                    ft.Text("✏️", size=12, color=TEXT_MUTED),
                 ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
                 ft.Row(controls=[
                     ft.Column(controls=[
@@ -2631,14 +2629,14 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
     avg_widget = ft.Container(
         content=ft.Column(
             controls=[
-                ft.Text("Taxa Média de Desconto", size=11, color=TEXT_SECONDARY,
+                ft.Text("Desconto Médio", size=11, color=TEXT_SECONDARY,
                         text_align=ft.TextAlign.CENTER),
                 ft.Text(
-                    f"{avg_ratio:.1f}%" if avg_ratio else "— Sem dados ainda",
+                    yen(round(avg_deducao)) if avg_deducao else "— Sem dados ainda",
                     size=28, color=ACCENT_LITE, weight=ft.FontWeight.W_800,
                     text_align=ft.TextAlign.CENTER,
                 ),
-                ft.Text("Usada para prever descontos na aba Holerite", size=10,
+                ft.Text("Usado para prever descontos na aba Holerite", size=10,
                         color=TEXT_MUTED, text_align=ft.TextAlign.CENTER),
             ],
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
@@ -4061,18 +4059,6 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
     APP_URL = "https://kamebug.github.io/onion-payroll/"
     FEEDBACK_URL = APP_URL + "feedback.html?build=" + BUILD_ID
     COMPARTILHAR_URL = APP_URL + "compartilhar.html"
-
-    async def _abrir_feedback_task():
-        await page.launch_url(FEEDBACK_URL)
-
-    def _abrir_feedback(e):
-        page.run_task(_abrir_feedback_task)
-
-    async def _abrir_compartilhar_task():
-        await page.launch_url(COMPARTILHAR_URL)
-
-    def _abrir_compartilhar(e):
-        page.run_task(_abrir_compartilhar_task)
     # v2.37: trocado ft.Text(selectable=True) por ft.TextField(read_only=True)
     # — sugestão do usuário, ainda não testada antes nesta conversa.
     # TextField é widget de INPUT nativo (usado em dezenas de lugares
@@ -4087,7 +4073,8 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
             ft.FilledButton(
                 "Compartilhar",
                 icon="share",
-                on_click=_abrir_compartilhar,
+                url=COMPARTILHAR_URL,
+                url_target=ft.UrlTarget.BLANK,
                 style=ft.ButtonStyle(bgcolor=ACCENT_DARK),
             ),
         ], spacing=8, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
@@ -4105,7 +4092,8 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
             ft.FilledButton(
                 "Relatar Problema",
                 icon="bug_report",
-                on_click=_abrir_feedback,
+                url=FEEDBACK_URL,
+                url_target=ft.UrlTarget.BLANK,
                 style=ft.ButtonStyle(bgcolor=ACCENT_DARK),
             ),
 
@@ -4120,7 +4108,7 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
             _item("4️⃣", "Consulte o Holerite",
                   "A aba 📋 mostra a previsão do mês selecionado — referente ao trabalho realizado naquele mês."),
             _item("5️⃣", "Registre o holerite real",
-                  "Na aba 🕐 Histórico, registre com o mês do TRABALHO, não o mês em que você recebeu o pagamento. Apenas 3 campos são obrigatórios."),
+                  "Na aba 🕐 Histórico, registre com o mês do TRABALHO, não o mês em que você recebeu o pagamento. Só o Total de Desconto é obrigatório."),
             _item("⚠️", "Atenção ao mês",
                   "No Japão o holerite geralmente chega no mês seguinte ao trabalho. Se você trabalhou em junho e recebeu o pagamento em julho, registre como '2026-06' no Histórico."),
 
@@ -4306,11 +4294,11 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
             # ── Descontos ────────────────────────────────────────────
             _title("🔢 Previsão de Descontos"),
             _item("📊 Média Histórica", "Botão em ⚙️ Config.",
-                  "Taxa média calculada automaticamente a partir dos holerites reais registrados no Histórico."),
+                  "Valor médio em ¥ calculado automaticamente a partir dos descontos reais registrados no Histórico — não é mais uma porcentagem do bruto, é a média dos valores em ienes já pagos."),
             _item("✏️ Desconto Fixo", "Botão em ⚙️ Config.",
                   "Usa o valor fixo em ¥ que você configurar, ignorando o histórico."),
-            _item("⭐ Campos obrigatórios", "Apenas 3 campos",
-                  "Total Bruto, Total Desconto e Salário Líquido são essenciais. Os demais campos do modal são opcionais — só para seu registro pessoal."),
+            _item("⭐ Campo obrigatório", "Apenas 1 campo",
+                  "Total de Desconto é essencial — é o valor usado para calcular a média histórica. Total Bruto e Salário Líquido são opcionais, só para seu registro pessoal (não entram no cálculo)."),
             _item("📅 Mês do Histórico", "Use o mês do TRABALHO",
                   "Se você recebeu o holerite em julho referente ao trabalho de junho, registre como '2026-06', não '2026-07'."),
             _item("✏️ Editar registro", "Toque em qualquer card",
@@ -4682,7 +4670,7 @@ async def main(page: ft.Page):
     page.add(
         ft.Container(
             expand=True, bgcolor=BG_DEEP,
-            padding=ft.Padding(left=20, right=20, top=40, bottom=20),
+            padding=ft.Padding(left=20, right=20, top=20, bottom=12),
             content=ft.Column(
                 scroll=ft.ScrollMode.AUTO,
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
@@ -4692,7 +4680,7 @@ async def main(page: ft.Page):
                         width=80, height=80, border_radius=18, bgcolor=BG_CARD,
                         alignment=ft.Alignment(0, 0), clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
                     ),
-                    ft.Container(height=12),
+                    ft.Container(height=6),
                     ft.Row(
                         controls=[
                             ft.Image(src="logo_icon.png", width=26, height=26, fit="contain"),
@@ -4701,10 +4689,10 @@ async def main(page: ft.Page):
                         spacing=8, alignment=ft.MainAxisAlignment.CENTER,
                     ),
                     ft.Text("Antes de continuar", size=13, color=TEXT_SECONDARY),
-                    ft.Container(height=16),
+                    ft.Container(height=8),
                     ft.Container(
-                        bgcolor=BG_CARD, border_radius=12, padding=16,
-                        content=ft.Column(spacing=8, controls=[
+                        bgcolor=BG_CARD, border_radius=12, padding=12,
+                        content=ft.Column(spacing=5, controls=[
                             ft.Text("⚠️ Aviso Legal", size=14, weight=ft.FontWeight.W_700, color=WARNING),
                             ft.Text(
                                 "Os valores exibidos são estimativas baseadas nas "
@@ -4723,13 +4711,13 @@ async def main(page: ft.Page):
                             ),
                         ]),
                     ),
-                    ft.Container(height=20),
+                    ft.Container(height=10),
                     ft.FilledButton(
                         "Aceitar e Continuar", on_click=_aceitar_disclaimer,
                         style=ft.ButtonStyle(bgcolor=ACCENT, color="#121212"),
                         width=280,
                     ),
-                    ft.Container(height=8),
+                    ft.Container(height=4),
                     ft.TextButton(
                         "Recusar", on_click=_recusar_disclaimer,
                         style=ft.ButtonStyle(color=TEXT_MUTED),
