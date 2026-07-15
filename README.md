@@ -206,15 +206,21 @@ de taxa elevada — o cálculo permanece idêntico ao padrão (時給 puro).
 
 ## 📋 Registro de Holerite Real
 
-Apenas três campos são obrigatórios para o cálculo de Média Histórica:
+Apenas um campo é obrigatório para o cálculo de Média Histórica:
 
 | Campo | Uso |
 |---|---|
-| ⭐ 総支給額 Total Bruto | Base do cálculo |
-| ⭐ 控除合計 Total Desconto | Base do cálculo |
-| ⭐ 差引支給額 Salário Líquido | Conferência |
+| ⭐ 控除合計 Total Desconto | Base do cálculo — a Média Histórica é a média em ¥ dos valores já registrados, não uma porcentagem do bruto |
 
-Os demais ~25 campos são opcionais — apenas registro pessoal.
+`総支給額 Total Bruto` e `差引支給額 Salário Líquido` são opcionais — só
+para conferência pessoal, não entram no cálculo. Os demais ~24 campos
+também são opcionais.
+
+**Por que a mudança:** o desconto (INSS/imposto/etc.) tende a variar
+pouco em valor absoluto entre os holerites — calculá-lo como
+porcentagem do bruto e reaplicar sobre o bruto previsto inflava o
+valor em meses com mais hora extra/bônus. A partir de agora, a Média
+Histórica é simplesmente a média dos valores em ¥ já registrados.
 
 ---
 
