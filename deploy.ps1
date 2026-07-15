@@ -65,7 +65,7 @@ Copy-Item -Path "$ROOT\build_src\build\web\*" -Destination "$ROOT\docs\" -Recurs
 # 6b. Copiar arquivos que nao fazem parte do build do Flet (paginas
 # HTML extras e imagens usadas nelas) - precisam ser copiados
 # manualmente toda vez que docs/ e recriado do zero
-$arquivosExtras = @("feedback.html", "compartilhar.html", "qr-app.png")
+$arquivosExtras = @("feedback.html", "compartilhar.html", "qr-app.png", "logo-loading.gif")
 foreach ($arquivo in $arquivosExtras) {
     if (Test-Path "$ROOT\$arquivo") {
         Copy-Item "$ROOT\$arquivo" "$ROOT\docs\$arquivo" -Force
@@ -126,6 +126,26 @@ $headInjection = @"
     }
     #onion-install-btn { background: #00A896; color: #121212; }
     #onion-install-dismiss { background: transparent; color: #757575; }
+  </style>
+  <!-- Tela de carregamento instantanea (HTML/CSS puro, nao depende do Flutter/Pyodide) -->
+  <style>
+    #onion-splash {
+      position: fixed; inset: 0; z-index: 999999;
+      background: #2c2c2a;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      transition: opacity 0.4s ease;
+    }
+    #onion-splash img {
+      width: 160px; height: 160px;
+    }
+    #onion-splash p {
+      color: #BDBDBD; font-family: sans-serif;
+      font-size: 13px; margin-top: 4px;
+    }
+    #onion-splash.onion-splash-hide {
+      opacity: 0; pointer-events: none;
+    }
   </style>
   <script>
     (function () {
@@ -201,6 +221,31 @@ $headInjection = @"
 $html = Get-Content "$ROOT\docs\index.html" -Raw
 $html = $html -replace "</head>", "$headInjection`n</head>"
 
+# Tela de carregamento instantanea — injetada logo apos <body>, para
+# aparecer antes de qualquer script do Flutter/Pyodide rodar. Some
+# sozinha quando o evento 'flutter-first-frame' dispara (o Flutter
+# Web emite esse evento assim que a primeira tela e desenhada). Tem
+# um fallback por timeout (8s) para o caso raro do evento nao disparar.
+$bodyInjection = @"
+<div id="onion-splash">
+  <img src="logo-loading.gif" alt="Carregando Onion Payroll">
+  <p>Carregando...</p>
+</div>
+<script>
+  (function () {
+    function esconderSplash() {
+      var splash = document.getElementById('onion-splash');
+      if (!splash) return;
+      splash.classList.add('onion-splash-hide');
+      setTimeout(function () { splash.remove(); }, 500);
+    }
+    window.addEventListener('flutter-first-frame', esconderSplash);
+    setTimeout(esconderSplash, 8000); // fallback de seguranca
+  })();
+</script>
+"@
+$html = $html -replace "<body>", "<body>`n$bodyInjection"
+
 # Libera pinch-to-zoom — o Flet gera o viewport com maximum-scale=1.0 e
 # user-scalable=no por padrao, bloqueando o zoom nativo do navegador.
 # Corrigido aqui automaticamente a cada deploy (nao precisa mais editar
@@ -221,7 +266,7 @@ Write-Host ""
 $MSG = Read-Host "Mensagem do commit (Enter = Deploy $BUILD_ID)"
 if ([string]::IsNullOrWhiteSpace($MSG)) { $MSG = "Deploy $BUILD_ID" }
 
-git add docs\ main.py feedback.html compartilhar.html qr-app.png
+git add docs\ main.py feedback.html compartilhar.html qr-app.png logo-loading.gif
 git commit -m $MSG
 git push
 
