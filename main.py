@@ -879,6 +879,8 @@ def compute_monthly_forecast(
     _ot           = cfg_ot    if cfg_ot    else ("06:35" if _stype == "night" else "18:35")
     total_base = total_ot = total_night = total_holiday = total_legal = total_abono = 0
     total_yukyu = 0
+    total_ot_min = total_night_min = total_regular_min = 0
+    total_holiday_min = total_legal_min = total_yukyu_min = 0
     days_normal = days_holiday = days_legal = days_yukyu = 0
 
     for day_num, cycle_status in cycle.items():
@@ -989,9 +991,11 @@ def compute_monthly_forecast(
         )
         if (is_sunday and not is_holiday) or status == "legal":
             total_legal += pay["total_gross"]
+            total_legal_min += pay["net_minutes"]
             days_legal  += 1
         elif status == "holiday" or (is_holiday and not is_sunday):
             total_holiday += pay["total_gross"]
+            total_holiday_min += pay["net_minutes"]
             days_holiday  += 1
         elif shift_type == "yukyu":
             # Separado de total_base — sem isso, o valor do Yukyu ficava
@@ -999,12 +1003,16 @@ def compute_monthly_forecast(
             # sem como comparar com o holerite real (que mostra Yukyu
             # como rubrica própria, com dias e horas separados).
             total_yukyu += pay["base_pay"]
+            total_yukyu_min += pay["net_minutes"]
             if pay["base_pay"] > 0:
                 days_yukyu += 1
         else:
             total_base  += pay["base_pay"]
             total_ot    += pay["overtime_pay"]
             total_night += pay["night_pay"]
+            total_regular_min += pay["regular_minutes"]
+            total_ot_min      += pay["overtime_minutes"]
+            total_night_min   += pay["night_minutes"]
             if pay["base_pay"] > 0:
                 days_normal += 1
         total_abono += day_abono
@@ -1027,6 +1035,12 @@ def compute_monthly_forecast(
         "abono_total": total_abono,
         "fixed_monthly_bonus": fixed_monthly_bonus,
         "monthly_allowance": monthly_allowance,
+        "regular_hours": round(total_regular_min / 60, 1),
+        "overtime_hours": round(total_ot_min / 60, 1),
+        "night_hours": round(total_night_min / 60, 1),
+        "holiday_hours": round(total_holiday_min / 60, 1),
+        "legal_hours": round(total_legal_min / 60, 1),
+        "yukyu_hours": round(total_yukyu_min / 60, 1),
     }
 
 # ─────────────────────────────────────────────
@@ -1268,7 +1282,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607161106"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607111713"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -2201,17 +2215,17 @@ def build_holerite_tab(page: ft.Page, state: dict, refresh_all):
             nav_row, month_hint,
             card(ft.Column(controls=[
                 section_header("支給 VENCIMENTOS"),
-                pay_row(f"Salário Base 基本給 ({data.get('days_normal',0)}d)",
+                pay_row(f"Salário Base 基本給 ({data.get('days_normal',0)}d, {data.get('regular_hours',0):g}h)",
                         data["base_pay"]),
-                pay_row(f"Yukyu 有給休暇 ({data.get('days_yukyu',0)}d)",
+                pay_row(f"Yukyu 有給休暇 ({data.get('days_yukyu',0)}d, {data.get('yukyu_hours',0):g}h)",
                         data.get("yukyu_pay", 0),     color="#FFB74D",   small=True),
-                pay_row("Hora Extra 残業手当",
+                pay_row(f"Hora Extra 残業手当 ({data.get('overtime_hours',0):g}h)",
                         data["overtime_pay"],       color=WARNING,     small=True),
-                pay_row("Adicional Noturno 深夜手当",
+                pay_row(f"Adicional Noturno 深夜手当 ({data.get('night_hours',0):g}h)",
                         data["night_pay"],           color=ACCENT_LITE, small=True),
-                pay_row(f"Feriado 休出手当 ({data.get('days_holiday',0)}d)",
+                pay_row(f"Feriado 休出手当 ({data.get('days_holiday',0)}d, {data.get('holiday_hours',0):g}h)",
                         data["holiday_pay"],         color=DANGER,      small=True),
-                pay_row(f"Domingo 法定休出 ({data.get('days_legal',0)}d)",
+                pay_row(f"Domingo 法定休出 ({data.get('days_legal',0)}d, {data.get('legal_hours',0):g}h)",
                         data.get("legal_holiday_pay", 0), color="#EF9A9A", small=True),
                 pay_row("Bônus Mês Ímpar 奇数月",
                         data["odd_bonus"],           color=SUCCESS,     small=True),
