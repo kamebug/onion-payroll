@@ -1,5 +1,80 @@
 # Changelog — Onion Payroll
 
+## [2.49.0] — 2026-07-15 — REFORMULAÇÃO DO ARREDONDAMENTO DE SALÁRIO
+
+### 🔴 Alterado — CRÍTICO: Taxa de Referência descontinuada, substituída por sistema novo
+
+**Motivo:** RH real confirmou que o cálculo de hora extra/noturno/domingo,
+para empresas com adicional fixo mensal (ex: リーダー手当), usa arredondamento
+**separado** por parcela — jikyuu e o acréscimo do adicional são
+arredondados individualmente (o acréscimo sempre pra cima), depois
+somados — não uma taxa única arredondada de uma vez só, como o app
+fazia até aqui.
+
+**Exemplo real (confirmado por RH):** jikyuu=¥1.590, adicional
+líder=¥3.000/mês, 168h padrão, 33h de hora extra:
+```
+Taxa do jikyuu:     1.590 × 1,25            = ¥1.988 (arredondado)
+Taxa do adicional:  (3.000 ÷ 168) × 1,25     = ¥23    (sempre pra cima)
+Taxa final:         1.988 + 23               = ¥2.011
+Total:               2.011 × 33h              = ¥66.363
+```
+
+**Dois controles novos em ⚙️ Config, substituindo a antiga "Taxa de
+Referência" (nunca ficou visível — estava escondida atrás de um switch
+desligado desde sempre):**
+
+1. **Modo de Arredondamento** (geral) — "Sempre pra Cima" (novo padrão)
+   ou "Regra do 0,5" (comportamento anterior). Afeta Salário Base,
+   Hora Extra, Noturno, Feriado/Domingo e o campo 延長. **Não afeta** a
+   Média Histórica de desconto, que continua sempre na Regra do 0,5.
+2. **Usar Adicional de Líder no Arredondamento** — switch, desligado
+   por padrão. Reaproveita o valor já configurado em "Adicional Fixo
+   Mensal — Líder" (o mesmo que já soma no bruto) — não duplica campo.
+   Revela "Horas Padrão para este Cálculo" (padrão 168h, configurável).
+
+⚠️ **Mudança de padrão para todo mundo:** como "Sempre pra Cima" virou
+o padrão geral (não só para quem ativar o adicional de líder), os
+valores calculados mudam para **todos os usuários** a partir desta
+versão, mesmo quem nunca mexer em nenhuma configuração nova. Decisão
+consciente — ver `PROBLEMAS_RECORRENTES.md` para o raciocínio completo.
+
+**Removido:** `premium_allowances_monthly`, `premium_standard_hours`,
+`night_addon_extra` (settings), e toda a UI/lógica correspondente em
+`calculate_shift_pay`/`compute_monthly_forecast`. `README.md` — seção
+"Taxa de Referência" substituída por "Arredondamento com Adicional de
+Líder".
+
+**Pendente:** recalibrar `test_main.py` contra os 5 holerites reais
+(esses continuam fixos na Regra do 0,5, já que foi o que gerou os
+valores reais impressos) — a fazer depois da revisão visual do app.
+
+### 🔴 Corrigido — hora extra do Alternado Semanal/Mensal ignorava o horário configurado
+
+**Sintoma:** campo "残業 Início Hora Extra" não aparecia na tela de
+configuração do turno Alternado (Semanal e Mensal), e mesmo que
+aparecesse, não fazia efeito nenhum no cálculo.
+
+**Causa raiz:** dentro do loop mensal, o horário de início da hora
+extra para turnos alternados estava **hardcoded** (`"18:35"`/`"06:35"`),
+ignorando completamente o parâmetro `cfg_ot` configurado pelo usuário
+— diferente do 4x2/5x2, que já respeitavam esse campo corretamente.
+
+**Corrigido:** campo adicionado à tela (`section_alt_container`) e o
+cálculo agora usa `cfg_ot` quando preenchido, com fallback idêntico ao
+valor hardcoded anterior para quem não configurar nada (nenhuma
+mudança de comportamento pra quem já usa o padrão).
+
+### 🟢 Corrigido — textos confusos no modal de ponto
+
+- Switch "有休 em Feriado (+8h)" → "有休 em Feriado" (o "+8h" já não
+  era mais verdade — a jornada usada é a configurada, não 8h fixo)
+- Texto "Trabalho Normal", que aparecia acima dos campos Entrada/Saída
+  sem agregar informação, trocado por uma dica útil: "Preencha
+  Entrada/Saída para horário real (inclusive saída antecipada)"
+
+---
+
 ## [2.48.0] — 2026-07-14 — MÉDIA HISTÓRICA EM IENES + TELA DE CARREGAMENTO + FIX SAFARI/FIREFOX
 
 ### 🔴 Corrigido — Média Histórica inflava o desconto (porcentagem vs. valor fixo)

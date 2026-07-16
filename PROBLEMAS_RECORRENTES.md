@@ -232,6 +232,27 @@ carregamento, seguindo exatamente o que está declarado em
     holerite de verdade. Reforça a regra do item #3: qualquer fórmula
     nova envolvendo dinheiro precisa ser validada contra pelo menos 1
     holerite real antes de confiar nela, mesmo com testes verdes
+18. **Valores hardcoded "temporários" sobrevivem mais tempo do que se
+    imagina.** O horário de início de hora extra do Alternado
+    Semanal/Mensal estava fixo em `"18:35"`/`"06:35"` direto no meio do
+    loop de cálculo, sem nenhum campo de configuração correspondente
+    na tela — nem gerava erro, nem ficava óbvio, só calculava com um
+    valor que ninguém tinha como mudar. Ao adicionar um campo de
+    configuração novo, **sempre grep pela variável correspondente no
+    motor de cálculo** pra confirmar que o valor configurado
+    realmente chega até onde é usado — um campo na tela não garante
+    que ele tem efeito nenhum
+19. **Mudar um padrão geral do app (não just um recurso opt-in) é uma
+    decisão consciente, não um efeito colateral.** A v2.49 tornou
+    "Sempre pra Cima" o modo de arredondamento padrão pra TODOS os
+    usuários (não só quem ativa o adicional de líder) — decisão
+    tomada cientes de que isso muda os valores calculados até pra
+    quem nunca mexer em nenhuma configuração nova, e invalida a
+    calibração anterior contra holerites reais (que precisou ser
+    recalibrada em `test_main.py`). Esse tipo de mudança de padrão
+    geral deve sempre ser perguntado explicitamente ("isso muda o
+    comportamento de quem não mexer em nada — confirma?"), nunca
+    assumido implicitamente só porque parece a opção "mais correta"
 
 ---
 

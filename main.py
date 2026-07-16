@@ -23,8 +23,13 @@ class _ValueHolder:
 #  BUSINESS LOGIC — Decoupled from UI
 # ─────────────────────────────────────────────
 
-def shisha_gofuuu(value: float) -> int:
-    """四捨五入 — Japanese rounding: 0.5 rounds UP."""
+def shisha_gofuuu(value: float, mode: str = "half_up") -> int:
+    """Arredondamento de valores monetários.
+    mode="up": sempre arredonda pra cima (ceiling) — NOVO PADRÃO do app
+    mode="half_up": 四捨五入 clássico, 0,5 sempre sobe (comportamento anterior)
+    """
+    if mode == "up":
+        return int(math.ceil(value))
     return int(math.floor(value + 0.5))
 
 
@@ -308,8 +313,9 @@ def calculate_shift_pay(
     break_min: int = 65, block: int = 1, is_holiday: bool = False,
     yukyu_on_holiday: bool = False, base_shift: str = "",
     round_mode: str = "truncate",
-    fixed_allowances_monthly: float = 0, standard_monthly_hours: float = 144,
-    night_addon_extra: float = 0,
+    wage_round_mode: str = "up",
+    use_leader_addon: bool = False,
+    leader_addon_amount: float = 0, leader_addon_hours: float = 168,
     ot_start_str: str = "",
     cfg_start_str: str = "", cfg_end_str: str = "",
     break_periods: list = None,
@@ -345,21 +351,25 @@ def calculate_shift_pay(
         tinham o adicional inflado (pausa contada como se fosse
         trabalhada).
 
-    fixed_allowances_monthly: soma de adicionais fixos mensais (ex: リーダー
-        手当, 管理手当, 技術手当) que por lei (労基法37条 + regras de exclusão
-        do施行規則21条) entram na "taxa de referência" usada para calcular
-        hora extra/noturno/domingo — mas NÃO entram no cálculo de horas
-        normais. Validado contra 5 holerites reais (2 jikyuu diferentes,
-        com e sem adicional de líder): bate exato quando dividido pelas
-        horas padrão. Default 0 = comportamento idêntico a versões
-        anteriores (sem acréscimo).
-    standard_monthly_hours: horas padrão usadas para transformar o
-        adicional fixo mensal em ¥/hora (default 144h, validado nos 5
-        holerites reais — NÃO é o total de horas trabalhadas no mês, é
-        uma referência fixa da empresa).
-    night_addon_extra: ajuste fino manual (¥/h), só para o adicional
-        noturno, cobrindo uma pequena diferença (~¥448/mês nos holerites
-        analisados) ainda não totalmente explicada. Default 0.
+    wage_round_mode: "up" (padrão, sempre arredonda pra cima) ou
+        "half_up" (0,5 sempre sobe — comportamento anterior à v2.49).
+        Aplicado à taxa por hora de base, extra, noturno e feriado.
+
+    use_leader_addon: quando True, separa o cálculo da taxa cheia
+        (extra/noturno/domingo) em duas parcelas arredondadas
+        INDIVIDUALMENTE — jikyuu puro + acréscimo do adicional de líder
+        — em vez de somar os dois numa taxa só antes de arredondar uma
+        vez. Baseado em fórmula confirmada por RH real: cada parcela é
+        arredondada separadamente porque a diferença muda o resultado
+        final. Default False = comportamento antigo (soma antes de
+        arredondar).
+    leader_addon_amount: valor do adicional fixo mensal (ex: リーダー手当)
+        usado na parcela do acréscimo, quando use_leader_addon=True.
+        Normalmente vem do mesmo campo "Adicional Fixo Mensal — Líder"
+        que já soma no bruto do mês — não precisa duplicar o valor.
+    leader_addon_hours: horas padrão usadas para transformar o
+        adicional fixo mensal em ¥/hora (default 168h, do exemplo real
+        de RH — pode variar por empresa, sempre confirmar).
     """
     result = {
         "base_pay": 0, "overtime_pay": 0, "night_pay": 0, "holiday_pay": 0,
@@ -543,14 +553,21 @@ def calculate_shift_pay(
         result["night_minutes"]    = night_min
     holiday_premium            = 0.35 if is_holiday else 0.0
 
-    # Acréscimo por hora vindo de adicionais fixos mensais (リーダー手当 etc.)
-    # — aplicado SOMENTE em extra/noturno/domingo, nunca em horas normais
-    # (confirmado: 基本給 bate exato com jikyuu puro em todos os holerites
-    # reais analisados, mesmo quando há adicionais fixos no mês).
-    addon_per_hour = (fixed_allowances_monthly / standard_monthly_hours
-                       if standard_monthly_hours > 0 else 0.0)
-    premium_jikyuu = jikyuu + addon_per_hour
-    night_jikyuu   = jikyuu + addon_per_hour + night_addon_extra
+    # Taxa cheia (extra/noturno/domingo), com arredondamento configurável.
+    # Se use_leader_addon estiver ativo, jikyuu e o acréscimo do adicional
+    # de líder são arredondados EM SEPARADO, cada um por si, antes de
+    # somar — confirmado por RH real que o resultado muda dependendo de
+    # arredondar tudo junto ou separado. Sem isso ativo, comportamento
+    # idêntico a uma taxa só (jikyuu puro).
+    addon_per_hour = (leader_addon_amount / leader_addon_hours
+                       if (use_leader_addon and leader_addon_hours > 0) else 0.0)
+
+    def _taxa_cheia(multiplicador: float) -> int:
+        parte_base = shisha_gofuuu(jikyuu * multiplicador, wage_round_mode)
+        if use_leader_addon and addon_per_hour > 0:
+            parte_addon = shisha_gofuuu(addon_per_hour * multiplicador, wage_round_mode)
+            return parte_base + parte_addon
+        return parte_base
 
     # IMPORTANTE: a taxa por HORA é arredondada pro yen mais próximo ANTES
     # de multiplicar pelas horas trabalhadas — não o valor total no final.
@@ -574,19 +591,19 @@ def calculate_shift_pay(
         # Todas as horas trabalhadas em domingo/feriado vão pra
         # holiday_pay, à taxa CHEIA — nenhuma parcela fica "escondida"
         # em base_pay a taxa normal.
-        holiday_rate_full       = shisha_gofuuu(premium_jikyuu * (1.0 + holiday_premium))
+        holiday_rate_full       = _taxa_cheia(1.0 + holiday_premium)
         result["base_pay"]      = 0
         result["overtime_pay"]  = 0
         result["night_pay"]     = 0
-        result["holiday_pay"]   = shisha_gofuuu(holiday_rate_full * (net_min / 60.0))
+        result["holiday_pay"]   = shisha_gofuuu(holiday_rate_full * (net_min / 60.0), wage_round_mode)
     else:
         # base_pay cobre SÓ as horas regulares — hora extra é 100%
         # coberta por overtime_pay à taxa cheia, sem sobreposição.
-        result["base_pay"]      = shisha_gofuuu(jikyuu_per_min * result["regular_minutes"])
-        ot_rate_full            = shisha_gofuuu(premium_jikyuu * 1.25)
-        night_rate_increment    = shisha_gofuuu(night_jikyuu * 0.25)
-        result["overtime_pay"]  = shisha_gofuuu(ot_rate_full * (ot_min / 60.0))
-        result["night_pay"]     = shisha_gofuuu(night_rate_increment * (night_min / 60.0))
+        result["base_pay"]      = shisha_gofuuu(jikyuu_per_min * result["regular_minutes"], wage_round_mode)
+        ot_rate_full            = _taxa_cheia(1.25)
+        night_rate_increment    = _taxa_cheia(0.25)
+        result["overtime_pay"]  = shisha_gofuuu(ot_rate_full * (ot_min / 60.0), wage_round_mode)
+        result["night_pay"]     = shisha_gofuuu(night_rate_increment * (night_min / 60.0), wage_round_mode)
         result["holiday_pay"]   = 0
     result["total_gross"]  = (result["base_pay"] + result["overtime_pay"]
                                + result["night_pay"] + result["holiday_pay"])
@@ -825,8 +842,8 @@ def compute_monthly_forecast(
     alt_start_night: str = "20:35", alt_end_night: str = "08:35",
     fixed_monthly_bonus: int = 0,  # adicional fixo todo mês (liderança, etc.)
     round_mode: str = "truncate",
-    premium_allowances_monthly: float = 0, premium_standard_hours: float = 144,
-    night_addon_extra: float = 0,
+    wage_round_mode: str = "up",
+    use_leader_addon: bool = False, leader_addon_hours: float = 168,
     anchor_group: str = None,
     alt_monthly_rest_pattern: str = "5x2", shift_anchor_date: date = None,
     break_periods: list = None,
@@ -867,9 +884,9 @@ def compute_monthly_forecast(
             _day_shift = _alt_shift_map[day_num]
             default_shift = _day_shift
             if _day_shift == "day":
-                _start, _end, _ot = alt_start_day, alt_end_day, "18:35"
+                _start, _end, _ot = alt_start_day, alt_end_day, (cfg_ot if cfg_ot else "18:35")
             else:
-                _start, _end, _ot = alt_start_night, alt_end_night, "06:35"
+                _start, _end, _ot = alt_start_night, alt_end_night, (cfg_ot if cfg_ot else "06:35")
         ov        = day_overrides.get(str(day_num), {})
         status    = ov.get("status", "normal")   # "normal","absent","yukyu","holiday","legal"
         start_str = ov.get("start", "")
@@ -959,9 +976,10 @@ def compute_monthly_forecast(
                                         # usado para horários/limiar de OT mesmo
                                         # quando shift_type="holiday"
             round_mode=round_mode,
-            fixed_allowances_monthly=premium_allowances_monthly,
-            standard_monthly_hours=premium_standard_hours,
-            night_addon_extra=night_addon_extra,
+            wage_round_mode=wage_round_mode,
+            use_leader_addon=use_leader_addon,
+            leader_addon_amount=fixed_monthly_bonus,
+            leader_addon_hours=leader_addon_hours,
             ot_start_str=_ot,  # horário configurado de início da hora extra
             cfg_start_str=_start, cfg_end_str=_end,  # horário de entrada/saída configurado
             break_periods=break_periods,
@@ -1113,15 +1131,14 @@ DEFAULT_SETTINGS = {
     "hire_date": None,  # Data de Admissão — separada de anchor_date (turno), usada só para Yukyu
     "odd_bonus": 50000, "deduction_mode": "historical", "fixed_deduction": 45000,
     "block": 1, "round_mode": "truncate", "pin_enabled": False,
-    # v2.37: REVERTIDO — gravar 2720/3,11 como padrão universal (v2.36)
-    # estava errado, porque esse valor é específico da empresa de UM
-    # usuário. O app é distribuído publicamente (tem LICENSE, disclaimer,
-    # vídeo promocional) — outros usuários com outra empresa (ou sem
-    # esse adicional) ficariam com o cálculo errado por causa de um
-    # padrão que não é universal. Volta a 0, neutro e correto para
-    # qualquer instalação nova.
-    "premium_allowances_monthly": 0, "premium_standard_hours": 144,
-    "night_addon_extra": 0,
+    # v2.49: Taxa de Referência (premium_allowances_monthly/
+    # premium_standard_hours/night_addon_extra) DESCONTINUADA — sempre
+    # ficou escondida atrás de um switch desligado, nunca exposta na
+    # tela. Substituída por wage_round_mode + use_leader_addon, que
+    # reaproveitam o campo fixed_monthly_bonus já existente em vez de
+    # duplicar o valor num campo separado.
+    "wage_round_mode": "up", "use_leader_addon": False,
+    "leader_addon_hours": 168,
     "anchor_group": None,
     "cycle_type_confirmed": False,
     "disclaimer_accepted": False,
@@ -1245,7 +1262,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607151131"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607111713"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -1410,7 +1427,7 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
         # (chave, label PT principal, label JP secundário p/ localizar no
         # holerite real, descrição completa exibida abaixo)
         STATUS_OPCOES = [
-            ("normal",  "Normal",             "",       "Trabalho Normal"),
+            ("normal",  "Normal",             "",       "Preencha Entrada/Saída para horário real (inclusive saída antecipada)"),
             ("early",   "Saída Antecipada",   "",       "Saída Antecipada — horário real"),
             ("absent",  "Falta",              "欠勤",    "Falta 欠勤"),
             ("yukyu",   "Folga Remunerada",   "有休",    "有休 Yukyu — jornada normal, sem 残業/noturno"),
@@ -1467,7 +1484,7 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
             label_style=ft.TextStyle(color="#A0A0A0"),
         )
         yukyu_sw = ft.Switch(
-            label="有休 em Feriado (+8h)",
+            label="有休 em Feriado",
             value=ov.get("yukyu_on_holiday", False),
             active_color=ACCENT,
             label_text_style=ft.TextStyle(color=TEXT_SECONDARY, size=11),
@@ -1514,6 +1531,10 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
             ot_cfg  = state["settings"].get("shift_ot") or ("06:35" if stype == "night" else "18:35")
             cfg_start = state["settings"].get("shift_start") or ("20:35" if stype == "night" else "08:35")
             cfg_end   = state["settings"].get("shift_end")   or ("08:35" if stype == "night" else "20:35")
+            _wage_rm  = state["settings"].get("wage_round_mode", "up")
+            _use_addon = bool(state["settings"].get("use_leader_addon", False))
+            _addon_amt = int(state["settings"].get("fixed_monthly_bonus") or 0)
+            _addon_hrs = float(state["settings"].get("leader_addon_hours") or 168)
             is_hol_day = day_num in month_holidays
             cycle_st   = cycle.get(day_num, "off")
             is_off_day = (cycle_st == "off") or is_hol_day
@@ -1526,7 +1547,7 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
                     # Yukyu parcial: horas reais, sem 残業/noturno
                     pay = calculate_shift_pay(jikyuu, "yukyu",
                                               start_str=s, end_str=e,
-                                              break_min=brk)
+                                              break_min=brk, wage_round_mode=_wage_rm)
                     preview_text.value = (
                         f"有休 parcial: {pay['net_minutes']}min → "
                         f"{yen(pay['base_pay'])} (sem 残業/noturno)"
@@ -1539,7 +1560,8 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
                     pay = calculate_shift_pay(jikyuu, "yukyu",
                                               break_min=brk, base_shift=stype,
                                               ot_start_str=ot_cfg,
-                                              cfg_start_str=cfg_start, cfg_end_str=cfg_end)
+                                              cfg_start_str=cfg_start, cfg_end_str=cfg_end,
+                                              wage_round_mode=_wage_rm)
                     _horas_yk = pay["net_minutes"] / 60
                     preview_text.value = (
                         f"有休 dia completo: {yen(pay['base_pay'])} "
@@ -1552,7 +1574,8 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
                     pay = calculate_shift_pay(jikyuu, "yukyu",
                                               break_min=brk, base_shift=stype,
                                               ot_start_str=ot_cfg,
-                                              cfg_start_str=cfg_start, cfg_end_str=cfg_end)
+                                              cfg_start_str=cfg_start, cfg_end_str=cfg_end,
+                                              wage_round_mode=_wage_rm)
                     _horas_yk = pay["net_minutes"] / 60
                     preview_text.value = f"有休 em feriado: {yen(pay['base_pay'])} ({_horas_yk:g}h base)"
                 else:
@@ -1566,7 +1589,11 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
                                           start_str=s, end_str=e,
                                           break_min=brk, is_holiday=True,
                                           base_shift=stype, ot_start_str=ot_cfg,
-                                          cfg_start_str=cfg_start, cfg_end_str=cfg_end)
+                                          cfg_start_str=cfg_start, cfg_end_str=cfg_end,
+                                          wage_round_mode=_wage_rm,
+                                          use_leader_addon=_use_addon,
+                                          leader_addon_amount=_addon_amt,
+                                          leader_addon_hours=_addon_hrs)
                 nm = pay["net_minutes"]
                 parts = [f"base {yen(pay['base_pay'])}",
                          f"休出 +{yen(pay['holiday_pay'])}"]
@@ -1584,7 +1611,11 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
                 pay = calculate_shift_pay(jikyuu, stype,
                                           start_str=s, end_str=e, break_min=brk,
                                           ot_start_str=ot_cfg,
-                                          cfg_start_str=cfg_start, cfg_end_str=cfg_end)
+                                          cfg_start_str=cfg_start, cfg_end_str=cfg_end,
+                                          wage_round_mode=_wage_rm,
+                                          use_leader_addon=_use_addon,
+                                          leader_addon_amount=_addon_amt,
+                                          leader_addon_hours=_addon_hrs)
                 nm = pay["net_minutes"]
                 parts = [f"base {yen(pay['base_pay'])}"]
                 if pay["overtime_pay"]:
@@ -1596,7 +1627,11 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
                 try: extra_m = int(extra_min_f.value or 0)
                 except: extra_m = 0
                 if extra_m > 0:
-                    extra_pay = shisha_gofuuu((jikyuu / 60.0) * extra_m * 1.25)
+                    _extra_rate = shisha_gofuuu(jikyuu * 1.25, _wage_rm)
+                    if _use_addon and _addon_hrs > 0:
+                        _extra_addon_hr = _addon_amt / _addon_hrs
+                        _extra_rate += shisha_gofuuu(_extra_addon_hr * 1.25, _wage_rm)
+                    extra_pay = shisha_gofuuu((_extra_rate / 60.0) * extra_m, _wage_rm)
                     parts.append(f"延長 +{yen(extra_pay)}")
                     total_with_extra = pay['total_gross'] + extra_pay
                     preview_text.value = (
@@ -2077,9 +2112,9 @@ def build_holerite_tab(page: ft.Page, state: dict, refresh_all):
             alt_end_night=settings.get("shift_end_night", "08:35"),
             fixed_monthly_bonus=int(settings.get("fixed_monthly_bonus") or 0),
             round_mode=settings.get("round_mode", "truncate"),
-            premium_allowances_monthly=float(settings.get("premium_allowances_monthly") or 0),
-            premium_standard_hours=float(settings.get("premium_standard_hours") or 144),
-            night_addon_extra=float(settings.get("night_addon_extra") or 0),
+            wage_round_mode=settings.get("wage_round_mode", "up"),
+            use_leader_addon=bool(settings.get("use_leader_addon", False)),
+            leader_addon_hours=float(settings.get("leader_addon_hours") or 168),
             anchor_group=settings.get("anchor_group"),
             alt_monthly_rest_pattern=settings.get("alt_monthly_rest_pattern", "5x2"),
             shift_anchor_date=(date.fromisoformat(settings["shift_anchor_date"])
@@ -3082,7 +3117,7 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
             section_header("HORÁRIOS — TURNO ALTERNADO"),
             ft.Row([alt_day_start_f, alt_day_end_f], spacing=8),
             ft.Row([alt_night_start_f, alt_night_end_f], spacing=8),
-            shift_break_f,
+            ft.Row([shift_break_f, shift_ot_f], spacing=8),
         ], spacing=8, tight=True),
         visible=(settings.get("cycle_type", "4x2") in ("alternating", "alternating_monthly")),
     )
@@ -3353,67 +3388,98 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
         visible=(_cur_block > 1),
     )
 
-    # ── Adicionais fixos que entram no cálculo de extra/noturno/domingo ──
-    # Algumas empresas usam uma taxa por hora MAIOR que o jikyuu puro nesses
-    # 3 cálculos. Por padrão FICA ESCONDIDO (switch desligado) — a maioria
-    # dos usuários não precisa disso, e não vale poluir a tela de todo
-    # mundo por uma situação específica. Ver aba Ajuda para a explicação
-    # completa e a fórmula de calibração.
-    premium_help = ft.Text(
-        "⚠️ Não copie o valor do adicional impresso no holerite — raramente "
-        "bate exato. Veja como calibrar certinho na aba ❓ Ajuda.",
+    # ── Modo de Arredondamento (geral) ────────────────────────────────
+    # Afeta Salário Base, Hora Extra, Noturno e Feriado/Domingo — NÃO
+    # afeta a Média Histórica de desconto (essa continua sempre na
+    # regra do 0,5). Padrão "Sempre pra cima" a partir da v2.49 —
+    # comportamento antigo (0,5 sobe) continua disponível pra quem
+    # precisar recalibrar contra um holerite real específico.
+    wage_round_help = ft.Text(
+        "Como arredondar a taxa por hora (base, extra, noturno, "
+        "feriado/domingo). \"Sempre pra cima\" é o padrão atual do "
+        "app. Troque pra \"Regra do 0,5\" se seu holerite bater melhor "
+        "com o arredondamento clássico (0,5 sempre sobe, resto trunca).",
         size=11, color="#A0A0A0", italic=True,
     )
-    premium_allowances_f = ft.TextField(
-        label="Acréscimo p/ Taxa de Extra/Domingo (¥/mês, calibrado)",
-        value=str(settings.get("premium_allowances_monthly", 0)),
-        keyboard_type=ft.KeyboardType.NUMBER,
-        bgcolor="#2A2A2A", color="#F0F0F0",
-        border_color="#333333", focused_border_color="#00D2C6",
-        label_style=ft.TextStyle(color="#A0A0A0"),
-    )
-    premium_hours_f = ft.TextField(
-        label="Horas Padrão para o Cálculo", value=str(settings.get("premium_standard_hours", 144)),
-        keyboard_type=ft.KeyboardType.NUMBER,
-        bgcolor="#2A2A2A", color="#F0F0F0",
-        border_color="#333333", focused_border_color="#00D2C6",
-        label_style=ft.TextStyle(color="#A0A0A0"),
-    )
-    night_addon_f = ft.TextField(
-        label="Ajuste Fino do Noturno (¥/h, opcional)", value=str(settings.get("night_addon_extra", 0)),
-        keyboard_type=ft.KeyboardType.NUMBER,
-        bgcolor="#2A2A2A", color="#F0F0F0",
-        border_color="#333333", focused_border_color="#00D2C6",
-        label_style=ft.TextStyle(color="#A0A0A0"),
-    )
-    def _save_premium_field(key, field):
-        try:
-            settings.__setitem__(key, float(field.value or 0))
-        except ValueError:
-            settings.__setitem__(key, 0)
-        save_json(page, KEY_SETTINGS, settings)
-    premium_allowances_f.on_change = lambda e: _save_premium_field("premium_allowances_monthly", premium_allowances_f)
-    premium_hours_f.on_change      = lambda e: _save_premium_field("premium_standard_hours", premium_hours_f)
-    night_addon_f.on_change        = lambda e: _save_premium_field("night_addon_extra", night_addon_f)
 
-    # Campos empilhados verticalmente (não lado a lado) — em telas
-    # estreitas de celular, dois campos numa Row cortavam o segundo campo.
-    premium_fields_col = ft.Column(
-        controls=[premium_help, premium_allowances_f, premium_hours_f, night_addon_f],
-        spacing=8,
-        visible=(float(settings.get("premium_allowances_monthly", 0)) != 0
-                 or float(settings.get("night_addon_extra", 0)) != 0),
+    def _set_wage_round(mode):
+        settings["wage_round_mode"] = mode
+        _mem_cache[KEY_SETTINGS] = settings
+        save_json(page, KEY_SETTINGS, settings)
+        btn_wage_up.style = ft.ButtonStyle(
+            bgcolor=ACCENT if mode == "up" else BG_SURFACE,
+            color="#121212" if mode == "up" else TEXT_PRIMARY,
+        )
+        btn_wage_half.style = ft.ButtonStyle(
+            bgcolor=ACCENT if mode == "half_up" else BG_SURFACE,
+            color="#121212" if mode == "half_up" else TEXT_PRIMARY,
+        )
+        btn_wage_up.update()
+        btn_wage_half.update()
+
+    _cur_wage_round = settings.get("wage_round_mode", "up")
+    btn_wage_up = ft.FilledButton(
+        "⬆️ Sempre pra Cima",
+        on_click=lambda _: _set_wage_round("up"),
+        style=ft.ButtonStyle(
+            bgcolor=ACCENT if _cur_wage_round == "up" else BG_SURFACE,
+            color="#121212" if _cur_wage_round == "up" else TEXT_PRIMARY,
+        ),
+        expand=1,
     )
-    def _toggle_premium(e):
-        premium_fields_col.visible = e.control.value
-        premium_fields_col.update()
-    premium_switch_toggle = ft.Switch(
-        value=premium_fields_col.visible, active_color=ACCENT,
-        on_change=lambda e: _toggle_premium(e),
+    btn_wage_half = ft.FilledButton(
+        "🔄 Regra do 0,5",
+        on_click=lambda _: _set_wage_round("half_up"),
+        style=ft.ButtonStyle(
+            bgcolor=ACCENT if _cur_wage_round == "half_up" else BG_SURFACE,
+            color="#121212" if _cur_wage_round == "half_up" else TEXT_PRIMARY,
+        ),
+        expand=1,
     )
-    premium_switch = ft.Row(controls=[
-        premium_switch_toggle,
-        ft.Text("Minha empresa usa taxa diferente para hora extra/noturno/domingo",
+    wage_round_row = ft.Row(controls=[btn_wage_up, btn_wage_half], spacing=8)
+
+    # ── Adicional de Líder no Arredondamento ──────────────────────────
+    # Desligado por padrão. Reaproveita o campo "Adicional Fixo Mensal
+    # — Líder" (que já soma no bruto) em vez de duplicar o valor —
+    # quando ligado, esse mesmo valor também entra na taxa por hora de
+    # extra/noturno/domingo, separado do jikyuu e arredondado
+    # individualmente (conforme o Modo de Arredondamento acima).
+    leader_addon_help = ft.Text(
+        "⚠️ Regra confirmada por um RH específico — pode não valer pra "
+        "sua empresa. \"Horas Padrão\" (ex: 168h) também varia — "
+        "confirme com seu RH ou compare com um holerite real antes de "
+        "confiar no resultado. Deixe desligado se não tiver certeza.",
+        size=11, color="#A0A0A0", italic=True,
+    )
+    leader_addon_hours_f = ft.TextField(
+        label="Horas Padrão para este Cálculo",
+        value=str(settings.get("leader_addon_hours", 168)),
+        keyboard_type=ft.KeyboardType.NUMBER,
+        bgcolor="#2A2A2A", color="#F0F0F0",
+        border_color="#333333", focused_border_color="#00D2C6",
+        label_style=ft.TextStyle(color="#A0A0A0"),
+        visible=bool(settings.get("use_leader_addon", False)),
+    )
+    def _save_leader_addon_hours(e):
+        try:
+            settings["leader_addon_hours"] = float(leader_addon_hours_f.value or 168)
+        except ValueError:
+            settings["leader_addon_hours"] = 168
+        save_json(page, KEY_SETTINGS, settings)
+    leader_addon_hours_f.on_change = _save_leader_addon_hours
+
+    def _toggle_leader_addon(e):
+        settings["use_leader_addon"] = e.control.value
+        save_json(page, KEY_SETTINGS, settings)
+        leader_addon_hours_f.visible = e.control.value
+        leader_addon_hours_f.update()
+    leader_addon_switch = ft.Switch(
+        value=bool(settings.get("use_leader_addon", False)), active_color=ACCENT,
+        on_change=_toggle_leader_addon,
+    )
+    leader_addon_row = ft.Row(controls=[
+        leader_addon_switch,
+        ft.Text("Usar Adicional de Líder no arredondamento de extra/noturno/domingo",
                 size=12, color=TEXT_SECONDARY, expand=True),
     ], spacing=8)
 
@@ -3426,9 +3492,6 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
         block_row,
         round_mode_label,
         round_mode_row,
-        section_header("TAXA DE HORA EXTRA/NOTURNO/DOMINGO"),
-        premium_switch,
-        premium_fields_col,
     ], spacing=12, tight=True))
     hidden_advanced_container.visible = False
 
@@ -3665,6 +3728,16 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
             # Reativar: trocar visible=False por visible=True no container
             # `hidden_advanced_container` logo abaixo.
             hidden_advanced_container,
+
+            card(ft.Column(controls=[
+                section_header("ARREDONDAMENTO DE SALÁRIO"),
+                wage_round_help,
+                wage_round_row,
+                ft.Container(height=4),
+                leader_addon_row,
+                leader_addon_help,
+                leader_addon_hours_f,
+            ], spacing=12, tight=True)),
 
             card(ft.Column(controls=[
                 section_header("CONFIGURAÇÃO DE DESCONTOS"),
@@ -4281,11 +4354,18 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
             # ── Bônus e Adicionais ────────────────────────────────────
             _title("💰 Bônus e Adicionais Mensais"),
             _item("Adicional Fixo Mensal", "Configure em ⚙️ Config.",
-                  "Valor somado AUTOMATICAMENTE todo mês — ideal para função de líder, técnico ou qualquer adicional fixo recorrente. Configure uma vez e esqueça."),
+                  "Valor somado AUTOMATICAMENTE todo mês — ideal para função de líder, técnico ou qualquer adicional fixo recorrente. Configure uma vez e esqueça. Também pode ser usado no Arredondamento de Salário (abaixo), sem precisar duplicar o valor em outro campo."),
             _item("Bônus Mês Ímpar 奇数月", "Configure em ⚙️ Config.",
                   "Valor somado apenas em meses ímpares (jan, mar, mai, jul, set, nov)."),
             _item("Abono Extra", "Configure em ⚙️ Config.",
                   "Valor pontual — edite manualmente quando precisar adicionar algo fora do padrão."),
+
+            # ── Arredondamento de Salário ──────────────────────────────
+            _title("🔢 Arredondamento de Salário"),
+            _item("Modo de Arredondamento", "Botões em ⚙️ Config.",
+                  "\"Sempre pra Cima\" (padrão) arredonda toda taxa por hora pra cima, sem exceção. \"Regra do 0,5\" volta ao arredondamento clássico (0,5 sempre sobe, resto trunca) — troque se seu holerite bater melhor com esse modo. Afeta Salário Base, Hora Extra, Noturno e Feriado/Domingo. Não afeta a Média Histórica de desconto, que sempre usa a Regra do 0,5."),
+            _item("Usar Adicional de Líder no Arredondamento", "Switch em ⚙️ Config, desligado por padrão.",
+                  "Quando ativado, separa o cálculo da taxa de Extra/Noturno/Domingo em duas partes — jikyuu puro e o acréscimo do Adicional Fixo Mensal — cada uma arredondada individualmente antes de somar, em vez de somar tudo numa taxa só. Regra confirmada por um RH específico — pode não valer pra toda empresa. Revela o campo \"Horas Padrão para este Cálculo\" (ex: 168h), que também varia por empresa — confirme sempre com seu RH ou compare com um holerite real."),
             _item("Abono / Vale / Bico extra", "Campo no modal de ponto, por dia",
                   "Para valores específicos de UM dia — arubaito, gorjeta, vale-transporte extra."),
 
