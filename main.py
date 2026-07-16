@@ -841,6 +841,9 @@ def compute_monthly_forecast(
     alt_start_day: str = "08:35", alt_end_day: str = "20:35",
     alt_start_night: str = "20:35", alt_end_night: str = "08:35",
     fixed_monthly_bonus: int = 0,  # adicional fixo todo mês (liderança, etc.)
+    monthly_allowance: int = 0,  # abono mensal SEPARADO — nunca entra no
+                                  # cálculo de arredondamento de extra/
+                                  # noturno/domingo, só soma no bruto
     round_mode: str = "truncate",
     wage_round_mode: str = "up",
     use_leader_addon: bool = False, leader_addon_hours: float = 168,
@@ -1009,7 +1012,8 @@ def compute_monthly_forecast(
     applied_odd = odd_month_bonus if month % 2 == 1 else 0
     gross       = (total_base + total_ot + total_night + total_holiday + total_legal
                    + total_yukyu
-                   + applied_odd + extra_bonus + total_abono + fixed_monthly_bonus)
+                   + applied_odd + extra_bonus + total_abono + fixed_monthly_bonus
+                   + monthly_allowance)
     deductions  = (fixed_deduction if deduction_mode == "fixed"
                    else shisha_gofuuu(history_avg_deduction))
 
@@ -1022,6 +1026,7 @@ def compute_monthly_forecast(
         "days_normal": days_normal, "days_holiday": days_holiday, "days_legal": days_legal,
         "abono_total": total_abono,
         "fixed_monthly_bonus": fixed_monthly_bonus,
+        "monthly_allowance": monthly_allowance,
     }
 
 # ─────────────────────────────────────────────
@@ -1149,6 +1154,7 @@ DEFAULT_SETTINGS = {
     "shift_type": "night", "shift_start": "20:35", "shift_end": "08:35",
     "shift_break": 65, "shift_ot": "06:35", "extra_bonus": 0,
     "fixed_monthly_bonus": 0,  # adicional fixo todo mês (ex: liderança)
+    "monthly_allowance": 0,  # abono mensal separado, não afeta arredondamento
     "cycle_type": "4x2",  # "4x2" | "5x2" | "alternating" | "alternating_monthly"
     "alt_monthly_rest_pattern": "5x2",  # "5x2" | "4x2" — só usado em alternating_monthly
     "shift_anchor_date": None,  # só usado em alternating_monthly (mês de referência diurno)
@@ -1262,7 +1268,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607161049"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607111713"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -2111,6 +2117,7 @@ def build_holerite_tab(page: ft.Page, state: dict, refresh_all):
             alt_start_night=settings.get("shift_start_night", "20:35"),
             alt_end_night=settings.get("shift_end_night", "08:35"),
             fixed_monthly_bonus=int(settings.get("fixed_monthly_bonus") or 0),
+            monthly_allowance=int(settings.get("monthly_allowance") or 0),
             round_mode=settings.get("round_mode", "truncate"),
             wage_round_mode=settings.get("wage_round_mode", "up"),
             use_leader_addon=bool(settings.get("use_leader_addon", False)),
@@ -2210,6 +2217,8 @@ def build_holerite_tab(page: ft.Page, state: dict, refresh_all):
                         data["odd_bonus"],           color=SUCCESS,     small=True),
                 pay_row("Adicional Fixo Mensal",
                         data.get("fixed_monthly_bonus", 0), color=SUCCESS, small=True),
+                pay_row("Abono Mensal (separado)",
+                        data.get("monthly_allowance", 0), color=SUCCESS, small=True),
                 pay_row("Abono Extra",
                         data["extra_bonus"],         color=SUCCESS,     small=True),
                 pay_row("Abono/Vale do Dia",
@@ -3287,7 +3296,19 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
         mk_field("Adicional Fixo Mensal — Líder, etc. (¥)", "fixed_monthly_bonus"),
         ft.Text(
             "Valor somado automaticamente TODO mês na previsão "
-            "(ex: adicional de liderança, função técnica fixa).",
+            "(ex: adicional de liderança, função técnica fixa). "
+            "⚠️ Esse valor também é usado no cálculo de Extra/Noturno/"
+            "Domingo se \"Usar Adicional de Líder no Arredondamento\" "
+            "estiver ativo (⚙️ Config).",
+            size=9, color=TEXT_MUTED,
+        ),
+        mk_field("Abono Mensal — separado (¥)", "monthly_allowance"),
+        ft.Text(
+            "Outro valor somado automaticamente TODO mês, mas "
+            "SEPARADO do Adicional de Líder acima — nunca entra no "
+            "cálculo de Extra/Noturno/Domingo, mesmo com o "
+            "arredondamento ativado. Use pra qualquer abono fixo que "
+            "não deva afetar essa taxa.",
             size=9, color=TEXT_MUTED,
         ),
         hire_date_field,
@@ -4355,6 +4376,8 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
             _title("💰 Bônus e Adicionais Mensais"),
             _item("Adicional Fixo Mensal", "Configure em ⚙️ Config.",
                   "Valor somado AUTOMATICAMENTE todo mês — ideal para função de líder, técnico ou qualquer adicional fixo recorrente. Configure uma vez e esqueça. Também pode ser usado no Arredondamento de Salário (abaixo), sem precisar duplicar o valor em outro campo."),
+            _item("Abono Mensal (separado)", "Configure em ⚙️ Config.",
+                  "Igual ao Adicional Fixo Mensal (soma todo mês automaticamente), mas NUNCA entra no cálculo de Extra/Noturno/Domingo, mesmo com o Arredondamento com Adicional de Líder ativado. Use pra qualquer abono fixo que não deva afetar essa taxa."),
             _item("Bônus Mês Ímpar 奇数月", "Configure em ⚙️ Config.",
                   "Valor somado apenas em meses ímpares (jan, mar, mai, jul, set, nov)."),
             _item("Abono Extra", "Configure em ⚙️ Config.",
