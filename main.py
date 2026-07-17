@@ -1540,7 +1540,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607180631"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607111713"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -3925,12 +3925,10 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
     _ded_mode_val = [settings.get("deduction_mode", "historical")]
 
     def _set_ded_mode(mode):
-        import sys
         _ded_mode_val[0] = mode
         settings["deduction_mode"] = mode
         _mem_cache[KEY_SETTINGS] = settings
         save_json(page, KEY_SETTINGS, settings)
-        print(f"[DED_CHANGE] modo={mode}", file=sys.stderr)
         # Atualizar visual dos botões
         btn_hist.style = ft.ButtonStyle(
             bgcolor=ACCENT if mode == "historical" else BG_SURFACE,
@@ -3942,6 +3940,9 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
         )
         btn_hist.update()
         btn_fix.update()
+        # Esconde/mostra o campo de valor fixo conforme o modo ativo
+        fixed_deduction_f.visible = (mode == "fixed")
+        fixed_deduction_f.update()
         # Não chama refresh_all() — evita scroll ao topo
         # O holerite lerá o novo modo na próxima vez que abrir a aba
 
@@ -3965,6 +3966,12 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
         expand=1,
     )
     ded_mode_dd = ft.Row(controls=[btn_hist, btn_fix], spacing=8)
+    # Só aparece quando "Desconto Fixo" está ativo — escondido em "Média
+    # Histórica" pra não dar a impressão errada de que ainda está em uso
+    # (o cálculo já ignorava certo, só a tela continuava mostrando).
+    fixed_deduction_f = mk_field("Valor de Desconto Fixo (¥)", "fixed_deduction")
+    fixed_deduction_f.visible = (_cur == "fixed")
+
     pin_switch = ft.Switch(
         label="Ativar Bloqueio PIN / Biométrico",
         value=settings.get("pin_enabled", False),
@@ -4166,7 +4173,7 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
             card(ft.Column(controls=[
                 section_header("CONFIGURAÇÃO DE DESCONTOS"),
                 ded_mode_dd,
-                mk_field("Valor de Desconto Fixo (¥)", "fixed_deduction"),
+                fixed_deduction_f,
             ], spacing=12, tight=True)),
 
             card(ft.Column(controls=[
