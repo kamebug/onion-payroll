@@ -291,6 +291,42 @@ carregamento, seguindo exatamente o que está declarado em
     de verdade em vez de assumir de memória, e cruzar com pelo menos
     uma fonte oficial antes de confiar num dado que já estava no
     código
+24. **Corrigir a lógica de decisão não garante que a agregação use a
+    mesma lógica.** O bug de domingo+feriado corporativo foi corrigido
+    na decisão de `shift_type` — mas um bloco de agregação SEPARADO
+    (que soma os totais do mês) tinha sua própria condição antiga
+    duplicando a mesma regra de prioridade, e não foi atualizado
+    junto. Sempre que uma regra de prioridade/decisão existir em mais
+    de um lugar do código (decisão + agregação, cálculo + exibição,
+    etc.), uma correção precisa varrer TODOS os lugares — `grep` pela
+    mesma condição/padrão antes de considerar uma correção completa
+25. **`return` antecipado dentro de uma função pode pular
+    inicialização que outro código depende.** `calculate_shift_pay`
+    tinha 2 `return`s antecipados (Yukyu, shift_type inválido) que
+    pulavam o bloco onde `_ot_rate_full`/`_night_rate_increment`/etc.
+    eram definidos no resultado — `compute_monthly_forecast` lia essas
+    chaves incondicionalmente todo dia do loop, travando com
+    `KeyError` em qualquer mês com Yukyu. Ao adicionar chaves num
+    dicionário de retorno consumidas por quem chama a função,
+    definir ANTES de qualquer `return` antecipado, não só no caminho
+    "feliz" principal
+26. **Escrever teste automatizado pra um bug já "corrigido" pode
+    revelar que a correção estava incompleta.** O teste novo escrito
+    especificamente pro cenário domingo+feriado corporativo (item 24)
+    falhou na primeira tentativa — o que levou direto à descoberta do
+    segundo bug (agregação) que a correção original não tinha coberto.
+    Reforça: sempre escrever um teste específico pro cenário exato do
+    bug relatado pelo usuário, não confiar só na correção "parecer"
+    certa lendo o código
+27. **Ao recalibrar testes depois de descontinuar uma feature, cuidado
+    com classes duplicadas.** Uma substituição de classe de teste
+    (`str_replace`) inseriu a classe nova mas deixou a classe antiga
+    (com o mesmo nome) intacta mais abaixo no arquivo — em Python, a
+    segunda declaração de uma classe com o mesmo nome sobrescreve a
+    primeira silenciosamente, então os testes "novos" nunca rodavam de
+    verdade, só os antigos (quebrados). Depois de qualquer substituição
+    de classe/função, `grep -c` pelo nome pra confirmar que não sobrou
+    duplicata
 
 ---
 

@@ -61,7 +61,7 @@ python main.py
 python test_main.py
 ```
 
-94 testes cobrindo cálculo de hora extra, ciclos de trabalho (incluindo o deslocamento entre turmas Grupo A/B/C), descontos, feriados (nacionais e corporativos), domingo, falta, yukyu, abono, formatação de horário e arredondamento por categoria — validados contra 5 holerites reais. Recomendado antes de cada deploy. ⚠️ Pendente recalibração contra a v2.50.0 (mudanças no cálculo de noturno/domingo e arredondamento mensal ainda não refletidas nos valores esperados dos testes).
+101 testes cobrindo cálculo de hora extra, ciclos de trabalho (incluindo o deslocamento entre turmas Grupo A/B/C), descontos, feriados (nacionais e corporativos), domingo, falta, yukyu, abono, formatação de horário e arredondamento por categoria — validados contra 5 holerites reais. Recomendado antes de cada deploy.
 
 ### Deploy GitHub Pages
 
@@ -267,6 +267,6 @@ O app é gratuito, sem fins lucrativos, 100% offline, e fornecido "como está", 
 
 ## 🧪 Qualidade
 
-O motor de cálculo é coberto por 94 testes automatizados (`test_main.py`),
+O motor de cálculo é coberto por 101 testes automatizados (`test_main.py`),
 incluindo validação direta contra 5 holerites reais de dois contratos
-diferentes (2021-2022 e 2026). ⚠️ Pendente recalibração contra a v2.50.0.
+diferentes (2021-2022 e 2026).

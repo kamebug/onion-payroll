@@ -1,5 +1,68 @@
 # Changelog — Onion Payroll
 
+## [2.51.0] — 2026-07-16 — CRÍTICO: DOMINGO+FERIADO CORPORATIVO, YUKYU TRAVANDO, 延長 EM DOMINGO + RECALIBRAÇÃO COMPLETA DOS TESTES
+
+### 🔴 Corrigido — CRÍTICO: domingo marcado como feriado corporativo virava dia normal
+
+Confirmado com holerite real de maio/2026 (dia 3, domingo E 憲法記念日
+E feriado corporativo ao mesmo tempo): Salário Base e Hora Extra
+saíam inflados, Domingo saía reduzido — o dia caía no cálculo de "dia
+normal de trabalho" em vez de "domingo trabalhado".
+
+**Causa raiz, em duas partes:**
+1. A lógica de decisão de `shift_type` tratava domingo/feriado/escala
+   como uma cadeia frágil de prioridades (`elif`), sem garantia de que
+   um domingo TAMBÉM marcado como feriado seguisse pelo caminho certo.
+2. Mesmo depois de corrigir a decisão de `shift_type` (separando
+   escala/tipo de dia/status como sinais independentes), um bloco de
+   **agregação separado** — que soma os minutos/valores de cada
+   categoria pro total do mês — ainda usava a condição antiga
+   (`is_sunday and not is_holiday`), fazendo o dia cair na categoria
+   errada mesmo com `shift_type` já correto. Bug real pego só depois
+   de escrever um teste automatizado específico pra esse cenário.
+
+**Corrigido nos dois lugares.** Domingo agora tem prioridade
+consistente sobre feriado corporativo/nacional tanto na decisão do
+cálculo quanto na agregação mensal — feriado é só uma informação
+adicional, nunca sobrepõe a escala nem o domingo.
+
+### 🔴 Corrigido — CRÍTICO: mês com Yukyu travava o Holerite (KeyError)
+
+Qualquer dia marcado como Yukyu fazia `compute_monthly_forecast`
+travar com `KeyError: '_ot_rate_full'`. Causa: as taxas expostas no
+resultado de `calculate_shift_pay` (usadas pelo cálculo mensal com
+arredondamento único) só eram definidas depois de um `return`
+antecipado no caminho do Yukyu — dias de Yukyu nunca chegavam lá.
+
+**Corrigido:** as taxas agora são calculadas logo no início da função,
+antes de qualquer `return` antecipado (Yukyu, Falta, `shift_type`
+inválido, etc.) — garantindo que todo caminho de saída tenha essas
+chaves preenchidas.
+
+### 🔴 Corrigido — 延長 (minutos extras) em domingo/feriado não entrava no cálculo
+
+Campo calculava o valor certo dentro de `calculate_shift_pay`, mas
+jogava em `overtime_pay`/`overtime_minutes` (taxa de 1,25x) — que o
+cálculo mensal **nunca lê** para dias de domingo/feriado (só
+`holiday_pay`/`night_pay` são acumulados nesse caso). O minuto extra
+era calculado e descartado em silêncio. Corrigido: 延長 em domingo
+entra nas horas de domingo, à taxa de 1,35x.
+
+### 🟢 Recalibrado — `test_main.py` completo para v2.50/v2.51
+
+- Removida a classe inteira que testava a Taxa de Referência
+  descontinuada (`TestAcrescimoTaxaPremium`), substituída por
+  `TestAcrescimoLiderModoArredondamento`, testando o sistema novo
+  (Adicional de Líder + Modo de Arredondamento)
+- 3 testes de domingo/noturno atualizados — noturno não é mais zerado
+  em domingo, é linha separada
+- 4 testes novos travando os bugs críticos desta versão: 延長 em
+  domingo, domingo+feriado corporativo (o bug de agregação acima), e
+  Yukyu não travar mais com KeyError
+- **101 testes, todos passando** (era 94 antes desta rodada)
+
+---
+
 ## [2.50.0] — 2026-07-15 — FERIADOS AUTOMÁTICOS + FIXES CRÍTICOS DE NOTURNO/ARREDONDAMENTO/延長
 
 ### 🔴 Corrigido — CRÍTICO: 延長 (minutos extras) nunca entrava no Holerite
