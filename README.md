@@ -18,7 +18,7 @@ Calcula automaticamente salário base, hora extra, adicional noturno e trabalho 
   - 🔁 **Alternado Semanal** — 1 semana diurno + 1 semana noturno, automaticamente
   - 🔁 **Alternado Mensal** — 1 mês diurno + 1 mês noturno, com padrão de folga configurável (5×2 fim de semana, ou 4×2 com Grupo A/B/C)
 - **Turno configurável** — defina entrada, saída, intervalo e início de hora extra
-- **Feriados japoneses 2025-2026 embutidos** — aparecem automaticamente
+- **Feriados japoneses se atualizam sozinhos** — buscados automaticamente uma vez por ano (GitHub Action + fonte oficial do governo), com reserva embutida se estiver offline. Aparecem com moldura vermelha no calendário e nome completo (japonês/romaji/português) ao tocar no dia
 - **Feriados corporativos** afetam o cálculo, não só a cor do calendário
 - **Cálculo conforme a lei japonesa:**
   - 残業手当 Hora Extra → +25%
@@ -28,6 +28,7 @@ Calcula automaticamente salário base, hora extra, adicional noturno e trabalho 
   - 四捨五入 Arredondamento japonês — aplicado à taxa por hora, antes de multiplicar pelas horas
 - **Modo de Arredondamento configurável** — "Sempre pra Cima" (padrão) ou "Regra do 0,5" (clássica), aplicado à taxa por hora de base, extra, noturno e feriado
 - **Adicional de Líder no arredondamento** — para empresas que separam jikyuu e adicional fixo mensal em duas parcelas arredondadas individualmente no cálculo de hora extra/noturno/domingo, reaproveitando o campo de Adicional Fixo Mensal já existente. Escondido atrás de um switch desligado por padrão — não polui a tela de quem não precisa
+- **Abono Mensal separado** — soma automaticamente no bruto todo mês, igual ao Adicional Fixo Mensal, mas nunca entra no cálculo de arredondamento de extra/noturno/domingo
 - **Modal de ponto completo:**
   - 有休 Yukyu — laranja, 8h fixo sem hora extra/noturno
   - 欠勤 Falta — roxo, ¥0
@@ -60,7 +61,7 @@ python main.py
 python test_main.py
 ```
 
-64 testes cobrindo cálculo de hora extra, ciclos de trabalho (incluindo o deslocamento entre turmas Grupo A/B/C), descontos, feriados (nacionais e corporativos), domingo, falta, yukyu, abono, formatação de horário, arredondamento por categoria e taxa de referência elevada — validados contra 5 holerites reais. Recomendado antes de cada deploy.
+94 testes cobrindo cálculo de hora extra, ciclos de trabalho (incluindo o deslocamento entre turmas Grupo A/B/C), descontos, feriados (nacionais e corporativos), domingo, falta, yukyu, abono, formatação de horário e arredondamento por categoria — validados contra 5 holerites reais. Recomendado antes de cada deploy. ⚠️ Pendente recalibração contra a v2.50.0 (mudanças no cálculo de noturno/domingo e arredondamento mensal ainda não refletidas nos valores esperados dos testes).
 
 ### Deploy GitHub Pages
 
@@ -266,6 +267,6 @@ O app é gratuito, sem fins lucrativos, 100% offline, e fornecido "como está", 
 
 ## 🧪 Qualidade
 
-O motor de cálculo é coberto por 64 testes automatizados (`test_main.py`),
+O motor de cálculo é coberto por 94 testes automatizados (`test_main.py`),
 incluindo validação direta contra 5 holerites reais de dois contratos
-diferentes (2021-2022 e 2026).
+diferentes (2021-2022 e 2026). ⚠️ Pendente recalibração contra a v2.50.0.

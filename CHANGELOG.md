@@ -1,5 +1,102 @@
 # Changelog — Onion Payroll
 
+## [2.50.0] — 2026-07-15 — FERIADOS AUTOMÁTICOS + FIXES CRÍTICOS DE NOTURNO/ARREDONDAMENTO/延長
+
+### 🔴 Corrigido — CRÍTICO: 延長 (minutos extras) nunca entrava no Holerite
+
+Campo salvava o valor e mostrava prévia bonita no modal, mas a prévia
+usava uma fórmula duplicada e isolada — nunca chegava no motor de
+cálculo mensal (`compute_monthly_forecast`). Agora `extra_minutes` é
+parâmetro de verdade em `calculate_shift_pay`, somado à Hora Extra
+respeitando Modo de Arredondamento e Adicional de Líder. Preview do
+modal simplificado para chamar a função real, eliminando a duplicata.
+
+### 🔴 Corrigido — CRÍTICO: adicional noturno de domingo/feriado zerado
+
+`night_pay` era zerado sempre que o dia era domingo/feriado, partindo
+da premissa de que o valor já estava embutido no 1,35x. Holerite real
+mostrou o contrário: 深夜手当 é linha **separada e independente**,
+somando as horas noturnas de **todos** os dias (incluindo domingo),
+calculadas à taxa noturna normal — só a linha do domingo em si
+(休日手当) não deve misturar noturno. Corrigido, com `total_legal`/
+`total_holiday` ajustados para não duplicar o valor.
+
+### 🔴 Corrigido — CRÍTICO: resíduo de arredondamento acumulado (mês inteiro)
+
+Somar valores já arredondados de cada dia (ex: 20 dias de Hora Extra,
+cada um arredondado "pra cima" individualmente) acumula alguns yens a
+mais que arredondar o total do mês de uma vez — exatamente como o
+holerite real calcula (33h × ¥2.011/h = ¥66.363 exato, não a soma de
+vários dias). Motor de cálculo reestruturado: acumula só **minutos**
+durante o loop mensal, aplica a taxa (constante o mês inteiro) e
+arredonda **uma única vez** no final, para Base, Hora Extra, Noturno,
+Domingo, Feriado e Yukyu.
+
+### 🟢 Adicionado — feriados nacionais se atualizam sozinhos
+
+Novo scraper (`scraper/scrape_holidays.py`) busca o CSV oficial do
+Gabinete do Governo japonês uma vez por ano (GitHub Action, 10 de
+janeiro), gera `holidays.json`. O app busca esse arquivo em tempo de
+execução via `pyodide.http.pyfetch()` (não `httpx` — tem bug conhecido
+dentro do Pyodide, issues #4926/#4840 do próprio Flet), com timeout de
+5s e fallback automático pro `JP_HOLIDAYS_BUILTIN` fixo se falhar —
+nunca trava o boot, nunca quebra o "100% offline".
+
+### 🟢 Adicionado — moldura vermelha + nome do feriado nacional no modal
+
+Feriados nacionais ganham borda vermelha de 2px na célula do
+calendário (além do preenchimento), com prioridade até sobre o
+destaque de "hoje". Modal de ponto mostra o nome completo em
+japonês/romaji/português (`JP_HOLIDAY_NAMES_BUILTIN`, 39 feriados de
+2025-2026, datas móveis calculadas e verificadas, não digitadas de
+memória).
+
+### 🔴 Corrigido — hol_text sempre mostrava "Feriado da Empresa"
+
+Mesmo quando o dia era feriado **nacional**, o texto no modal mostrava
+"🏭 Feriado da Empresa" — a distinção nacional/corporativo só era
+calculada depois, para outra finalidade. Corrigido junto com a
+funcionalidade acima.
+
+### 🔴 Corrigido — dado incorreto: 22/09/2025 não é feriado
+
+`JP_HOLIDAYS_BUILTIN` tinha 22/09/2025 marcado como feriado nacional.
+Verificado com cálculo exato de dia da semana + fontes oficiais: o
+feriado "sanduíche" (国民の休日) entre 敬老の日 e 秋分の日 só
+acontece em 2026, não em 2025 (intervalo de 8 dias entre os dois
+feriados naquele ano, não 1). Removido.
+
+### 🟢 Adicionado — campo Abono Mensal, separado do Adicional de Líder
+
+Novo campo "Abono Mensal — separado (¥)" em ⚙️ Config — soma
+automaticamente no bruto todo mês, igual ao Adicional Fixo Mensal, mas
+**nunca** entra no cálculo de arredondamento de Extra/Noturno/Domingo,
+mesmo com essa regra ativada. Para qualquer abono fixo que não deva
+afetar a taxa.
+
+### 🟢 Simplificado — importação CSV de feriados
+
+Removida a opção de tag `jp` (feriados nacionais) do campo de
+importação — feriados nacionais agora se atualizam sozinhos, não
+precisam mais de importação manual. Campo continua funcionando só para
+feriados corporativos (textos e exemplos atualizados no modal e na
+aba Ajuda).
+
+### 🟢 Corrigido — textos desatualizados na aba Ajuda e no modal de ponto
+
+- "Feriados nacionais de 2025-2026 já vêm embutidos" → texto sem menção
+  a anos fixos, mencionando a atualização automática
+- Seção antiga "Arredondamento da Taxa por Hora (sempre ativo)" —
+  duplicada e desatualizada (dizia "não é configurável", já não é
+  verdade) — removida, exemplo numérico atualizado migrado pra dentro
+  da seção nova "Arredondamento de Salário"
+- Switch "有休 em Feriado (+8h)" → "有休 em Feriado" (jornada usada é
+  a configurada, não mais 8h fixo)
+- Texto "Trabalho Normal" acima dos campos Entrada/Saída → dica sobre
+  saída antecipada, mais útil
+
+---
+
 ## [2.49.0] — 2026-07-15 — REFORMULAÇÃO DO ARREDONDAMENTO DE SALÁRIO
 
 ### 🔴 Alterado — CRÍTICO: Taxa de Referência descontinuada, substituída por sistema novo

@@ -253,6 +253,44 @@ carregamento, seguindo exatamente o que está declarado em
     geral deve sempre ser perguntado explicitamente ("isso muda o
     comportamento de quem não mexer em nada — confirma?"), nunca
     assumido implicitamente só porque parece a opção "mais correta"
+20. **Somar valores já arredondados de cada dia ≠ arredondar o total
+    do mês uma vez.** Motor de cálculo somava `shisha_gofuuu()` de
+    cada dia individual — com "sempre pra cima", isso acumula alguns
+    yens a mais que arredondar o total do mês de uma vez só (holerite
+    real de fevereiro fechou 33h×¥2.011=¥66.363 exato, mas a soma dia
+    a dia dava ¥66.364). Corrigido: acumular só MINUTOS durante o
+    loop mensal, aplicar a taxa (constante o mês inteiro) e arredondar
+    uma única vez no final. Vale pra qualquer cálculo que soma
+    valores monetários já arredondados de itens individuais — sempre
+    preferir somar as quantidades brutas e arredondar o total
+21. **Premissa de negócio "óbvia" nem sempre é a certa — sempre
+    validar contra holerite real, mesmo quando já parece "resolvida".**
+    O código zerava `night_pay` em domingo/feriado, com justificativa
+    registrada (bug antigo corrigido, validado contra holerite real
+    de que não deveria empilhar). Só que a validação antiga conferiu
+    a linha de domingo (休日手当) sozinha — não conferiu que 深夜手当
+    é uma linha SEPARADA que também deveria somar as horas noturnas
+    de domingo. As duas conclusões pareciam contraditórias até os
+    números reais (¥45.338 = todos os 18 dias, não só 16) resolverem
+    a ambiguidade. Nunca assumir que uma decisão documentada e
+    "validada" está necessariamente completa — pode estar certa sobre
+    UMA linha e incompleta sobre outra
+22. **UI mostrando informação errada porque a lógica de classificação
+    roda tarde demais.** `hol_text` no modal de ponto sempre exibia
+    "🏭 Feriado da Empresa", mesmo em feriado NACIONAL — o código que
+    distinguia nacional/corporativo existia, mas só era calculado
+    DEPOIS de `hol_text` já estar montado (pra outra finalidade). Ao
+    adicionar lógica de classificação nova, sempre conferir se algo
+    ANTERIOR no mesmo bloco já deveria ter usado essa classificação e
+    não usou
+23. **Dados "óbvios"/hardcoded de calendário merecem verificação
+    ativa, não só confiança.** `JP_HOLIDAYS_BUILTIN` tinha 22/09/2025
+    marcado como feriado — nunca foi verdade (o feriado "sanduíche"
+    naquele padrão só ocorre em 2026). Ao trabalhar com datas de
+    calendário/feriados, usar `datetime` pra calcular o dia da semana
+    de verdade em vez de assumir de memória, e cruzar com pelo menos
+    uma fonte oficial antes de confiar num dado que já estava no
+    código
 
 ---
 
