@@ -1028,23 +1028,28 @@ def compute_monthly_forecast(
 
         else:
             # Dia PREVISTO pra trabalho pela escala (cycle_status=="work").
-            # Domingo tem prioridade sobre feriado corporativo/nacional —
-            # um domingo de trabalho é sempre taxa cheia 1,35x, com ou
-            # sem feriado corporativo também marcado em cima dele (bug
-            # real corrigido: antes, um domingo marcado como feriado
-            # corporativo podia cair no ramo de "dia normal de trabalho"
-            # em vez de "domingo trabalhado", inflando Salário Base e
-            # Hora Extra e reduzindo Domingo — confirmado com holerite
-            # real de maio/2026, ¥0 de diferença esperado antes/depois
-            # de marcar feriado corporativo no mesmo domingo).
-            if is_sunday:
-                shift_type = "holiday"
-            elif is_holiday and has_time:
-                shift_type = "holiday"   # trabalhou no feriado → +35%
+            # ORDEM CORRIGIDA (v2.52): feriado (nacional/corporativo) SEM
+            # horário registrado vence sobre domingo — fábrica fechada é
+            # fábrica fechada, mesmo caindo num domingo. Só vira "domingo
+            # trabalhado" se tiver horário registrado (trabalhou mesmo
+            # com a fábrica fechada) ou se não houver feriado nenhum
+            # marcado nesse dia. Confirmado com caso real: dia 3 de
+            # maio/2026 era domingo E feriado corporativo — a fábrica
+            # estava fechada, ninguém trabalhou, e o dia devia ficar
+            # como "não trabalhou" (¥0), não como domingo pago. A versão
+            # anterior desta correção invertia essa prioridade (domingo
+            # sempre vencia), o que resolvia o bug original mas quebrava
+            # esse caso — feriado corporativo passava a não ter nenhum
+            # efeito nos domingos, mesmo quando a fábrica realmente
+            # fechava.
+            if is_holiday and has_time:
+                shift_type = "holiday"   # trabalhou no feriado/domingo → +35%
             elif is_holiday and yukyu_hol:
                 shift_type = "yukyu"     # yukyu em feriado
             elif is_holiday:
-                continue   # feriado (nacional/corporativo) sem registro → não trabalhou, não remunerado
+                continue   # feriado (nacional/corporativo) sem registro → fábrica fechada, não trabalhou
+            elif is_sunday:
+                shift_type = "holiday"   # domingo normal trabalhado, sem feriado marcado
             elif status == "early":
                 shift_type = default_shift   # horário real descontado automaticamente
             else:
@@ -1474,7 +1479,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607171941"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607111713"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
