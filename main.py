@@ -1031,10 +1031,18 @@ def compute_monthly_forecast(
         if (is_sunday and not is_holiday) or status == "legal":
             total_legal += pay["total_gross"]
             total_legal_min += pay["net_minutes"]
+            # Horas noturnas de domingo trabalhado ENTRAM no total de
+            # horas noturnas do mês (ex: 6,25h/dia × dias, mesmo em
+            # domingo) — mas o PAGAMENTO delas já está embutido nos
+            # 1,35x de total_legal, sem duplicar (pay["night_pay"] já
+            # sai ¥0 nesses dias, de propósito). Só a contagem de horas
+            # estava faltando, não o valor.
+            total_night_min += pay["night_minutes"]
             days_legal  += 1
         elif status == "holiday" or (is_holiday and not is_sunday):
             total_holiday += pay["total_gross"]
             total_holiday_min += pay["net_minutes"]
+            total_night_min += pay["night_minutes"]  # mesma lógica do domingo acima
             days_holiday  += 1
         elif shift_type == "yukyu":
             # Separado de total_base — sem isso, o valor do Yukyu ficava
@@ -1346,7 +1354,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607171305"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607111713"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
