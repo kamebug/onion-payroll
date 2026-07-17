@@ -1540,7 +1540,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607180559"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607111713"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -2713,7 +2713,7 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
         # que esse registro seja o marco mais recente igual ou anterior
         # ao mês sendo visto. Sem isso, um aumento de salário mudaria
         # retroativamente a previsão de meses passados não registrados.
-        f_jikyuu_novo = _tf("時給 a partir deste mês (¥, opcional)",
+        f_jikyuu_novo = _tf("時給 Jikyuu — Valor por Hora a partir deste mês (¥, opcional)",
                             val=_v("jikyuu_effective"))
 
         ov_ref = [None]
@@ -2868,14 +2868,15 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
                 _sec("💰 TOTAIS (opcional)"),
                 _padded_row(f_gross, f_net),
 
-                _sec("📈 MUDANÇA DE 時給 (opcional)"),
+                _sec("📈 MUDANÇA DE 時給 Jikyuu — Valor por Hora (opcional)"),
                 _padded_row(f_jikyuu_novo),
                 ft.Container(
                     ft.Text(
-                        "Só preencha se o 時給 mudou A PARTIR deste mês "
-                        "(ex: aumento de salário). A previsão de qualquer "
-                        "mês sem registro passa a usar esse valor, em vez "
-                        "do 時給 atual de ⚙️ Config — evita que um aumento "
+                        "Só preencha se o 時給 (Jikyuu, valor por hora) "
+                        "mudou A PARTIR deste mês (ex: aumento de "
+                        "salário). A previsão de qualquer mês sem "
+                        "registro passa a usar esse valor, em vez do "
+                        "時給 atual de ⚙️ Config — evita que um aumento "
                         "futuro mude retroativamente a previsão de meses "
                         "passados que você não registrou aqui. Deixe "
                         "vazio se não houve mudança nesse mês.",
@@ -3644,13 +3645,14 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
 
     step4_salario_container = card(ft.Column(controls=[
         section_header("4️⃣ CONFIGURAÇÃO DE SALÁRIO"),
-        mk_field("Valor Hora 時給 (¥)",              "jikyuu"),
+        mk_field("時給 Jikyuu — Valor por Hora (¥)",  "jikyuu"),
         ft.Text(
-            "⚠️ Se seu 時給 mudou (aumento de salário), esse valor vale "
-            "SEMPRE, inclusive pra meses passados sem registro. Pra "
-            "manter a previsão de meses anteriores ao aumento correta, "
-            "registre em 📋 Histórico o mês em que o aumento começou, "
-            "preenchendo o campo \"時給 a partir deste mês\".",
+            "⚠️ Se seu 時給 (Jikyuu, valor por hora) mudou (aumento de "
+            "salário), esse valor vale SEMPRE, inclusive pra meses "
+            "passados sem registro. Pra manter a previsão de meses "
+            "anteriores ao aumento correta, registre em 📋 Histórico o "
+            "mês em que o aumento começou, preenchendo o campo "
+            "\"時給 Jikyuu — Valor por Hora a partir deste mês\".",
             size=9, color=TEXT_MUTED,
         ),
         mk_field("Bônus Padrão Mês Ímpar (¥)",        "odd_bonus"),
@@ -4591,7 +4593,7 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
             # ── Início rápido ────────────────────────────────────────
             _title("🚀 Início Rápido"),
             _item("1️⃣", "Configure seu perfil",
-                  "Abra ⚙️ Config. → insira seu Valor Hora (時給), escolha o Tipo de Ciclo (4×2, 5×2 ou Alternado) e a Data Início."),
+                  "Abra ⚙️ Config. → insira seu 時給 Jikyuu (Valor por Hora), escolha o Tipo de Ciclo (4×2, 5×2 ou Alternado) e a Data Início."),
             _item("2️⃣", "Importe os feriados",
                   "Feriados nacionais já vêm embutidos, e se atualizam sozinhos automaticamente quando o app tem conexão com a internet. Para feriados corporativos, acesse 🏭 Feriados e marque manualmente."),
             _item("3️⃣", "Acompanhe no Calendário",
@@ -4751,9 +4753,9 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
 
             # ── Bônus e Adicionais ────────────────────────────────────
             # ── Mudança de 時給 ────────────────────────────────────────
-            _title("📈 Mudança de 時給 (Aumento de Salário)"),
-            _item("時給 a partir deste mês", "Campo em 📋 Histórico, opcional.",
-                  "O 時給 configurado em ⚙️ Config vale sempre, inclusive retroativamente pra meses passados sem registro — se você teve um aumento, a previsão de meses ANTES do aumento ficaria errada sem esse campo. Ao registrar um holerite real no Histórico, preencha \"時給 a partir deste mês\" com o novo valor, no mês em que o aumento começou. A previsão de qualquer mês sem registro passa a usar automaticamente o 時給 vigente na época — o marco mais recente igual ou anterior ao mês sendo visto. Sem preencher nada, o app usa sempre o 時給 atual de Config, mesmo pra meses passados."),
+            _title("📈 Mudança de 時給 Jikyuu — Valor por Hora (Aumento de Salário)"),
+            _item("時給 Jikyuu — a partir deste mês", "Campo em 📋 Histórico, opcional.",
+                  "O 時給 (Jikyuu, valor por hora) configurado em ⚙️ Config vale sempre, inclusive retroativamente pra meses passados sem registro — se você teve um aumento, a previsão de meses ANTES do aumento ficaria errada sem esse campo. Ao registrar um holerite real no Histórico, preencha \"時給 Jikyuu — Valor por Hora a partir deste mês\" com o novo valor, no mês em que o aumento começou. A previsão de qualquer mês sem registro passa a usar automaticamente o 時給 vigente na época — o marco mais recente igual ou anterior ao mês sendo visto. Sem preencher nada, o app usa sempre o 時給 atual de Config, mesmo pra meses passados."),
             _item("Desconto — Registro Real vs Previsão", "Automático, aba Holerite.",
                   "Ao registrar um holerite real no Histórico, o mês correspondente na aba Holerite deixa de usar a previsão de desconto (Média Histórica ou Fixo, conforme configurado em ⚙️ Config) e passa a mostrar o valor REAL registrado — já é um dado conhecido, não precisa mais estimar. A nota abaixo do valor muda pra \"📋 Registro real\". Meses sem registro continuam usando a previsão normalmente."),
 
