@@ -625,6 +625,7 @@ def calculate_shift_pay(
         # ¥45.338 reais de 深夜手当 do mês.
         holiday_rate_full       = _taxa_cheia(1.0 + holiday_premium)
         night_rate_increment    = _taxa_cheia(0.25)
+        ot_rate_full            = _taxa_cheia(1.25)  # exposto p/ 延長, mesmo sem OT normal no dia
         result["base_pay"]      = 0
         result["overtime_pay"]  = 0
         result["night_pay"]     = shisha_gofuuu(night_rate_increment * (night_min / 60.0), wage_round_mode)
@@ -635,9 +636,23 @@ def calculate_shift_pay(
         result["base_pay"]      = shisha_gofuuu(jikyuu_per_min * result["regular_minutes"], wage_round_mode)
         ot_rate_full            = _taxa_cheia(1.25)
         night_rate_increment    = _taxa_cheia(0.25)
+        holiday_rate_full       = _taxa_cheia(1.0 + holiday_premium)  # exposto p/ consistência
         result["overtime_pay"]  = shisha_gofuuu(ot_rate_full * (ot_min / 60.0), wage_round_mode)
         result["night_pay"]     = shisha_gofuuu(night_rate_increment * (night_min / 60.0), wage_round_mode)
         result["holiday_pay"]   = 0
+
+    # Taxas expostas no resultado — CONSTANTES o mês inteiro (dependem só
+    # de jikyuu/adicional/modo de arredondamento configurados, nunca do
+    # dia específico). compute_monthly_forecast usa isso pra recalcular
+    # os totais do mês com arredondamento único no final, em vez de somar
+    # valores já arredondados dia a dia (que acumula um resíduo de poucos
+    # yens quando as horas ficam espalhadas em muitos dias — cada
+    # arredondamento "pra cima" individual soma mais que um arredondamento
+    # só no total do mês).
+    result["_ot_rate_full"]         = ot_rate_full
+    result["_night_rate_increment"] = night_rate_increment
+    result["_holiday_rate_full"]    = holiday_rate_full
+    result["_jikyuu_per_min"]       = jikyuu_per_min
 
     # 延長 — minutos extras solicitados além do turno, sempre à taxa
     # cheia de hora extra (1,25x), independente do dia ser feriado ou
@@ -926,6 +941,7 @@ def compute_monthly_forecast(
     total_yukyu = 0
     total_ot_min = total_night_min = total_regular_min = 0
     total_holiday_min = total_legal_min = total_yukyu_min = 0
+    _rate_ot = _rate_night = _rate_holiday = _rate_base = 0
     days_normal = days_holiday = days_legal = days_yukyu = 0
 
     for day_num, cycle_status in cycle.items():
@@ -1043,15 +1059,11 @@ def compute_monthly_forecast(
             # que night_pay deixou de ser zerado em dias de domingo,
             # somar o total_gross aqui DUPLICARIA o valor do noturno
             # (uma vez aqui, outra vez em total_night logo abaixo).
-            total_legal += pay["holiday_pay"]
             total_legal_min += pay["net_minutes"]
-            total_night += pay["night_pay"]      # 深夜手当 é linha separada,
             total_night_min += pay["night_minutes"]  # mesmo em domingo
             days_legal  += 1
         elif status == "holiday" or (is_holiday and not is_sunday):
-            total_holiday += pay["holiday_pay"]  # mesma lógica do domingo acima
             total_holiday_min += pay["net_minutes"]
-            total_night += pay["night_pay"]
             total_night_min += pay["night_minutes"]
             days_holiday  += 1
         elif shift_type == "yukyu":
@@ -1059,20 +1071,39 @@ def compute_monthly_forecast(
             # misturado com dias normais de trabalho em "Salário Base",
             # sem como comparar com o holerite real (que mostra Yukyu
             # como rubrica própria, com dias e horas separados).
-            total_yukyu += pay["base_pay"]
             total_yukyu_min += pay["net_minutes"]
             if pay["base_pay"] > 0:
                 days_yukyu += 1
         else:
-            total_base  += pay["base_pay"]
-            total_ot    += pay["overtime_pay"]
-            total_night += pay["night_pay"]
             total_regular_min += pay["regular_minutes"]
             total_ot_min      += pay["overtime_minutes"]
             total_night_min   += pay["night_minutes"]
             if pay["base_pay"] > 0:
                 days_normal += 1
         total_abono += day_abono
+        # Taxas — CONSTANTES o mês inteiro (não dependem do dia
+        # específico, só de jikyuu/adicional/modo configurados).
+        # Capturadas a cada iteração por simplicidade — sempre o mesmo
+        # valor, sem custo real de recomputar.
+        _rate_ot      = pay["_ot_rate_full"]
+        _rate_night   = pay["_night_rate_increment"]
+        _rate_holiday = pay["_holiday_rate_full"]
+        _rate_base    = pay["_jikyuu_per_min"]
+
+    # Totais finais — taxa (constante o mês inteiro) × MINUTOS TOTAIS do
+    # mês, arredondado UMA VEZ aqui, em vez de somar valores já
+    # arredondados de cada dia individual. Evita acumular resíduo de
+    # poucos yens quando as horas de uma categoria ficam espalhadas em
+    # vários dias — cada arredondamento "pra cima" separado soma mais do
+    # que arredondar o total do mês de uma vez, exatamente como o
+    # holerite real calcula (confirmado: 33h × ¥2.011/h = ¥66.363 exato,
+    # não a soma de vários dias arredondados individualmente).
+    total_base    = shisha_gofuuu(_rate_base * total_regular_min, wage_round_mode)
+    total_ot      = shisha_gofuuu(_rate_ot * (total_ot_min / 60.0), wage_round_mode)
+    total_night   = shisha_gofuuu(_rate_night * (total_night_min / 60.0), wage_round_mode)
+    total_holiday = shisha_gofuuu(_rate_holiday * (total_holiday_min / 60.0), wage_round_mode)
+    total_legal   = shisha_gofuuu(_rate_holiday * (total_legal_min / 60.0), wage_round_mode)
+    total_yukyu   = shisha_gofuuu(_rate_base * total_yukyu_min, wage_round_mode)
 
     applied_odd = odd_month_bonus if month % 2 == 1 else 0
     gross       = (total_base + total_ot + total_night + total_holiday + total_legal
@@ -1412,7 +1443,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607171359"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607111713"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
