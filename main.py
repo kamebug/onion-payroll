@@ -319,6 +319,11 @@ def calculate_shift_pay(
     ot_start_str: str = "",
     cfg_start_str: str = "", cfg_end_str: str = "",
     break_periods: list = None,
+    night_interval_minutes: int = 0,  # minutos de intervalo dentro da
+                                       # janela 22h-5h, descontados do
+                                       # bruto (420min) de forma
+                                       # simplificada, sem precisar saber
+                                       # a posição exata do intervalo
 ) -> dict:
     """
     shift_type: "night"|"day"|"holiday"|"yukyu"|"absent" — determina o
@@ -547,6 +552,12 @@ def calculate_shift_pay(
         result["overtime_minutes"] = ot_min
         result["regular_minutes"]  = net_min - ot_min
         raw_night_min = night_minutes_in_range(start_dt, end_dt)
+        # Desconto simplificado de intervalo dentro da janela noturna —
+        # alternativa à posição exata (que exigiria a engine de linha do
+        # tempo completa). Ex: 420min (7h) - 45min configurados = 375min
+        # (6,25h). Default 0 = comportamento idêntico a antes.
+        if night_interval_minutes > 0:
+            raw_night_min = max(0, raw_night_min - night_interval_minutes)
         # Adicional noturno também arredondado separadamente a partir do bruto,
         # em vez de só herdar o cap do net_min sem arredondamento próprio.
         night_min                  = min(truncate_minutes(raw_night_min, block, round_mode), net_min)
@@ -847,6 +858,7 @@ def compute_monthly_forecast(
     round_mode: str = "truncate",
     wage_round_mode: str = "up",
     use_leader_addon: bool = False, leader_addon_hours: float = 168,
+    night_interval_minutes: int = 0,
     anchor_group: str = None,
     alt_monthly_rest_pattern: str = "5x2", shift_anchor_date: date = None,
     break_periods: list = None,
@@ -985,6 +997,7 @@ def compute_monthly_forecast(
             use_leader_addon=use_leader_addon,
             leader_addon_amount=fixed_monthly_bonus,
             leader_addon_hours=leader_addon_hours,
+            night_interval_minutes=night_interval_minutes,
             ot_start_str=_ot,  # horário configurado de início da hora extra
             cfg_start_str=_start, cfg_end_str=_end,  # horário de entrada/saída configurado
             break_periods=break_periods,
@@ -1158,6 +1171,7 @@ DEFAULT_SETTINGS = {
     # duplicar o valor num campo separado.
     "wage_round_mode": "up", "use_leader_addon": False,
     "leader_addon_hours": 168,
+    "night_interval_minutes": 0,
     "anchor_group": None,
     "cycle_type_confirmed": False,
     "disclaimer_accepted": False,
@@ -1282,7 +1296,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607161133"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607111713"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -1555,6 +1569,7 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
             _use_addon = bool(state["settings"].get("use_leader_addon", False))
             _addon_amt = int(state["settings"].get("fixed_monthly_bonus") or 0)
             _addon_hrs = float(state["settings"].get("leader_addon_hours") or 168)
+            _night_int_min = int(state["settings"].get("night_interval_minutes") or 0)
             is_hol_day = day_num in month_holidays
             cycle_st   = cycle.get(day_num, "off")
             is_off_day = (cycle_st == "off") or is_hol_day
@@ -1613,7 +1628,8 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
                                           wage_round_mode=_wage_rm,
                                           use_leader_addon=_use_addon,
                                           leader_addon_amount=_addon_amt,
-                                          leader_addon_hours=_addon_hrs)
+                                          leader_addon_hours=_addon_hrs,
+                                          night_interval_minutes=_night_int_min)
                 nm = pay["net_minutes"]
                 parts = [f"base {yen(pay['base_pay'])}",
                          f"休出 +{yen(pay['holiday_pay'])}"]
@@ -1635,7 +1651,8 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
                                           wage_round_mode=_wage_rm,
                                           use_leader_addon=_use_addon,
                                           leader_addon_amount=_addon_amt,
-                                          leader_addon_hours=_addon_hrs)
+                                          leader_addon_hours=_addon_hrs,
+                                          night_interval_minutes=_night_int_min)
                 nm = pay["net_minutes"]
                 parts = [f"base {yen(pay['base_pay'])}"]
                 if pay["overtime_pay"]:
@@ -2136,6 +2153,7 @@ def build_holerite_tab(page: ft.Page, state: dict, refresh_all):
             wage_round_mode=settings.get("wage_round_mode", "up"),
             use_leader_addon=bool(settings.get("use_leader_addon", False)),
             leader_addon_hours=float(settings.get("leader_addon_hours") or 168),
+            night_interval_minutes=int(settings.get("night_interval_minutes") or 0),
             anchor_group=settings.get("anchor_group"),
             alt_monthly_rest_pattern=settings.get("alt_monthly_rest_pattern", "5x2"),
             shift_anchor_date=(date.fromisoformat(settings["shift_anchor_date"])
@@ -3503,6 +3521,47 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
         save_json(page, KEY_SETTINGS, settings)
     leader_addon_hours_f.on_change = _save_leader_addon_hours
 
+    # ── Intervalo dentro da janela noturna (simplificado) ─────────────
+    # Alternativa simples à posição exata do intervalo (que exigiria
+    # saber HORÁRIO de início/fim de cada pausa). Aqui só a DURAÇÃO
+    # total do intervalo que cai dentro de 22h-5h é descontada da
+    # janela cheia (7h = 420min) — aplicado igual todo dia com turno
+    # noturno completo. Default 0 = comportamento idêntico a antes
+    # (desconta nada, janela cheia).
+    def _calc_night_result_text(minutos: int) -> str:
+        resultado_min = max(0, 420 - minutos)
+        return f"7h (420min) − {minutos}min = {resultado_min/60:g}h de adicional noturno por dia"
+
+    night_interval_result = ft.Text(
+        _calc_night_result_text(int(settings.get("night_interval_minutes", 0))),
+        size=11, color=ACCENT_LITE,
+    )
+    night_interval_help = ft.Text(
+        "Quantos minutos do SEU intervalo caem dentro do período "
+        "noturno (22h-5h)? Descontado da janela cheia de 7h, aplicado "
+        "todo dia com turno noturno completo. Não sabe a posição exata "
+        "do intervalo? Deixe em 0 (sem desconto, comportamento padrão).",
+        size=11, color="#A0A0A0", italic=True,
+    )
+    night_interval_f = ft.TextField(
+        label="Minutos de Intervalo no Período Noturno",
+        value=str(settings.get("night_interval_minutes", 0)),
+        keyboard_type=ft.KeyboardType.NUMBER,
+        bgcolor="#2A2A2A", color="#F0F0F0",
+        border_color="#333333", focused_border_color="#00D2C6",
+        label_style=ft.TextStyle(color="#A0A0A0"),
+    )
+    def _save_night_interval(e):
+        try:
+            minutos = int(night_interval_f.value or 0)
+        except ValueError:
+            minutos = 0
+        settings["night_interval_minutes"] = minutos
+        save_json(page, KEY_SETTINGS, settings)
+        night_interval_result.value = _calc_night_result_text(minutos)
+        night_interval_result.update()
+    night_interval_f.on_change = _save_night_interval
+
     def _toggle_leader_addon(e):
         settings["use_leader_addon"] = e.control.value
         save_json(page, KEY_SETTINGS, settings)
@@ -3772,6 +3831,10 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
                 leader_addon_row,
                 leader_addon_help,
                 leader_addon_hours_f,
+                ft.Container(height=4),
+                night_interval_help,
+                night_interval_f,
+                night_interval_result,
             ], spacing=12, tight=True)),
 
             card(ft.Column(controls=[
@@ -4403,6 +4466,8 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
                   "\"Sempre pra Cima\" (padrão) arredonda toda taxa por hora pra cima, sem exceção. \"Regra do 0,5\" volta ao arredondamento clássico (0,5 sempre sobe, resto trunca) — troque se seu holerite bater melhor com esse modo. Afeta Salário Base, Hora Extra, Noturno e Feriado/Domingo. Não afeta a Média Histórica de desconto, que sempre usa a Regra do 0,5."),
             _item("Usar Adicional de Líder no Arredondamento", "Switch em ⚙️ Config, desligado por padrão.",
                   "Quando ativado, separa o cálculo da taxa de Extra/Noturno/Domingo em duas partes — jikyuu puro e o acréscimo do Adicional Fixo Mensal — cada uma arredondada individualmente antes de somar, em vez de somar tudo numa taxa só. Regra confirmada por um RH específico — pode não valer pra toda empresa. Revela o campo \"Horas Padrão para este Cálculo\" (ex: 168h), que também varia por empresa — confirme sempre com seu RH ou compare com um holerite real."),
+            _item("Minutos de Intervalo no Período Noturno", "Campo em ⚙️ Config, padrão 0.",
+                  "Desconta a duração do seu intervalo (que cai dentro de 22h-5h) da janela noturna cheia de 7h, aplicado todo dia com turno noturno completo — ex: 45min de intervalo dentro do período = 6,25h de adicional noturno por dia, em vez de 7h. Não sabe a posição exata do seu intervalo? Deixe em 0 (sem desconto)."),
             _item("Abono / Vale / Bico extra", "Campo no modal de ponto, por dia",
                   "Para valores específicos de UM dia — arubaito, gorjeta, vale-transporte extra."),
 
