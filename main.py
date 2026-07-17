@@ -1540,7 +1540,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607180621"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607111713"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -1986,8 +1986,9 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
                     content=ft.Column(controls=[
                         ft.Text(f"🏮 {_jp_name}", size=13,
                                 weight=ft.FontWeight.W_700, color=HOL_COLOR),
-                        ft.Text(_romaji_name, size=11, color=TEXT_SECONDARY, italic=True),
-                        ft.Text(_pt_name, size=12, color=TEXT_PRIMARY),
+                        ft.Text(_romaji_name, size=11, color="#6B4A4A", italic=True),
+                        ft.Text(_pt_name, size=12, color="#3D2020",
+                                weight=ft.FontWeight.W_600),
                     ], spacing=2, tight=True),
                     visible=True,
                     padding=ft.Padding(left=10, right=10, top=8, bottom=8),
