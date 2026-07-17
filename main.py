@@ -8,8 +8,19 @@ import flet as ft
 import json
 import math
 import calendar
+import asyncio
 from datetime import date, datetime, timedelta
 from typing import Optional
+
+# pyfetch só existe no modo web (Pyodide) — em modo desktop (python main.py
+# local), essa importação falha e o app cai de volta pro JP_HOLIDAYS_BUILTIN
+# sem tentar buscar nada pela rede. httpx NÃO é usado aqui de propósito:
+# tem bugs conhecidos e reportados no próprio repositório do Flet quando
+# usado dentro do Pyodide (issues #4926 e #4840).
+try:
+    from pyodide.http import pyfetch
+except ImportError:
+    pyfetch = None
 
 
 class _ValueHolder:
@@ -1158,6 +1169,30 @@ JP_HOLIDAYS_BUILTIN = {
     "2026-12": [31],
 }
 
+
+async def fetch_updated_holidays() -> Optional[dict]:
+    """Busca holidays.json (gerado uma vez por ano por um GitHub Action,
+    a partir do CSV oficial do Gabinete do Governo japonês) em tempo de
+    execução. Só funciona no modo web (Pyodide) — em desktop, ou se a
+    busca falhar/der timeout por qualquer motivo (offline, primeira
+    visita sem cache, arquivo ainda não existe), retorna None e quem
+    chamou continua usando JP_HOLIDAYS_BUILTIN como reserva. Nunca
+    lança exceção — falha sempre em silêncio, de propósito.
+    """
+    if pyfetch is None:
+        return None
+    try:
+        resp = await asyncio.wait_for(pyfetch("holidays.json", method="GET"), timeout=5)
+        if resp.status != 200:
+            return None
+        data = await asyncio.wait_for(resp.json(), timeout=5)
+        if not isinstance(data, dict) or not data:
+            return None
+        return data
+    except Exception:
+        return None
+
+
 DEFAULT_SETTINGS = {
     "jikyuu": 1500, "group": "B", "anchor_date": date.today().isoformat(),
     "hire_date": None,  # Data de Admissão — separada de anchor_date (turno), usada só para Yukyu
@@ -1296,7 +1331,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607171222"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607111713"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -4271,7 +4306,7 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
             _item("1️⃣", "Configure seu perfil",
                   "Abra ⚙️ Config. → insira seu Valor Hora (時給), escolha o Tipo de Ciclo (4×2, 5×2 ou Alternado) e a Data Início."),
             _item("2️⃣", "Importe os feriados",
-                  "Feriados nacionais já vêm embutidos. Para feriados corporativos, acesse 🏭 Feriados e marque manualmente."),
+                  "Feriados nacionais já vêm embutidos, e se atualizam sozinhos automaticamente quando o app tem conexão com a internet. Para feriados corporativos, acesse 🏭 Feriados e marque manualmente."),
             _item("3️⃣", "Acompanhe no Calendário",
                   "A aba 📅 gera automaticamente o ciclo escolhido. Toque em qualquer dia para registrar horários, faltas ou férias."),
             _item("4️⃣", "Consulte o Holerite",
@@ -4620,9 +4655,15 @@ async def main(page: ft.Page):
     _mem_cache[KEY_SETTINGS] = settings
     history   = load_json(page, KEY_HISTORY,   [])
     overrides = load_json(page, KEY_OVERRIDES, {})
-    # Mesclar feriados embutidos com os importados pelo usuário
+    # Feriados nacionais: tenta buscar a versão atualizada (gerada 1x/ano
+    # por GitHub Action a partir do CSV oficial do governo) — se falhar
+    # por qualquer motivo, cai de volta pro JP_HOLIDAYS_BUILTIN fixo.
+    # Nunca bloqueia o boot do app por mais de alguns segundos (timeout
+    # interno em fetch_updated_holidays).
+    _updated_holidays = await fetch_updated_holidays()
+    holidays = _updated_holidays if _updated_holidays else {**JP_HOLIDAYS_BUILTIN}
+    # Mesclar com os feriados corporativos importados pelo usuário
     _imported = load_json(page, KEY_HOLIDAYS, {})
-    holidays  = {**JP_HOLIDAYS_BUILTIN}
     for mk, days in _imported.items():
         if mk not in holidays:
             holidays[mk] = []

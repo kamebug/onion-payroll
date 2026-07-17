@@ -1,0 +1,40 @@
+name: Atualizar feriados nacionais
+
+on:
+  schedule:
+    # Todo dia 10 de janeiro, 00:00 JST (09/jan 15:00 UTC).
+    # Roda uma vez por ano — o governo japonês já publica o CSV oficial
+    # com bastante antecedência, então essa data dá folga suficiente
+    # antes do início do ano seguinte.
+    - cron: "0 15 9 1 *"
+  workflow_dispatch: {}  # permite rodar manualmente pelo GitHub também
+
+permissions:
+  contents: write
+
+jobs:
+  update-holidays:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Rodar scraper de feriados
+        run: python scraper/scrape_holidays.py
+
+      - name: Commitar e enviar, se houve mudança
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add holidays.json docs/holidays.json
+          if git diff --cached --quiet; then
+            echo "Nenhuma mudança nos feriados — nada para commitar."
+          else
+            git commit -m "chore: atualiza feriados nacionais (automático)"
+            git push
+          fi
