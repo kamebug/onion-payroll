@@ -612,13 +612,22 @@ def calculate_shift_pay(
     # holerites reais (fev/mar/abr 2026): confirma ¥0 de diferença tanto
     # no total quanto em cada rubrica individual, agora sim.
     if is_holiday:
-        # Todas as horas trabalhadas em domingo/feriado vão pra
-        # holiday_pay, à taxa CHEIA — nenhuma parcela fica "escondida"
-        # em base_pay a taxa normal.
+        # holiday_pay = SÓ as horas trabalhadas × taxa cheia de domingo
+        # (1,35x), sem noturno misturado dentro dessa linha — confere
+        # exato com 公出手当/法定休出 do holerite real (¥23.892/domingo).
+        #
+        # night_pay, porém, é uma linha SEPARADA e INDEPENDENTE no
+        # holerite (深夜手当) — soma as horas noturnas de TODOS os dias,
+        # incluindo domingo/feriado, à taxa noturna normal (sem premium
+        # de domingo misturado). NÃO deve ser zerada aqui — validado
+        # contra holerite real: 2 domingos × 6,25h noturno + 16 dias
+        # normais × 6,25h = 112,5h no total, batendo exato com os
+        # ¥45.338 reais de 深夜手当 do mês.
         holiday_rate_full       = _taxa_cheia(1.0 + holiday_premium)
+        night_rate_increment    = _taxa_cheia(0.25)
         result["base_pay"]      = 0
         result["overtime_pay"]  = 0
-        result["night_pay"]     = 0
+        result["night_pay"]     = shisha_gofuuu(night_rate_increment * (night_min / 60.0), wage_round_mode)
         result["holiday_pay"]   = shisha_gofuuu(holiday_rate_full * (net_min / 60.0), wage_round_mode)
     else:
         # base_pay cobre SÓ as horas regulares — hora extra é 100%
@@ -1029,20 +1038,21 @@ def compute_monthly_forecast(
             break_periods=break_periods,
         )
         if (is_sunday and not is_holiday) or status == "legal":
-            total_legal += pay["total_gross"]
+            # total_legal recebe SÓ a parcela de domingo (holiday_pay,
+            # taxa 1,35x) — não pay["total_gross"] inteiro, porque agora
+            # que night_pay deixou de ser zerado em dias de domingo,
+            # somar o total_gross aqui DUPLICARIA o valor do noturno
+            # (uma vez aqui, outra vez em total_night logo abaixo).
+            total_legal += pay["holiday_pay"]
             total_legal_min += pay["net_minutes"]
-            # Horas noturnas de domingo trabalhado ENTRAM no total de
-            # horas noturnas do mês (ex: 6,25h/dia × dias, mesmo em
-            # domingo) — mas o PAGAMENTO delas já está embutido nos
-            # 1,35x de total_legal, sem duplicar (pay["night_pay"] já
-            # sai ¥0 nesses dias, de propósito). Só a contagem de horas
-            # estava faltando, não o valor.
-            total_night_min += pay["night_minutes"]
+            total_night += pay["night_pay"]      # 深夜手当 é linha separada,
+            total_night_min += pay["night_minutes"]  # mesmo em domingo
             days_legal  += 1
         elif status == "holiday" or (is_holiday and not is_sunday):
-            total_holiday += pay["total_gross"]
+            total_holiday += pay["holiday_pay"]  # mesma lógica do domingo acima
             total_holiday_min += pay["net_minutes"]
-            total_night_min += pay["night_minutes"]  # mesma lógica do domingo acima
+            total_night += pay["night_pay"]
+            total_night_min += pay["night_minutes"]
             days_holiday  += 1
         elif shift_type == "yukyu":
             # Separado de total_base — sem isso, o valor do Yukyu ficava
@@ -1402,7 +1412,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607171350"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607111713"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
