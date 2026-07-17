@@ -395,6 +395,36 @@ def calculate_shift_pay(
         "night_minutes": 0, "regular_minutes": 0,
     }
 
+    # Taxas expostas no resultado — calculadas AQUI, bem no início da
+    # função, antes de qualquer branch/return antecipado (absent, yukyu,
+    # shift_type inválido, etc.) — bug real corrigido: essas chaves só
+    # eram definidas mais abaixo, dentro do bloco is_holiday/else, então
+    # qualquer dia de Yukyu (que retorna antes de chegar lá) travava
+    # compute_monthly_forecast com KeyError ao tentar ler
+    # pay["_ot_rate_full"]. CONSTANTES o mês inteiro (dependem só de
+    # jikyuu/adicional/modo de arredondamento configurados, nunca do dia
+    # específico ou do shift_type).
+    _holiday_premium_fixo = 0.35
+    addon_per_hour = (leader_addon_amount / leader_addon_hours
+                       if (use_leader_addon and leader_addon_hours > 0) else 0.0)
+
+    def _taxa_cheia(multiplicador: float) -> int:
+        # Se use_leader_addon estiver ativo, jikyuu e o acréscimo do
+        # adicional de líder são arredondados EM SEPARADO, cada um por
+        # si, antes de somar — confirmado por RH real que o resultado
+        # muda dependendo de arredondar tudo junto ou separado. Sem isso
+        # ativo, comportamento idêntico a uma taxa só (jikyuu puro).
+        parte_base = shisha_gofuuu(jikyuu * multiplicador, wage_round_mode)
+        if use_leader_addon and addon_per_hour > 0:
+            parte_addon = shisha_gofuuu(addon_per_hour * multiplicador, wage_round_mode)
+            return parte_base + parte_addon
+        return parte_base
+
+    result["_ot_rate_full"]         = _taxa_cheia(1.25)
+    result["_night_rate_increment"] = _taxa_cheia(0.25)
+    result["_holiday_rate_full"]    = _taxa_cheia(1.0 + _holiday_premium_fixo)
+    result["_jikyuu_per_min"]       = jikyuu / 60.0
+
     if shift_type == "absent":
         return result
 
@@ -575,31 +605,6 @@ def calculate_shift_pay(
         # em vez de só herdar o cap do net_min sem arredondamento próprio.
         night_min                  = min(truncate_minutes(raw_night_min, block, round_mode), net_min)
         result["night_minutes"]    = night_min
-    # Fixo em 0,35 SEMPRE — usado só para expor a taxa de domingo/feriado
-    # no resultado (_holiday_rate_full), consumida por compute_monthly_
-    # forecast em QUALQUER dia do loop (inclusive dias normais, que são
-    # maioria). Uma versão condicional a is_holiday aqui geraria a taxa
-    # errada (sem o 1,35x) sempre que capturada num dia que não seja
-    # feriado — bug real que já aconteceu (domingo saía ¥35.376 em vez
-    # de ¥47.784, porque a taxa exposta em dia normal vinha sem premium).
-    _holiday_premium_fixo       = 0.35
-
-    # Taxa cheia (extra/noturno/domingo), com arredondamento configurável.
-    # Se use_leader_addon estiver ativo, jikyuu e o acréscimo do adicional
-    # de líder são arredondados EM SEPARADO, cada um por si, antes de
-    # somar — confirmado por RH real que o resultado muda dependendo de
-    # arredondar tudo junto ou separado. Sem isso ativo, comportamento
-    # idêntico a uma taxa só (jikyuu puro).
-    addon_per_hour = (leader_addon_amount / leader_addon_hours
-                       if (use_leader_addon and leader_addon_hours > 0) else 0.0)
-
-    def _taxa_cheia(multiplicador: float) -> int:
-        parte_base = shisha_gofuuu(jikyuu * multiplicador, wage_round_mode)
-        if use_leader_addon and addon_per_hour > 0:
-            parte_addon = shisha_gofuuu(addon_per_hour * multiplicador, wage_round_mode)
-            return parte_base + parte_addon
-        return parte_base
-
     # IMPORTANTE: a taxa por HORA é arredondada pro yen mais próximo ANTES
     # de multiplicar pelas horas trabalhadas — não o valor total no final.
     # Confirmado com planilha de referência do usuário e validado contra
@@ -632,11 +637,19 @@ def calculate_shift_pay(
         # ¥45.338 reais de 深夜手当 do mês.
         holiday_rate_full       = _taxa_cheia(1.0 + _holiday_premium_fixo)
         night_rate_increment    = _taxa_cheia(0.25)
-        ot_rate_full            = _taxa_cheia(1.25)  # exposto p/ 延長, mesmo sem OT normal no dia
+        ot_rate_full            = _taxa_cheia(1.25)  # exposto p/ consistência, não usado hoje
+        # 延長 em domingo/feriado entra NAS HORAS DE DOMINGO, à taxa de
+        # 1,35x — não como hora extra genérica (1,25x). Bug real: antes
+        # o 延長 sempre ia pra overtime_pay/overtime_minutes, que nem é
+        # somado no total mensal em dias de domingo (só holiday_pay e
+        # night_pay são lidos pra domingo em compute_monthly_forecast) —
+        # o minuto extra era calculado aqui dentro e depois descartado.
+        _holiday_min_total       = net_min + extra_minutes
         result["base_pay"]      = 0
         result["overtime_pay"]  = 0
         result["night_pay"]     = shisha_gofuuu(night_rate_increment * (night_min / 60.0), wage_round_mode)
-        result["holiday_pay"]   = shisha_gofuuu(holiday_rate_full * (net_min / 60.0), wage_round_mode)
+        result["holiday_pay"]   = shisha_gofuuu(holiday_rate_full * (_holiday_min_total / 60.0), wage_round_mode)
+        result["net_minutes"]   = _holiday_min_total
     else:
         # base_pay cobre SÓ as horas regulares — hora extra é 100%
         # coberta por overtime_pay à taxa cheia, sem sobreposição.
@@ -648,24 +661,14 @@ def calculate_shift_pay(
         result["night_pay"]     = shisha_gofuuu(night_rate_increment * (night_min / 60.0), wage_round_mode)
         result["holiday_pay"]   = 0
 
-    # Taxas expostas no resultado — CONSTANTES o mês inteiro (dependem só
-    # de jikyuu/adicional/modo de arredondamento configurados, nunca do
-    # dia específico). compute_monthly_forecast usa isso pra recalcular
-    # os totais do mês com arredondamento único no final, em vez de somar
-    # valores já arredondados dia a dia (que acumula um resíduo de poucos
-    # yens quando as horas ficam espalhadas em muitos dias — cada
-    # arredondamento "pra cima" individual soma mais que um arredondamento
-    # só no total do mês).
-    result["_ot_rate_full"]         = ot_rate_full
-    result["_night_rate_increment"] = night_rate_increment
-    result["_holiday_rate_full"]    = holiday_rate_full
-    result["_jikyuu_per_min"]       = jikyuu_per_min
+    # As chaves _ot_rate_full/_night_rate_increment/_holiday_rate_full/
+    # _jikyuu_per_min já foram definidas no início da função (antes de
+    # qualquer early-return) — não precisam ser reatribuídas aqui, os
+    # valores são idênticos (mesma _taxa_cheia, mesmos parâmetros).
 
-    # 延長 — minutos extras solicitados além do turno, sempre à taxa
-    # cheia de hora extra (1,25x), independente do dia ser feriado ou
-    # não. Precisa da própria _taxa_cheia(1,25) porque ot_rate_full só
-    # existe no ramo "else" acima (dias sem feriado).
-    if extra_minutes > 0:
+    # 延長 em dia NORMAL (não feriado) — hora extra genérica, à taxa
+    # cheia de 1,25x, somada em overtime_pay/overtime_minutes.
+    if extra_minutes > 0 and not is_holiday:
         _extra_rate = _taxa_cheia(1.25)
         extra_pay = shisha_gofuuu((_extra_rate / 60.0) * extra_minutes, wage_round_mode)
         result["overtime_pay"]     += extra_pay
@@ -978,19 +981,30 @@ def compute_monthly_forecast(
             is_sunday = False
 
         # ── Regras por STATUS (o que foi salvo no day_overrides) ──────
+        # Reestruturado para tratar 3 sinais como INDEPENDENTES, sem
+        # ordem de prioridade frágil entre eles:
+        #   1. cycle_status — só a escala (4x2/5x2/alternado) decide se
+        #      o dia É PREVISTO pra trabalho ou não. NUNCA alterado por
+        #      feriado ou domingo.
+        #   2. is_holiday / is_sunday — só CARACTERÍSTICAS do dia no
+        #      calendário. NUNCA alteram a escala.
+        #   3. status (override manual) — só isso define COMO calcular.
         #
-        # "absent"  → falta → pular (¥0)
-        # "yukyu"   → férias → jornada normal configurada, sem OT/noturno
-        # "holiday" → trabalho em feriado → taxa cheia 1,35x
-        # "legal"   → trabalho no domingo → taxa cheia 1,35x
-        # "normal"  → depende do ciclo e do dia da semana:
-        #             ciclo=work + domingo → taxa cheia 1,35x automático
-        #             ciclo=work           → turno normal
-        #             ciclo=off + horário  → taxa cheia 1,35x (trabalhou na folga)
-        #             ciclo=off + yukyu_hol→ yukyu
-        #             ciclo=off            → não trabalhou → pular
-        #             feriado + horário    → taxa cheia 1,35x
-        #             feriado              → não trabalhou → pular
+        # "\"absent\"  → falta → pular (¥0)\n"
+        # "\"yukyu\"   → férias → jornada normal configurada, sem OT/noturno\n"
+        # "\"holiday\"/\"legal\" → marcado manualmente → taxa cheia 1,35x\n"
+        # "\"normal\"  → depende SÓ da escala (cycle_status), nunca de\n"
+        #              feriado sozinho:\n"
+        #   escala=off  + sem registro         → não trabalhou → pular\n"
+        #   escala=off  + horário/yukyu_hol    → trabalhou na folga\n"
+        #   escala=work + domingo              → taxa cheia 1,35x (sempre,\n"
+        #                                         independente de feriado\n"
+        #                                         corporativo também marcado)\n"
+        #   escala=work + feriado (sem domingo)+ sem registro → feriado\n"
+        #                                         corporativo/nacional NÃO\n"
+        #                                         remunerado por padrão\n"
+        #   escala=work + feriado + horário    → trabalhou no feriado\n"
+        #   escala=work (sem feriado/domingo)  → turno normal\n"
 
         if status == "absent":
             continue   # falta — ¥0, não entra no cálculo
@@ -1002,15 +1016,9 @@ def compute_monthly_forecast(
             # Marcado manualmente como feriado/domingo
             shift_type = "holiday"
 
-        elif is_sunday:
-            # Domingo — folga legal obrigatória
-            if cycle_status == "work" or has_time:
-                shift_type = "holiday"   # +35% obrigatório
-            else:
-                continue   # domingo sem registro → não trabalhou
-
         elif cycle_status == "off":
-            # Dia de folga no ciclo
+            # Dia de folga na ESCALA — feriado/domingo aqui não mudam
+            # nada, só um dia que já não era previsto pra trabalhar.
             if has_time:
                 shift_type = "holiday"   # trabalhou na folga → +35%
             elif yukyu_hol and is_holiday:
@@ -1018,21 +1026,29 @@ def compute_monthly_forecast(
             else:
                 continue   # folga sem registro → não trabalhou
 
-        elif is_holiday:
-            # Feriado nacional/corporativo
-            if has_time:
-                shift_type = "holiday"   # trabalhou no feriado → +35%
-            elif yukyu_hol:
-                shift_type = "yukyu"
-            else:
-                continue   # feriado sem registro → não trabalhou
-
-        elif status == "early":
-            shift_type = default_shift   # horário real descontado automaticamente
-
         else:
-            # Dia normal de trabalho
-            shift_type = default_shift
+            # Dia PREVISTO pra trabalho pela escala (cycle_status=="work").
+            # Domingo tem prioridade sobre feriado corporativo/nacional —
+            # um domingo de trabalho é sempre taxa cheia 1,35x, com ou
+            # sem feriado corporativo também marcado em cima dele (bug
+            # real corrigido: antes, um domingo marcado como feriado
+            # corporativo podia cair no ramo de "dia normal de trabalho"
+            # em vez de "domingo trabalhado", inflando Salário Base e
+            # Hora Extra e reduzindo Domingo — confirmado com holerite
+            # real de maio/2026, ¥0 de diferença esperado antes/depois
+            # de marcar feriado corporativo no mesmo domingo).
+            if is_sunday:
+                shift_type = "holiday"
+            elif is_holiday and has_time:
+                shift_type = "holiday"   # trabalhou no feriado → +35%
+            elif is_holiday and yukyu_hol:
+                shift_type = "yukyu"     # yukyu em feriado
+            elif is_holiday:
+                continue   # feriado (nacional/corporativo) sem registro → não trabalhou, não remunerado
+            elif status == "early":
+                shift_type = default_shift   # horário real descontado automaticamente
+            else:
+                shift_type = default_shift   # dia normal de trabalho
 
 
         # Horários: override manual > configuração do usuário > padrão
@@ -1060,16 +1076,24 @@ def compute_monthly_forecast(
             cfg_start_str=_start, cfg_end_str=_end,  # horário de entrada/saída configurado
             break_periods=break_periods,
         )
-        if (is_sunday and not is_holiday) or status == "legal":
+        if (is_sunday and status != "yukyu") or status == "legal":
             # total_legal recebe SÓ a parcela de domingo (holiday_pay,
             # taxa 1,35x) — não pay["total_gross"] inteiro, porque agora
             # que night_pay deixou de ser zerado em dias de domingo,
             # somar o total_gross aqui DUPLICARIA o valor do noturno
             # (uma vez aqui, outra vez em total_night logo abaixo).
+            #
+            # is_sunday sozinho (sem "and not is_holiday") — domingo tem
+            # prioridade sobre feriado corporativo/nacional, igual à
+            # decisão de shift_type acima. Bug real corrigido: a condição
+            # antiga excluía um domingo TAMBÉM marcado como feriado
+            # corporativo dessa agregação, e ele caía por engano no
+            # bloco de "dia normal" mais abaixo, mesmo com shift_type
+            # já corretamente definido como "holiday".
             total_legal_min += pay["net_minutes"]
             total_night_min += pay["night_minutes"]  # mesmo em domingo
             days_legal  += 1
-        elif status == "holiday" or (is_holiday and not is_sunday):
+        elif status == "holiday" or is_holiday:
             total_holiday_min += pay["net_minutes"]
             total_night_min += pay["night_minutes"]
             days_holiday  += 1
@@ -1450,7 +1474,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607171429"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607111713"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -2414,17 +2438,17 @@ def build_holerite_tab(page: ft.Page, state: dict, refresh_all):
             nav_row, month_hint,
             card(ft.Column(controls=[
                 section_header("支給 VENCIMENTOS"),
-                pay_row(f"Salário Base 基本給 ({data.get('days_normal',0)}d, {data.get('regular_hours',0):g}h)",
+                pay_row(f"Salário Base 基本給 ({data.get('days_normal',0)}d, {data.get('regular_hours',0):.2f}h)",
                         data["base_pay"]),
-                pay_row(f"Yukyu 有給休暇 ({data.get('days_yukyu',0)}d, {data.get('yukyu_hours',0):g}h)",
+                pay_row(f"Yukyu 有給休暇 ({data.get('days_yukyu',0)}d, {data.get('yukyu_hours',0):.2f}h)",
                         data.get("yukyu_pay", 0),     color="#FFB74D",   small=True),
-                pay_row(f"Hora Extra 残業手当 ({data.get('overtime_hours',0):g}h)",
+                pay_row(f"Hora Extra 残業手当 ({data.get('overtime_hours',0):.2f}h)",
                         data["overtime_pay"],       color=WARNING,     small=True),
-                pay_row(f"Adicional Noturno 深夜手当 ({data.get('night_hours',0):g}h)",
+                pay_row(f"Adicional Noturno 深夜手当 ({data.get('night_hours',0):.2f}h)",
                         data["night_pay"],           color=ACCENT_LITE, small=True),
-                pay_row(f"Feriado 休出手当 ({data.get('days_holiday',0)}d, {data.get('holiday_hours',0):g}h)",
+                pay_row(f"Feriado 休出手当 ({data.get('days_holiday',0)}d, {data.get('holiday_hours',0):.2f}h)",
                         data["holiday_pay"],         color=DANGER,      small=True),
-                pay_row(f"Domingo 法定休出 ({data.get('days_legal',0)}d, {data.get('legal_hours',0):g}h)",
+                pay_row(f"Domingo 法定休出 ({data.get('days_legal',0)}d, {data.get('legal_hours',0):.2f}h)",
                         data.get("legal_holiday_pay", 0), color="#EF9A9A", small=True),
                 pay_row("Bônus Mês Ímpar 奇数月",
                         data["odd_bonus"],           color=SUCCESS,     small=True),
