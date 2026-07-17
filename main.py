@@ -1540,7 +1540,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607180307"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607111713"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -2080,7 +2080,6 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
     # Cores do calendário novo
     C_WORK    = WORK_COLOR    # verde escuro — trabalho
     C_OFF     = OFF_COLOR     # azul escuro  — folga
-    C_HOL_JP  = HOL_COLOR     # vermelho escuro — feriado nacional
     C_HOL_CO  = CAL_CORP      # marrom escuro — feriado corporativo
     C_MODIF   = CAL_MODIF     # roxo escuro — modificado
     C_TODAY_B = "#00C2A8"     # borda turquesa hoje
@@ -2118,8 +2117,6 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
             bg = "#00796B"       # Saiu mais cedo / horário customizado
         elif is_corp_hol:
             bg = C_HOL_CO        # Feriado corporativo — amarelo
-        elif is_hol:
-            bg = C_HOL_JP        # Feriado nacional — vermelho
         elif cycle_st == "off":
             bg = C_OFF           # Folga — azul
         elif is_sunday:
@@ -2138,8 +2135,6 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
             num_color = "#FFFFFF"
         elif is_corp_hol:
             num_color = CAL_TEXT_CORP
-        elif is_hol:
-            num_color = "#FFD740"   # amarelo dourado — feriado nacional
         elif cycle_st == "off":
             if is_sunday:
                 num_color = C_RED
@@ -2174,15 +2169,18 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
         elif is_corp_hol:
             indicator  = "🏭"
             ind_color  = "#212121"
-        elif is_hol:
-            indicator  = "🎌"
-            ind_color  = "#FFFFFF"
         else:
             indicator  = ""
             ind_color  = C_WHITE
 
+        # Bandeira de feriado nacional — INDEPENDENTE do indicador acima,
+        # aparece junto (não troca, soma) quando o dia também tem outro
+        # status/indicador.
+        indicators_row = [ft.Text(indicator, size=scaled(8), color=ind_color)] if indicator else []
+        if is_hol:
+            indicators_row.append(ft.Text("🎌", size=scaled(8)))
 
-        # ── Borda cinza claro (ou vermelha, se feriado nacional) ─────
+        # ── Borda cinza claro (vermelha se feriado nacional, turquesa se hoje) ─
         if is_hol:
             border = ft.Border.all(2, HOL_COLOR)
         elif is_today:
@@ -2204,8 +2202,7 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
                             ft.Text(str(day_num), size=scaled(14),
                                     color=num_color,
                                     weight=ft.FontWeight.W_800),
-                            ft.Text(indicator, size=scaled(8),
-                                    color=ind_color),
+                            ft.Row(controls=indicators_row, spacing=1, tight=True),
                         ],
                         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                     ),
