@@ -1540,7 +1540,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607180604"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607111713"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -2202,7 +2202,8 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
                             ft.Text(str(day_num), size=scaled(14),
                                     color=num_color,
                                     weight=ft.FontWeight.W_800),
-                            ft.Row(controls=indicators_row, spacing=1, tight=True),
+                            ft.Column(controls=indicators_row, spacing=0, tight=True,
+                                      horizontal_alignment=ft.CrossAxisAlignment.END),
                         ],
                         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                     ),
