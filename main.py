@@ -335,6 +335,8 @@ def calculate_shift_pay(
                                        # bruto (420min) de forma
                                        # simplificada, sem precisar saber
                                        # a posição exata do intervalo
+    extra_minutes: int = 0,  # 延長 — minutos extras solicitados além do
+                              # turno, à taxa cheia de hora extra (1,25x)
 ) -> dict:
     """
     shift_type: "night"|"day"|"holiday"|"yukyu"|"absent" — determina o
@@ -627,6 +629,17 @@ def calculate_shift_pay(
         result["overtime_pay"]  = shisha_gofuuu(ot_rate_full * (ot_min / 60.0), wage_round_mode)
         result["night_pay"]     = shisha_gofuuu(night_rate_increment * (night_min / 60.0), wage_round_mode)
         result["holiday_pay"]   = 0
+
+    # 延長 — minutos extras solicitados além do turno, sempre à taxa
+    # cheia de hora extra (1,25x), independente do dia ser feriado ou
+    # não. Precisa da própria _taxa_cheia(1,25) porque ot_rate_full só
+    # existe no ramo "else" acima (dias sem feriado).
+    if extra_minutes > 0:
+        _extra_rate = _taxa_cheia(1.25)
+        extra_pay = shisha_gofuuu((_extra_rate / 60.0) * extra_minutes, wage_round_mode)
+        result["overtime_pay"]     += extra_pay
+        result["overtime_minutes"] = result.get("overtime_minutes", 0) + extra_minutes
+
     result["total_gross"]  = (result["base_pay"] + result["overtime_pay"]
                                + result["night_pay"] + result["holiday_pay"])
     return result
@@ -923,6 +936,7 @@ def compute_monthly_forecast(
         yukyu_hol = ov.get("yukyu_on_holiday", False)
         has_time  = bool(start_str)              # tem horário registrado manualmente
         day_abono = int(ov.get("abono", 0) or 0)   # abono/vale do dia
+        day_extra_min = int(ov.get("extra_minutes", 0) or 0)  # 延長 do dia
         is_holiday = day_num in holiday_days
 
         try:
@@ -1009,6 +1023,7 @@ def compute_monthly_forecast(
             leader_addon_amount=fixed_monthly_bonus,
             leader_addon_hours=leader_addon_hours,
             night_interval_minutes=night_interval_minutes,
+            extra_minutes=day_extra_min,
             ot_start_str=_ot,  # horário configurado de início da hora extra
             cfg_start_str=_start, cfg_end_str=_end,  # horário de entrada/saída configurado
             break_periods=break_periods,
@@ -1331,7 +1346,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607171258"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607111713"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -1679,6 +1694,8 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
 
             else:
                 # Dia de trabalho normal (com ou sem horário customizado)
+                try: extra_m = int(extra_min_f.value or 0)
+                except: extra_m = 0
                 pay = calculate_shift_pay(jikyuu, stype,
                                           start_str=s, end_str=e, break_min=brk,
                                           ot_start_str=ot_cfg,
@@ -1687,7 +1704,8 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
                                           use_leader_addon=_use_addon,
                                           leader_addon_amount=_addon_amt,
                                           leader_addon_hours=_addon_hrs,
-                                          night_interval_minutes=_night_int_min)
+                                          night_interval_minutes=_night_int_min,
+                                          extra_minutes=extra_m)
                 nm = pay["net_minutes"]
                 parts = [f"base {yen(pay['base_pay'])}"]
                 if pay["overtime_pay"]:
@@ -1695,23 +1713,10 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
                 if pay["night_pay"]:
                     parts.append(f"深夜 +{yen(pay['night_pay'])}")
                 suffix = " (saída antecipada)" if e and not pay["overtime_pay"] else ""
-                # Calcular minutos extras solicitados
-                try: extra_m = int(extra_min_f.value or 0)
-                except: extra_m = 0
                 if extra_m > 0:
-                    _extra_rate = shisha_gofuuu(jikyuu * 1.25, _wage_rm)
-                    if _use_addon and _addon_hrs > 0:
-                        _extra_addon_hr = _addon_amt / _addon_hrs
-                        _extra_rate += shisha_gofuuu(_extra_addon_hr * 1.25, _wage_rm)
-                    extra_pay = shisha_gofuuu((_extra_rate / 60.0) * extra_m, _wage_rm)
-                    parts.append(f"延長 +{yen(extra_pay)}")
-                    total_with_extra = pay['total_gross'] + extra_pay
-                    preview_text.value = (
-                        f"{nm}min+{extra_m}延長 → {' | '.join(parts)} = {yen(total_with_extra)}{suffix}"
-                    )
-                else:
-                    preview_text.value = (
-                        f"{nm}min → {' | '.join(parts)} = {yen(pay['total_gross'])}{suffix}"
+                    suffix += f" [inclui {extra_m}min de 延長]"
+                preview_text.value = (
+                    f"{nm}min → {' | '.join(parts)} = {yen(pay['total_gross'])}{suffix}"
                     )
             page.update()
 
@@ -3682,7 +3687,7 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
         csv_field = ft.TextField(
             label="Cole o conteúdo do CSV aqui",
             multiline=True, min_lines=6, max_lines=12,
-            hint_text="2025-05-03,jp\n2025-08-13,corp\n2025-01-01",
+            hint_text="2025-08-13\n2025-12-25",
             bgcolor="#2A2A2A", color="#F0F0F0",
             border_color="#333333", focused_border_color="#00D2C6",
             label_style=ft.TextStyle(color="#A0A0A0"),
@@ -3694,30 +3699,25 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
             page.update()
 
         def _processar(_=None):
+            # Só feriados corporativos aqui — os nacionais se atualizam
+            # sozinhos automaticamente (busca em tempo de execução),
+            # não precisam mais de importação manual via CSV.
             texto = csv_field.value or ""
             lines = texto.strip().splitlines()
-            hols      = state["holidays"]
             hols_corp = state.get("holidays_corp", {})
             ok = 0
             for line in lines:
-                parts = [p.strip() for p in line.strip().split(",")]
-                if not parts or not parts[0]:
+                data_str = line.strip().split(",")[0].strip()
+                if not data_str:
                     continue
-                tipo = parts[1].lower() if len(parts) > 1 else "jp"
                 try:
-                    d  = date.fromisoformat(parts[0])
+                    d  = date.fromisoformat(data_str)
                     mk = f"{d.year}-{d.month:02d}"
-                    if tipo == "corp":
-                        if mk not in hols_corp: hols_corp[mk] = []
-                        if d.day not in hols_corp[mk]:
-                            hols_corp[mk].append(d.day); ok += 1
-                    else:
-                        if mk not in hols: hols[mk] = []
-                        if d.day not in hols[mk]:
-                            hols[mk].append(d.day); ok += 1
+                    if mk not in hols_corp: hols_corp[mk] = []
+                    if d.day not in hols_corp[mk]:
+                        hols_corp[mk].append(d.day); ok += 1
                 except Exception:
                     pass
-            save_json(page, KEY_HOLIDAYS, hols)
             save_json(page, "onion_holidays_corp", hols_corp)
             state["holidays_corp"] = hols_corp
             _close()
@@ -3726,22 +3726,20 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
         panel = ft.Container(
             content=ft.Column(controls=[
                 ft.Row(controls=[
-                    ft.Text("Importar Feriados CSV", size=13,
+                    ft.Text("Importar Feriados Corporativos (CSV)", size=13,
                             color=TEXT_PRIMARY, weight=ft.FontWeight.W_700,
                             expand=True),
                     ft.TextButton("✕", on_click=_close,
                                   style=ft.ButtonStyle(color=TEXT_SECONDARY)),
                 ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-                ft.Text("Cole o conteúdo do arquivo CSV abaixo:",
+                ft.Text("Cole uma data por linha (feriados nacionais já se atualizam sozinhos, não precisam ser importados):",
                         size=11, color=TEXT_SECONDARY),
                 ft.Container(
                     content=ft.Column(controls=[
-                        ft.Text("2025-05-03,jp   ← feriado nacional",
+                        ft.Text("2025-08-13  ← aniversário da fábrica",
                                 size=10, color=YEN_GOLD),
-                        ft.Text("2025-08-13,corp ← feriado corporativo",
+                        ft.Text("2025-12-25  ← recesso de fim de ano",
                                 size=10, color=YEN_GOLD),
-                        ft.Text("2025-01-01      ← sem tipo = jp",
-                                size=10, color=TEXT_MUTED),
                     ], spacing=2, tight=True),
                     bgcolor=BG_SURFACE, border_radius=6,
                     padding=ft.Padding(left=8, right=8, top=6, bottom=6),
@@ -4507,15 +4505,14 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
                   "Abre o registro para edição. Um botão Remover aparece quando estiver editando."),
 
             # ── CSV de feriados ──────────────────────────────────────
-            _title("📄 Formato do CSV de Feriados"),
+            _title("📄 Formato do CSV de Feriados Corporativos"),
+            _p("Feriados nacionais se atualizam sozinhos automaticamente — esse CSV é só para feriados da sua empresa (recessos, aniversário da fábrica, etc.)."),
             ft.Container(
                 content=ft.Column(controls=[
-                    ft.Text("2025-05-03,jp   ← feriado nacional (vermelho)",
+                    ft.Text("2025-08-13  ← aniversário da fábrica",
                             size=11, color=YEN_GOLD),
-                    ft.Text("2025-08-13,corp ← feriado corporativo (laranja)",
+                    ft.Text("2025-12-25  ← recesso de fim de ano",
                             size=11, color=YEN_GOLD),
-                    ft.Text("2025-01-01      ← sem tipo = jp por padrão",
-                            size=11, color=TEXT_SECONDARY),
                 ], spacing=2, tight=True),
                 bgcolor="#333333", border_radius=8,
                 padding=ft.Padding(left=12, right=12, top=8, bottom=8),
