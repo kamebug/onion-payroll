@@ -1175,7 +1175,7 @@ JP_HOLIDAYS_BUILTIN = {
     "2025-05": [3, 4, 5, 6],
     "2025-07": [21],
     "2025-08": [11],
-    "2025-09": [15, 22, 23],
+    "2025-09": [15, 23],
     "2025-10": [13],
     "2025-11": [3, 23, 24],
     "2025-12": [31],
@@ -1190,6 +1190,54 @@ JP_HOLIDAYS_BUILTIN = {
     "2026-10": [12],
     "2026-11": [3, 23],
     "2026-12": [31],
+}
+
+# Nomes dos feriados nacionais — jp, romaji, pt. Datas móveis calculadas
+# e verificadas contra o dia da semana real (Python datetime) e fontes
+# oficiais, não digitadas de memória. Cobre só 2025-2026 (mesmo range do
+# JP_HOLIDAYS_BUILTIN acima) — feriados buscados automaticamente via
+# fetch_updated_holidays() para anos futuros não têm nome aqui ainda; o
+# modal simplesmente não mostra nome nesse caso (sem erro).
+JP_HOLIDAY_NAMES_BUILTIN = {
+    "2025-01-01": ("元日", "Ganjitsu", "Ano Novo"),
+    "2025-01-13": ("成人の日", "Seijin no Hi", "Dia da Maioridade"),
+    "2025-02-11": ("建国記念の日", "Kenkoku Kinen no Hi", "Dia da Fundação Nacional"),
+    "2025-02-23": ("天皇誕生日", "Tennō Tanjōbi", "Aniversário do Imperador"),
+    "2025-02-24": ("振替休日", "Furikae Kyūjitsu", "Feriado Substituto"),
+    "2025-03-20": ("春分の日", "Shunbun no Hi", "Equinócio de Primavera"),
+    "2025-04-29": ("昭和の日", "Shōwa no Hi", "Dia de Shōwa"),
+    "2025-05-03": ("憲法記念日", "Kenpō Kinenbi", "Dia da Constituição"),
+    "2025-05-04": ("みどりの日", "Midori no Hi", "Dia do Verde"),
+    "2025-05-05": ("こどもの日", "Kodomo no Hi", "Dia das Crianças"),
+    "2025-05-06": ("振替休日", "Furikae Kyūjitsu", "Feriado Substituto"),
+    "2025-07-21": ("海の日", "Umi no Hi", "Dia do Mar"),
+    "2025-08-11": ("山の日", "Yama no Hi", "Dia da Montanha"),
+    "2025-09-15": ("敬老の日", "Keirō no Hi", "Dia do Respeito aos Idosos"),
+    "2025-09-23": ("秋分の日", "Shūbun no Hi", "Equinócio de Outono"),
+    "2025-10-13": ("スポーツの日", "Supōtsu no Hi", "Dia do Esporte"),
+    "2025-11-03": ("文化の日", "Bunka no Hi", "Dia da Cultura"),
+    "2025-11-23": ("勤労感謝の日", "Kinrō Kansha no Hi", "Dia de Ação de Graças pelo Trabalho"),
+    "2025-11-24": ("振替休日", "Furikae Kyūjitsu", "Feriado Substituto"),
+    "2025-12-31": ("大晦日", "Ōmisoka", "Véspera de Ano Novo (não é feriado oficial, uso comum)"),
+    "2026-01-01": ("元日", "Ganjitsu", "Ano Novo"),
+    "2026-01-12": ("成人の日", "Seijin no Hi", "Dia da Maioridade"),
+    "2026-02-11": ("建国記念の日", "Kenkoku Kinen no Hi", "Dia da Fundação Nacional"),
+    "2026-02-23": ("天皇誕生日", "Tennō Tanjōbi", "Aniversário do Imperador"),
+    "2026-03-20": ("春分の日", "Shunbun no Hi", "Equinócio de Primavera"),
+    "2026-04-29": ("昭和の日", "Shōwa no Hi", "Dia de Shōwa"),
+    "2026-05-03": ("憲法記念日", "Kenpō Kinenbi", "Dia da Constituição"),
+    "2026-05-04": ("みどりの日", "Midori no Hi", "Dia do Verde"),
+    "2026-05-05": ("こどもの日", "Kodomo no Hi", "Dia das Crianças"),
+    "2026-05-06": ("振替休日", "Furikae Kyūjitsu", "Feriado Substituto"),
+    "2026-07-20": ("海の日", "Umi no Hi", "Dia do Mar"),
+    "2026-08-11": ("山の日", "Yama no Hi", "Dia da Montanha"),
+    "2026-09-21": ("敬老の日", "Keirō no Hi", "Dia do Respeito aos Idosos"),
+    "2026-09-22": ("国民の休日", "Kokumin no Kyūjitsu", "Feriado Nacional (dia entre dois feriados)"),
+    "2026-09-23": ("秋分の日", "Shūbun no Hi", "Equinócio de Outono"),
+    "2026-10-12": ("スポーツの日", "Supōtsu no Hi", "Dia do Esporte"),
+    "2026-11-03": ("文化の日", "Bunka no Hi", "Dia da Cultura"),
+    "2026-11-23": ("勤労感謝の日", "Kinrō Kansha no Hi", "Dia de Ação de Graças pelo Trabalho"),
+    "2026-12-31": ("大晦日", "Ōmisoka", "Véspera de Ano Novo (não é feriado oficial, uso comum)"),
 }
 
 
@@ -1354,7 +1402,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607171333"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607111713"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -1513,7 +1561,6 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
     # ── Day modal ────────────────────────────────────────────────────
     def open_day_modal(day_num: int):
         ov     = month_overrides.get(str(day_num), {})
-        is_hol = day_num in month_holidays
 
         status_dd = _ValueHolder(ov.get("status", "normal"))
         # (chave, label PT principal, label JP secundário p/ localizar no
@@ -1782,20 +1829,56 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
             _close()
             refresh_all()
 
-        hol_text = ft.Container(
-            content=ft.Text("🏭 Feriado da Empresa", size=11, color=DANGER),
-            visible=is_hol,
-            padding=ft.Padding(left=8, right=8, top=4, bottom=4),
-            bgcolor="#FEE2E2", border_radius=8,
-        )
-
-        # Verificar tipo de feriado
+        # Verificar tipo de feriado ANTES de montar o texto de exibição —
+        # hol_text tinha um bug: sempre mostrava "🏭 Feriado da Empresa",
+        # mesmo quando era feriado NACIONAL, porque a distinção certa só
+        # era calculada depois, pra outra coisa.
         _hol_key   = f"{view_year}-{view_month:02d}"
         _jp_hols   = state.get("holidays", {}).get(_hol_key, [])
         _corp_hols = state.get("holidays_corp", {}).get(_hol_key, [])
-        if day_num in _jp_hols:
+        _is_jp_hol   = day_num in _jp_hols
+        _is_corp_hol = day_num in _corp_hols
+
+        if _is_jp_hol:
+            _hol_date_key = f"{view_year}-{view_month:02d}-{day_num:02d}"
+            _hol_names = JP_HOLIDAY_NAMES_BUILTIN.get(_hol_date_key)
+            if _hol_names:
+                _jp_name, _romaji_name, _pt_name = _hol_names
+                hol_text = ft.Container(
+                    content=ft.Column(controls=[
+                        ft.Text(f"🏮 {_jp_name}", size=13,
+                                weight=ft.FontWeight.W_700, color=HOL_COLOR),
+                        ft.Text(_romaji_name, size=11, color=TEXT_SECONDARY, italic=True),
+                        ft.Text(_pt_name, size=12, color=TEXT_PRIMARY),
+                    ], spacing=2, tight=True),
+                    visible=True,
+                    padding=ft.Padding(left=10, right=10, top=8, bottom=8),
+                    bgcolor="#FEE2E2", border_radius=8,
+                    border=ft.Border.all(1, HOL_COLOR),
+                )
+            else:
+                # Feriado nacional buscado automaticamente (ano futuro,
+                # fora do range 2025-2026 da tabela de nomes) — mostra
+                # só o rótulo genérico, sem nome específico.
+                hol_text = ft.Container(
+                    content=ft.Text("🏮 Feriado Nacional", size=11, color=DANGER),
+                    visible=True,
+                    padding=ft.Padding(left=8, right=8, top=4, bottom=4),
+                    bgcolor="#FEE2E2", border_radius=8,
+                )
+        elif _is_corp_hol:
+            hol_text = ft.Container(
+                content=ft.Text("🏭 Feriado da Empresa", size=11, color=DANGER),
+                visible=True,
+                padding=ft.Padding(left=8, right=8, top=4, bottom=4),
+                bgcolor="#FEE2E2", border_radius=8,
+            )
+        else:
+            hol_text = ft.Container(visible=False)
+
+        if _is_jp_hol:
             _hol_label = " 🏮 Feriado Nacional"
-        elif day_num in _corp_hols:
+        elif _is_corp_hol:
             _hol_label = " 🏭 Feriado Corporativo"
         else:
             _hol_label = ""
@@ -1961,8 +2044,10 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
             ind_color  = C_WHITE
 
 
-        # ── Borda cinza claro ────────────────────────────────────────
-        if is_today:
+        # ── Borda cinza claro (ou vermelha, se feriado nacional) ─────
+        if is_hol:
+            border = ft.Border.all(2, HOL_COLOR)
+        elif is_today:
             border = ft.Border.all(2, "#00D2C6")
         else:
             border = ft.Border.all(1, "#E5E7EB")
