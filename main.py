@@ -1296,7 +1296,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607171140"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607111713"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -1351,7 +1351,7 @@ ACCENT_DARK    = "#007A6E"   # Turquesa escuro
 # CALENDÁRIO — cores dos dias
 WORK_COLOR     = "#0F9D58"   # Trabalho — verde escuro saturado
 OFF_COLOR      = "#4285F4"   # Folga — azul escuro saturado
-HOL_COLOR      = "#4a1a1a"   # Feriado nacional — vermelho escuro
+HOL_COLOR      = "#DB4437"   # Feriado nacional — Tomato, vermelho Google vibrante (igual ao 1º bloco — estava escuro e quase invisível)
 
 # TEXTO (sobre fundo escuro #2c2c2a)
 TEXT_PRIMARY   = "#F9F9F9"   # Cinza 50 — máximo contraste
@@ -4271,7 +4271,7 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
             _item("1️⃣", "Configure seu perfil",
                   "Abra ⚙️ Config. → insira seu Valor Hora (時給), escolha o Tipo de Ciclo (4×2, 5×2 ou Alternado) e a Data Início."),
             _item("2️⃣", "Importe os feriados",
-                  "Feriados nacionais de 2025-2026 já vêm embutidos. Para feriados corporativos, acesse 🏭 Feriados e marque manualmente."),
+                  "Feriados nacionais já vêm embutidos. Para feriados corporativos, acesse 🏭 Feriados e marque manualmente."),
             _item("3️⃣", "Acompanhe no Calendário",
                   "A aba 📅 gera automaticamente o ciclo escolhido. Toque em qualquer dia para registrar horários, faltas ou férias."),
             _item("4️⃣", "Consulte o Holerite",
@@ -4343,28 +4343,6 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
                   "Trabalhou em dia de folga, feriado ou domingo",
                   "Taxa cheia 1,35x (único adicional)"),
             _p("⚠️ Domingo e feriado trabalhado recebem 1,35x sobre as horas trabalhadas nesse dia — essas horas não aparecem separadamente em 'Salário Base', e não soma noturno nem hora extra por cima, mesmo que o horário caia na madrugada. Mesma lógica para hora extra: as horas de 残業 saem 100% da linha 'Salário Base' e vão para 'Hora Extra' à taxa cheia de 1,25x — nunca as duas linhas juntas para a mesma hora. Validado com holerites reais da empresa."),
-            _p("Arredondamento: 四捨五入 — frações < 0.5 descartadas, ≥ 0.5 arredondadas para cima. Todos os valores em ¥ inteiro."),
-
-            # ── Exemplo: arredondamento da taxa por hora ────────────────
-            _title("🔢 Arredondamento da Taxa por Hora (sempre ativo)"),
-            _p("Diferente do arredondamento do ponto: aqui não se mexe nos minutos, mexe-se no ¥/hora usado para multiplicar. A taxa (時給 × multiplicador) é arredondada para o yen mais próximo ANTES de multiplicar pelas horas — não depois. Sempre ativo, não é configurável."),
-            _example("Exemplo — hora extra, 時給=¥1.430, 30h trabalhadas:", [
-                "Taxa: 1.430 × 1,25",
-                "= 1.787,50 ¥/hora",
-                "Arred. (0,5 sobe):",
-                "1.788 ¥/hora",
-                "Total: 1.788 × 30",
-                "= ¥53.640",
-            ]),
-            _example("Exemplo — noturno, 時給=¥1.430, 118,75h trabalhadas:", [
-                "Taxa: 1.430 × 0,25",
-                "= 357,50 ¥/hora",
-                "Arred.: 358 ¥/hora",
-                "Total: 358 × 118,75",
-                "= ¥42.512,50",
-                "→ ¥42.513",
-            ]),
-            _p("Os dois exemplos acima batem exatos com holerites reais analisados — essa é a diferença entre 'quase certo' e 100% preciso."),
 
             # ── Ponto diário ─────────────────────────────────────────
             _title("📅 Registrando o Ponto"),
@@ -4464,6 +4442,15 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
             _title("🔢 Arredondamento de Salário"),
             _item("Modo de Arredondamento", "Botões em ⚙️ Config.",
                   "\"Sempre pra Cima\" (padrão) arredonda toda taxa por hora pra cima, sem exceção. \"Regra do 0,5\" volta ao arredondamento clássico (0,5 sempre sobe, resto trunca) — troque se seu holerite bater melhor com esse modo. Afeta Salário Base, Hora Extra, Noturno e Feriado/Domingo. Não afeta a Média Histórica de desconto, que sempre usa a Regra do 0,5."),
+            _p("A taxa (時給 × multiplicador) é arredondada para o yen ANTES de multiplicar pelas horas — não depois. Exemplo com o padrão \"Sempre pra Cima\":"),
+            _example("Exemplo — hora extra, 時給=¥1.430, 30h trabalhadas:", [
+                "Taxa: 1.430 × 1,25",
+                "= 1.787,50 ¥/hora",
+                "Arred. (sempre pra cima):",
+                "1.788 ¥/hora",
+                "Total: 1.788 × 30",
+                "= ¥53.640",
+            ]),
             _item("Usar Adicional de Líder no Arredondamento", "Switch em ⚙️ Config, desligado por padrão.",
                   "Quando ativado, separa o cálculo da taxa de Extra/Noturno/Domingo em duas partes — jikyuu puro e o acréscimo do Adicional Fixo Mensal — cada uma arredondada individualmente antes de somar, em vez de somar tudo numa taxa só. Regra confirmada por um RH específico — pode não valer pra toda empresa. Revela o campo \"Horas Padrão para este Cálculo\" (ex: 168h), que também varia por empresa — confirme sempre com seu RH ou compare com um holerite real."),
             _item("Minutos de Intervalo no Período Noturno", "Campo em ⚙️ Config, padrão 0.",
