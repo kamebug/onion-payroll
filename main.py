@@ -575,7 +575,14 @@ def calculate_shift_pay(
         # em vez de só herdar o cap do net_min sem arredondamento próprio.
         night_min                  = min(truncate_minutes(raw_night_min, block, round_mode), net_min)
         result["night_minutes"]    = night_min
-    holiday_premium            = 0.35 if is_holiday else 0.0
+    # Fixo em 0,35 SEMPRE — usado só para expor a taxa de domingo/feriado
+    # no resultado (_holiday_rate_full), consumida por compute_monthly_
+    # forecast em QUALQUER dia do loop (inclusive dias normais, que são
+    # maioria). Uma versão condicional a is_holiday aqui geraria a taxa
+    # errada (sem o 1,35x) sempre que capturada num dia que não seja
+    # feriado — bug real que já aconteceu (domingo saía ¥35.376 em vez
+    # de ¥47.784, porque a taxa exposta em dia normal vinha sem premium).
+    _holiday_premium_fixo       = 0.35
 
     # Taxa cheia (extra/noturno/domingo), com arredondamento configurável.
     # Se use_leader_addon estiver ativo, jikyuu e o acréscimo do adicional
@@ -623,7 +630,7 @@ def calculate_shift_pay(
         # contra holerite real: 2 domingos × 6,25h noturno + 16 dias
         # normais × 6,25h = 112,5h no total, batendo exato com os
         # ¥45.338 reais de 深夜手当 do mês.
-        holiday_rate_full       = _taxa_cheia(1.0 + holiday_premium)
+        holiday_rate_full       = _taxa_cheia(1.0 + _holiday_premium_fixo)
         night_rate_increment    = _taxa_cheia(0.25)
         ot_rate_full            = _taxa_cheia(1.25)  # exposto p/ 延長, mesmo sem OT normal no dia
         result["base_pay"]      = 0
@@ -636,7 +643,7 @@ def calculate_shift_pay(
         result["base_pay"]      = shisha_gofuuu(jikyuu_per_min * result["regular_minutes"], wage_round_mode)
         ot_rate_full            = _taxa_cheia(1.25)
         night_rate_increment    = _taxa_cheia(0.25)
-        holiday_rate_full       = _taxa_cheia(1.0 + holiday_premium)  # exposto p/ consistência
+        holiday_rate_full       = _taxa_cheia(1.0 + _holiday_premium_fixo)  # exposto p/ consistência
         result["overtime_pay"]  = shisha_gofuuu(ot_rate_full * (ot_min / 60.0), wage_round_mode)
         result["night_pay"]     = shisha_gofuuu(night_rate_increment * (night_min / 60.0), wage_round_mode)
         result["holiday_pay"]   = 0
@@ -1443,7 +1450,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607171410"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607111713"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
