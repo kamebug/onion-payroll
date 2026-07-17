@@ -327,6 +327,19 @@ carregamento, seguindo exatamente o que está declarado em
     verdade, só os antigos (quebrados). Depois de qualquer substituição
     de classe/função, `grep -c` pelo nome pra confirmar que não sobrou
     duplicata
+28. **Corrigir a prioridade errada de um jeito absoluto pode acertar
+    um caso e quebrar outro.** A primeira correção do bug domingo+
+    feriado corporativo deu prioridade ABSOLUTA ao domingo sobre
+    qualquer feriado — resolvia o caso relatado originalmente, mas
+    quebrava o caso oposto (feriado corporativo real, fábrica fechada,
+    caindo num domingo escalado) só descoberto quando o usuário testou
+    esse cenário específico depois do deploy. A prioridade certa
+    dependia de UMA CONDIÇÃO A MAIS (tem horário registrado ou não),
+    não só de qual sinal "vence". Ao corrigir uma prioridade entre
+    dois sinais que podem coexistir no mesmo dia, sempre considerar
+    os DOIS casos práticos (com e sem ação manual do usuário) antes de
+    declarar a correção completa — não só o caso que gerou o relatório
+    original
 
 ---
 

@@ -99,6 +99,67 @@ def normalize_date(s: str) -> str:
     return s
 
 
+def jikyuu_vigente_para_mes(month_key: str, history: list, default: int) -> int:
+    """時給 vigente pra um mês específico, com base nos marcos registrados
+    no Histórico (campo "jikyuu_effective"). Procura o registro mais
+    recente, IGUAL OU ANTERIOR ao mês sendo visto, que tenha esse campo
+    preenchido — usa esse valor em vez do 時給 atual de ⚙️ Config. Sem
+    nenhum marco encontrado, cai no valor default (comportamento de
+    sempre, sem mudar nada pra quem não usa essa funcionalidade)."""
+    marcos = [
+        (e["month"], int(e["jikyuu_effective"]))
+        for e in history
+        if e.get("jikyuu_effective") and e.get("month", "") <= month_key
+    ]
+    if not marcos:
+        return default
+    marcos.sort(key=lambda x: x[0])
+    return marcos[-1][1]
+
+
+def desconto_real_para_mes(month_key: str, history: list) -> Optional[int]:
+    """Valor de desconto REAL, se esse mês específico já tiver holerite
+    registrado no Histórico (não é mais previsão, é dado conhecido).
+    Retorna None se não houver registro pra esse mês exato — nesse caso,
+    quem chamar deve usar a previsão normal (Média Histórica ou Fixo)."""
+    registro = next((e for e in history if e.get("month") == month_key), None)
+    if registro is not None and registro.get("deductions", 0) > 0:
+        return int(registro["deductions"])
+    return None
+
+
+def normalize_yyyymm(s: str) -> str:
+    """Converte entrada livre de mês para AAAA-MM, sem exigir hífen.
+    202602 → 2026-02 | 2026/02 → 2026-02 | 2026.2 → 2026-02
+    Já em AAAA-MM → mantém (só normaliza zero à esquerda).
+    Entrada inválida → devolve como veio, sem travar o campo.
+    """
+    if not s:
+        return ""
+    s = s.strip().replace("/", "-").replace(".", "-")
+    if "-" in s:
+        parts = s.split("-")
+        if len(parts) == 2:
+            try:
+                ano, mes = int(parts[0]), int(parts[1])
+                if not (1 <= mes <= 12):
+                    return s
+                return f"{ano:04d}-{mes:02d}"
+            except (ValueError, IndexError):
+                return s
+        return s
+    digits = "".join(c for c in s if c.isdigit())
+    if len(digits) == 6:  # AAAAMM
+        try:
+            ano, mes = int(digits[:4]), int(digits[4:6])
+            if not (1 <= mes <= 12):
+                return s
+            return f"{ano:04d}-{mes:02d}"
+        except ValueError:
+            return s
+    return s
+
+
 def parse_hhmm(s: str) -> Optional[datetime]:
     try:
         return datetime.strptime(s.strip(), "%H:%M")
@@ -1479,7 +1540,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607172013"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607111713"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -2329,6 +2390,12 @@ def build_holerite_tab(page: ft.Page, state: dict, refresh_all):
         anchor = today
 
     month_key = f"{view_year}-{view_month:02d}"
+
+    # 時給 vigente pra esse mês — ver jikyuu_vigente_para_mes() no topo
+    # do arquivo pra a lógica completa e testável isoladamente.
+    _jikyuu_efetivo = jikyuu_vigente_para_mes(
+        month_key, history, int(settings.get("jikyuu") or 1500))
+
     # Mesclar feriados nacionais (embutidos/CSV) + corporativos da aba 🏭
     # para que ambos afetem o cálculo do holerite, não só a cor da célula
     _nat_hols  = holidays.get(month_key, [])
@@ -2337,7 +2404,7 @@ def build_holerite_tab(page: ft.Page, state: dict, refresh_all):
     try:
         data = compute_monthly_forecast(
             year=view_year, month=view_month,
-            jikyuu=int(settings.get("jikyuu") or 1500),
+            jikyuu=_jikyuu_efetivo,
             anchor_date=anchor, group=settings.get("group", "B"),
             holiday_days=_all_holidays_month,
             day_overrides=overrides.get(month_key, {}),
@@ -2379,6 +2446,15 @@ def build_holerite_tab(page: ft.Page, state: dict, refresh_all):
                 "base_pay": 0, "overtime_pay": 0, "night_pay": 0,
                 "holiday_pay": 0, "legal_holiday_pay": 0,
                 "odd_bonus": 0, "extra_bonus": 0}
+
+    # Se esse mês específico já tem holerite real registrado no
+    # Histórico, o desconto deixa de ser uma previsão e vira o valor
+    # REAL conhecido — ver desconto_real_para_mes() no topo do arquivo.
+    _desconto_real = desconto_real_para_mes(month_key, history)
+    _eh_registro_real = _desconto_real is not None
+    if _eh_registro_real:
+        data["deductions"] = _desconto_real
+        data["net"] = data["gross"] - data["deductions"]
 
     def _go_prev(_):
         m, y = view_month - 1, view_year
@@ -2424,7 +2500,9 @@ def build_holerite_tab(page: ft.Page, state: dict, refresh_all):
 
     modo = settings.get("deduction_mode", "historical")
     fixed_val = int(settings.get("fixed_deduction") or 0)
-    if modo == "fixed":
+    if _eh_registro_real:
+        deduction_note = f"📋 Registro real: {yen(data['deductions'])}"
+    elif modo == "fixed":
         if fixed_val == 0:
             deduction_note = "Fixo: ¥0 (sem desconto)"
         else:
@@ -2568,6 +2646,12 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
         month_f = _tf("Mês 月 (AAAA-MM)", ft.KeyboardType.TEXT,
                       ee.get("month", date.today().strftime("%Y-%m")))
 
+        def _blur_month_f(e):
+            v = normalize_yyyymm(e.control.value.strip())
+            e.control.value = v
+            e.control.update()
+        month_f.on_blur = _blur_month_f
+
         def _v(key, default=""):
             v = ee.get(key, default)
             return str(v) if v else default
@@ -2624,6 +2708,16 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
         f_gross     = _tf("総支給額 Total Bruto", val=_v("gross"))
         f_ded       = _tf_obrigatorio("控除合計 Total Desc.", val=_v("deductions"))
         f_net       = _tf("差引支給額 Salário Líq.", val=_v("net"))
+
+        # ── 時給 vigente a partir deste mês (opcional) ─────────────────
+        # Marca esse mês como o início de um novo 時給 — a previsão
+        # (aba Holerite) de qualquer mês SEM registro passa a usar esse
+        # valor em vez do 時給 atual configurado em ⚙️ Config, contanto
+        # que esse registro seja o marco mais recente igual ou anterior
+        # ao mês sendo visto. Sem isso, um aumento de salário mudaria
+        # retroativamente a previsão de meses passados não registrados.
+        f_jikyuu_novo = _tf("時給 a partir deste mês (¥, opcional)",
+                            val=_v("jikyuu_effective"))
 
         ov_ref = [None]
 
@@ -2710,6 +2804,9 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
                 "shotoku":    _vi(f_shotoku),
                 "jumin":      _vi(f_jumin),
                 "ta_kojo":    _vi(f_ta_kojo),
+                # 時給 vigente a partir deste mês (opcional) — vazio se
+                # não houve mudança de salário nesse mês
+                "jikyuu_effective": _vi(f_jikyuu_novo),
             }
             # Remove tanto o mês antigo (se editando e mudou o mês) quanto
             # qualquer registro existente com o novo mês (evita duplicar)
@@ -2773,6 +2870,23 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
 
                 _sec("💰 TOTAIS (opcional)"),
                 _padded_row(f_gross, f_net),
+
+                _sec("📈 MUDANÇA DE 時給 (opcional)"),
+                _padded_row(f_jikyuu_novo),
+                ft.Container(
+                    ft.Text(
+                        "Só preencha se o 時給 mudou A PARTIR deste mês "
+                        "(ex: aumento de salário). A previsão de qualquer "
+                        "mês sem registro passa a usar esse valor, em vez "
+                        "do 時給 atual de ⚙️ Config — evita que um aumento "
+                        "futuro mude retroativamente a previsão de meses "
+                        "passados que você não registrou aqui. Deixe "
+                        "vazio se não houve mudança nesse mês.",
+                        size=9, color=TEXT_MUTED,
+                    ),
+                    padding=ft.Padding(left=0, right=0, top=0, bottom=6),
+                ),
+
                 _sec("勤怠 FREQUÊNCIA / DIAS"),
                 _padded_row(f_dias, f_kyujitsu, f_hokyujitsu),
                 _padded_row(f_kekkin, f_yukyu, f_tokyu),
@@ -3534,6 +3648,14 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
     step4_salario_container = card(ft.Column(controls=[
         section_header("4️⃣ CONFIGURAÇÃO DE SALÁRIO"),
         mk_field("Valor Hora 時給 (¥)",              "jikyuu"),
+        ft.Text(
+            "⚠️ Se seu 時給 mudou (aumento de salário), esse valor vale "
+            "SEMPRE, inclusive pra meses passados sem registro. Pra "
+            "manter a previsão de meses anteriores ao aumento correta, "
+            "registre em 📋 Histórico o mês em que o aumento começou, "
+            "preenchendo o campo \"時給 a partir deste mês\".",
+            size=9, color=TEXT_MUTED,
+        ),
         mk_field("Bônus Padrão Mês Ímpar (¥)",        "odd_bonus"),
         mk_field("Adicional Fixo Mensal — Líder, etc. (¥)", "fixed_monthly_bonus"),
         ft.Text(
@@ -4631,6 +4753,13 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
                           "Horário customizado registrado manualmente"),
 
             # ── Bônus e Adicionais ────────────────────────────────────
+            # ── Mudança de 時給 ────────────────────────────────────────
+            _title("📈 Mudança de 時給 (Aumento de Salário)"),
+            _item("時給 a partir deste mês", "Campo em 📋 Histórico, opcional.",
+                  "O 時給 configurado em ⚙️ Config vale sempre, inclusive retroativamente pra meses passados sem registro — se você teve um aumento, a previsão de meses ANTES do aumento ficaria errada sem esse campo. Ao registrar um holerite real no Histórico, preencha \"時給 a partir deste mês\" com o novo valor, no mês em que o aumento começou. A previsão de qualquer mês sem registro passa a usar automaticamente o 時給 vigente na época — o marco mais recente igual ou anterior ao mês sendo visto. Sem preencher nada, o app usa sempre o 時給 atual de Config, mesmo pra meses passados."),
+            _item("Desconto — Registro Real vs Previsão", "Automático, aba Holerite.",
+                  "Ao registrar um holerite real no Histórico, o mês correspondente na aba Holerite deixa de usar a previsão de desconto (Média Histórica ou Fixo, conforme configurado em ⚙️ Config) e passa a mostrar o valor REAL registrado — já é um dado conhecido, não precisa mais estimar. A nota abaixo do valor muda pra \"📋 Registro real\". Meses sem registro continuam usando a previsão normalmente."),
+
             _title("💰 Bônus e Adicionais Mensais"),
             _item("Adicional Fixo Mensal", "Configure em ⚙️ Config.",
                   "Valor somado AUTOMATICAMENTE todo mês — ideal para função de líder, técnico ou qualquer adicional fixo recorrente. Configure uma vez e esqueça. Também pode ser usado no Arredondamento de Salário (abaixo), sem precisar duplicar o valor em outro campo."),
@@ -4977,7 +5106,17 @@ async def main(page: ft.Page):
             # recente, evitando qualquer inconsistência de closures antigas
             state["history"]   = _mem_cache.get(KEY_HISTORY,   [])
             state["overrides"] = _mem_cache.get(KEY_OVERRIDES, {})
-            state["holidays"]  = _mem_cache.get(KEY_HOLIDAYS,  {})
+            # NÃO reler state["holidays"] de _mem_cache.get(KEY_HOLIDAYS) —
+            # bug real corrigido: KEY_HOLIDAYS ("onion_holidays") nunca é
+            # gravado em lugar nenhum do código atual (a importação de CSV
+            # corporativa usa uma chave diferente, "onion_holidays_corp"),
+            # então essa linha sempre lia um cache vazio e ZERAVA os
+            # feriados nacionais (buscados/embutidos no boot do app) a
+            # cada troca de aba ou ação — só os feriados corporativos
+            # (armazenados em state["holidays_corp"], não afetado por essa
+            # linha) continuavam aparecendo. state["holidays"] já é
+            # montado corretamente uma vez no boot (main()) e não precisa
+            # ser "atualizado" a partir de um cache que ninguém escreve.
 
             builders = [build_calendar_tab, build_holerite_tab,
                         build_history_tab,  build_holidays_tab,

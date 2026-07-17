@@ -29,6 +29,8 @@ Calcula automaticamente salário base, hora extra, adicional noturno e trabalho 
 - **Modo de Arredondamento configurável** — "Sempre pra Cima" (padrão) ou "Regra do 0,5" (clássica), aplicado à taxa por hora de base, extra, noturno e feriado
 - **Adicional de Líder no arredondamento** — para empresas que separam jikyuu e adicional fixo mensal em duas parcelas arredondadas individualmente no cálculo de hora extra/noturno/domingo, reaproveitando o campo de Adicional Fixo Mensal já existente. Escondido atrás de um switch desligado por padrão — não polui a tela de quem não precisa
 - **Abono Mensal separado** — soma automaticamente no bruto todo mês, igual ao Adicional Fixo Mensal, mas nunca entra no cálculo de arredondamento de extra/noturno/domingo
+- **Mudança de 時給 sem afetar meses passados** — registre no Histórico o mês em que um aumento de salário começou; a previsão de meses anteriores continua usando o 時給 antigo automaticamente
+- **Desconto real substitui a previsão** — mês com holerite real registrado no Histórico usa o valor de desconto conhecido, em vez de estimar via Média Histórica/Fixo
 - **Modal de ponto completo:**
   - 有休 Yukyu — laranja, 8h fixo sem hora extra/noturno
   - 欠勤 Falta — roxo, ¥0
@@ -61,7 +63,7 @@ python main.py
 python test_main.py
 ```
 
-101 testes cobrindo cálculo de hora extra, ciclos de trabalho (incluindo o deslocamento entre turmas Grupo A/B/C), descontos, feriados (nacionais e corporativos), domingo, falta, yukyu, abono, formatação de horário e arredondamento por categoria — validados contra 5 holerites reais. Recomendado antes de cada deploy.
+119 testes cobrindo cálculo de hora extra, ciclos de trabalho (incluindo o deslocamento entre turmas Grupo A/B/C), descontos, feriados (nacionais e corporativos), domingo, falta, yukyu, abono, formatação de horário e arredondamento por categoria — validados contra 5 holerites reais. Recomendado antes de cada deploy.
 
 ### Deploy GitHub Pages
 
@@ -267,6 +269,6 @@ O app é gratuito, sem fins lucrativos, 100% offline, e fornecido "como está", 
 
 ## 🧪 Qualidade
 
-O motor de cálculo é coberto por 101 testes automatizados (`test_main.py`),
+O motor de cálculo é coberto por 119 testes automatizados (`test_main.py`),
 incluindo validação direta contra 5 holerites reais de dois contratos
 diferentes (2021-2022 e 2026).

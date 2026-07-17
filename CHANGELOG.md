@@ -1,5 +1,61 @@
 # Changelog — Onion Payroll
 
+## [2.52.0] — 2026-07-16 — MUDANÇA DE 時給/DESCONTO REAL NO HISTÓRICO + FIX DE PRIORIDADE DOMINGO/FERIADO
+
+### 🔴 Corrigido — CRÍTICO: prioridade domingo vs feriado corporativo estava invertida
+
+A v2.51.0 corrigiu o bug de domingo+feriado corporativo dando prioridade
+**absoluta** ao domingo — mas isso estava errado na direção oposta.
+Confirmado com caso real: um domingo TAMBÉM marcado como feriado
+corporativo (fábrica fechada) deve continuar **não contando** como
+trabalhado, mesmo estando escalado — feriado sem horário registrado
+sempre vence, mesmo em domingo. Só volta a contar como domingo
+trabalhado se tiver horário registrado (trabalhou mesmo com a fábrica
+fechada) ou se não houver feriado nenhum marcado nesse dia específico.
+Teste automatizado correspondente reescrito para validar a direção
+certa.
+
+### 🟢 Adicionado — Mudança de 時給 (aumento de salário) sem afetar meses passados
+
+Novo campo **"時給 a partir deste mês"** no registro de Histórico
+(opcional). O 時給 configurado em ⚙️ Config valia sempre, inclusive
+retroativamente para meses passados sem registro — um aumento de
+salário mudava a previsão de meses ANTES do aumento também. Agora,
+registrando o mês em que o aumento começou, a previsão de qualquer mês
+sem registro passa a usar automaticamente o 時給 vigente na época (o
+marco mais recente igual ou anterior ao mês sendo visto). Funciona com
+múltiplos aumentos ao longo do tempo. Documentado na aba Ajuda e
+direto abaixo do campo 時給 em Config.
+
+### 🟢 Adicionado — Desconto real substitui a previsão em meses já registrados
+
+Ao registrar um holerite real no Histórico, o mês correspondente na
+aba Holerite deixa de usar a previsão de desconto (Média Histórica ou
+Fixo) e passa a mostrar o valor REAL registrado — já é um dado
+conhecido, não precisa mais estimar. A nota abaixo do valor muda para
+"📋 Registro real". Meses sem registro continuam usando a previsão
+normalmente.
+
+### 🟢 Adicionado — preenchimento automático no campo de mês do Histórico
+
+Campo "Mês 月 (AAAA-MM)" ganha o mesmo preenchimento automático
+(`on_blur`) já usado nos campos de hora/data — aceita `202602`,
+`2026/2`, `2026.02`, `2026-2`, todos convertidos para `2026-02`.
+
+### 🛠️ Refatorado — funções de busca extraídas para o nível do módulo
+
+`jikyuu_vigente_para_mes()` e `desconto_real_para_mes()` eram funções
+locais dentro da tela do Holerite — extraídas para o nível do módulo,
+tornando-as testáveis isoladamente sem precisar montar a UI inteira.
+
+### 🟢 Testes — 17 novos, 119 no total
+
+Cobrindo `jikyuu_vigente_para_mes` (7 testes: sem histórico, sem
+marco, antes/no/entre/depois de marcos, marcos fora de ordem),
+`desconto_real_para_mes` (4 testes) e `normalize_yyyymm` (6 testes).
+
+---
+
 ## [2.51.0] — 2026-07-16 — CRÍTICO: DOMINGO+FERIADO CORPORATIVO, YUKYU TRAVANDO, 延長 EM DOMINGO + RECALIBRAÇÃO COMPLETA DOS TESTES
 
 ### 🔴 Corrigido — CRÍTICO: domingo marcado como feriado corporativo virava dia normal

@@ -56,6 +56,9 @@ generate_alternating_calendar = FUNCS["generate_alternating_calendar"]
 generate_alternating_monthly_calendar = FUNCS["generate_alternating_monthly_calendar"]
 calcular_yukyu              = FUNCS["calcular_yukyu"]
 normalize_hhmm             = FUNCS["normalize_hhmm"]
+normalize_yyyymm           = FUNCS["normalize_yyyymm"]
+jikyuu_vigente_para_mes    = FUNCS["jikyuu_vigente_para_mes"]
+desconto_real_para_mes     = FUNCS["desconto_real_para_mes"]
 
 JIKYUU = 1500
 ANCHOR = date(2026, 1, 5)
@@ -1146,6 +1149,98 @@ class TestDomingoFeriadoCorporativoIndependentes(unittest.TestCase):
         # Não trava valor exato (depende de vários fatores do cenário
         # base), só confirma que não quebra e o resultado é coerente.
         self.assertIsNotNone(resultado["gross"])
+
+
+class TestJikyuuVigentePorMes(unittest.TestCase):
+    """v2.52 — trava jikyuu_vigente_para_mes(): permite registrar
+    aumentos de 時給 no Histórico sem afetar retroativamente a previsão
+    de meses passados não registrados."""
+
+    def test_sem_historico_usa_default(self):
+        self.assertEqual(jikyuu_vigente_para_mes("2026-05", [], 1500), 1500)
+
+    def test_sem_marco_algum_usa_default(self):
+        hist = [{"month": "2026-01", "deductions": 40000}]  # sem jikyuu_effective
+        self.assertEqual(jikyuu_vigente_para_mes("2026-05", hist, 1500), 1500)
+
+    def test_mes_antes_do_primeiro_marco_usa_default(self):
+        hist = [{"month": "2026-06", "jikyuu_effective": 1650}]
+        self.assertEqual(jikyuu_vigente_para_mes("2026-01", hist, 1500), 1500)
+
+    def test_mes_exatamente_no_marco(self):
+        hist = [{"month": "2026-01", "jikyuu_effective": 1590}]
+        self.assertEqual(jikyuu_vigente_para_mes("2026-01", hist, 1500), 1590)
+
+    def test_mes_entre_dois_marcos_usa_o_anterior(self):
+        hist = [
+            {"month": "2026-01", "jikyuu_effective": 1590},
+            {"month": "2026-06", "jikyuu_effective": 1650},
+        ]
+        self.assertEqual(jikyuu_vigente_para_mes("2026-03", hist, 1500), 1590)
+
+    def test_mes_depois_do_ultimo_marco_usa_o_mais_recente(self):
+        hist = [
+            {"month": "2026-01", "jikyuu_effective": 1590},
+            {"month": "2026-06", "jikyuu_effective": 1650},
+        ]
+        self.assertEqual(jikyuu_vigente_para_mes("2026-12", hist, 1500), 1650)
+
+    def test_marcos_fora_de_ordem_no_historico_ainda_funciona(self):
+        # Histórico normalmente vem ordenado reverse, mas a função não
+        # deve depender disso
+        hist = [
+            {"month": "2026-06", "jikyuu_effective": 1650},
+            {"month": "2026-01", "jikyuu_effective": 1590},
+        ]
+        self.assertEqual(jikyuu_vigente_para_mes("2026-03", hist, 1500), 1590)
+        self.assertEqual(jikyuu_vigente_para_mes("2026-12", hist, 1500), 1650)
+
+
+class TestDescontoRealParaMes(unittest.TestCase):
+    """v2.52 — trava desconto_real_para_mes(): mês com holerite real
+    registrado no Histórico usa o valor de desconto REAL, não a
+    previsão (Média Histórica/Fixo)."""
+
+    def test_sem_registro_retorna_none(self):
+        self.assertIsNone(desconto_real_para_mes("2026-05", []))
+
+    def test_mes_sem_registro_correspondente_retorna_none(self):
+        hist = [{"month": "2026-01", "deductions": 40000}]
+        self.assertIsNone(desconto_real_para_mes("2026-05", hist))
+
+    def test_mes_com_registro_retorna_valor_real(self):
+        hist = [{"month": "2026-02", "deductions": 44283}]
+        self.assertEqual(desconto_real_para_mes("2026-02", hist), 44283)
+
+    def test_registro_com_desconto_zero_retorna_none(self):
+        # Desconto 0 é tratado como "não preenchido ainda", não como um
+        # valor real válido de ¥0 — evita mostrar "Registro real: ¥0"
+        # em holerites que só têm outros campos preenchidos.
+        hist = [{"month": "2026-02", "deductions": 0}]
+        self.assertIsNone(desconto_real_para_mes("2026-02", hist))
+
+
+class TestNormalizeYyyymm(unittest.TestCase):
+    """v2.52 — trava o preenchimento automático do campo de mês na aba
+    Histórico, mesmo padrão dos campos de hora/data já existentes."""
+
+    def test_seis_digitos_sem_separador(self):
+        self.assertEqual(normalize_yyyymm("202602"), "2026-02")
+
+    def test_com_barra(self):
+        self.assertEqual(normalize_yyyymm("2026/2"), "2026-02")
+
+    def test_com_ponto(self):
+        self.assertEqual(normalize_yyyymm("2026.02"), "2026-02")
+
+    def test_ja_no_formato_correto(self):
+        self.assertEqual(normalize_yyyymm("2026-02"), "2026-02")
+
+    def test_mes_invalido_devolve_como_veio(self):
+        self.assertEqual(normalize_yyyymm("2026-13"), "2026-13")
+
+    def test_vazio_retorna_vazio(self):
+        self.assertEqual(normalize_yyyymm(""), "")
 
 
 class TestYukyuNaoTravaComKeyError(unittest.TestCase):
