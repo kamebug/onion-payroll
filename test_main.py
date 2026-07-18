@@ -377,14 +377,17 @@ class TestCiclosNoForecast(unittest.TestCase):
 
     def test_feriado_corporativo_sem_registro_nao_conta(self):
         # Dia marcado como feriado corp, mas SEM horário registrado
-        # (o funcionário não foi trabalhar) — não deve contar nada
+        # (o funcionário não foi trabalhar) — não deve contar nada.
+        # v2.54: corp_holiday_days precisa ser passado explicitamente —
+        # holiday_days sozinho agora só representa feriado NACIONAL
+        # (sem efeito no cálculo), is_corp_hol vem de corp_holiday_days.
         com_feriado_sem_trabalho = base_forecast(
-            holiday_days=[10], day_overrides={},
+            holiday_days=[10], corp_holiday_days=[10], day_overrides={},
         )
         sem_feriado = base_forecast(holiday_days=[], day_overrides={})
         # Como dia 10 normalmente seria "work" no ciclo 4x2, marcá-lo
-        # como feriado SEM horário registrado faz o app pular esse dia
-        # (não conta nem como trabalho normal nem como feriado)
+        # como feriado CORPORATIVO sem horário registrado faz o app
+        # pular esse dia (não conta nem como trabalho normal nem feriado)
         self.assertLessEqual(
             com_feriado_sem_trabalho["gross"], sem_feriado["gross"]
         )
@@ -1093,6 +1096,7 @@ class TestDomingoFeriadoCorporativoIndependentes(unittest.TestCase):
     def test_domingo_com_feriado_corporativo_sem_registro_nao_conta(self):
         # Caso real: dia 3 de maio/2026, domingo + feriado corporativo,
         # SEM horário registrado — fábrica fechada, não deveria contar.
+        # v2.54: corp_holiday_days precisa ser passado explicitamente.
         resultado_sem_feriado = base_forecast(
             year=2026, month=5, cycle_type="4x2",
             anchor_date=date(2026, 5, 1),
@@ -1101,7 +1105,7 @@ class TestDomingoFeriadoCorporativoIndependentes(unittest.TestCase):
         resultado_com_feriado_no_domingo = base_forecast(
             year=2026, month=5, cycle_type="4x2",
             anchor_date=date(2026, 5, 1),
-            holiday_days=[3], day_overrides={},   # 03/05/2026 é domingo
+            holiday_days=[3], corp_holiday_days=[3], day_overrides={},   # 03/05/2026 é domingo
         )
         # Marcar feriado corporativo no domingo deve REDUZIR days_legal
         # em 1 (o dia deixa de contar), não manter igual.
@@ -1126,7 +1130,7 @@ class TestDomingoFeriadoCorporativoIndependentes(unittest.TestCase):
         resultado_com_registro = base_forecast(
             year=2026, month=5, cycle_type="4x2",
             anchor_date=date(2026, 5, 1),
-            holiday_days=[3],
+            holiday_days=[3], corp_holiday_days=[3],
             day_overrides={"3": {"status": "normal", "start": "20:35",
                                   "end": "08:35", "break_min": 65}},
         )
@@ -1149,6 +1153,98 @@ class TestDomingoFeriadoCorporativoIndependentes(unittest.TestCase):
         # Não trava valor exato (depende de vários fatores do cenário
         # base), só confirma que não quebra e o resultado é coerente.
         self.assertIsNotNone(resultado["gross"])
+
+    def test_status_saida_antecipada_em_feriado_corporativo_conta_como_trabalhado(self):
+        # v2.54 — bug real: dia com status "early" (Saída Antecipada)
+        # mas sem os campos de horário explicitamente preenchidos (só
+        # o status selecionado) caía em "feriado corporativo sem
+        # registro → não trabalhou", mesmo o usuário tendo marcado o
+        # dia deliberadamente. status="early" sozinho já deve contar
+        # como "trabalhou apesar do feriado corporativo", igual
+        # has_time. Precisa ser feriado CORPORATIVO especificamente —
+        # feriado nacional sozinho não tem esse problema (não afeta a
+        # decisão de jeito nenhum, ver TestFeriadoNacionalNaoAfetaCalculo).
+        resultado_sem_feriado = base_forecast(
+            year=2026, month=4, cycle_type="4x2",
+            anchor_date=date(2026, 4, 1),
+            holiday_days=[],
+            day_overrides={"29": {"status": "early"}},
+        )
+        resultado_com_feriado = base_forecast(
+            year=2026, month=4, cycle_type="4x2",
+            anchor_date=date(2026, 4, 1),
+            holiday_days=[29], corp_holiday_days=[29],
+            day_overrides={"29": {"status": "early"}},
+        )
+        # O bruto do mês não deve cair por causa do feriado, já que o
+        # dia foi marcado como trabalhado (status="early") de qualquer
+        # forma — só a categoria/taxa pode mudar (vira feriado 1,35x
+        # em vez de dia normal), não o fato de ter sido contado.
+        self.assertGreater(resultado_com_feriado["gross"], 0)
+        self.assertGreaterEqual(
+            resultado_com_feriado["days_holiday"] + resultado_com_feriado["days_legal"],
+            1,
+        )
+
+
+class TestFeriadoNacionalNaoAfetaCalculo(unittest.TestCase):
+    """v2.54 — trava o bug crítico onde feriado NACIONAL sozinho (sem
+    feriado corporativo marcado em cima) estava sendo tratado como
+    "fábrica fechada por padrão", igual feriado corporativo — um dia
+    normal de trabalho escalado, sem nenhuma marcação manual, que
+    calhava de também ser feriado nacional, virava "não trabalhou"
+    (¥0), inflando pra baixo o Salário Base do mês inteiro. Confirmado
+    com caso real: 29/04/2026 é 昭和の日 (feriado nacional) e dia normal
+    de trabalho na escala do usuário — sua fábrica funciona normal em
+    feriado nacional, só fecha quando o feriado CORPORATIVO é
+    explicitamente marcado. Feriado nacional agora é só informativo
+    (bandeira + borda no calendário), sem nenhum efeito no cálculo."""
+
+    def test_feriado_nacional_sozinho_nao_muda_dias_trabalhados(self):
+        resultado_sem_feriado = base_forecast(
+            year=2026, month=4, cycle_type="4x2",
+            anchor_date=date(2026, 4, 1),
+            holiday_days=[], day_overrides={},
+        )
+        resultado_com_feriado_nacional = base_forecast(
+            year=2026, month=4, cycle_type="4x2",
+            anchor_date=date(2026, 4, 1),
+            holiday_days=[29], day_overrides={},   # 29/04 é feriado nacional
+        )
+        # Sem corp_holiday_days, feriado nacional sozinho não deve
+        # mudar NADA no cálculo — nem dias, nem bruto.
+        self.assertEqual(
+            resultado_com_feriado_nacional["days_normal"],
+            resultado_sem_feriado["days_normal"],
+        )
+        self.assertEqual(
+            resultado_com_feriado_nacional["gross"],
+            resultado_sem_feriado["gross"],
+        )
+
+    def test_feriado_nacional_em_domingo_ainda_conta_como_domingo(self):
+        # Feriado nacional que TAMBÉM cai num domingo escalado pra
+        # trabalho continua contando como domingo trabalhado
+        # normalmente (regra do is_sunday, independente do nacional).
+        resultado_sem_feriado = base_forecast(
+            year=2026, month=5, cycle_type="4x2",
+            anchor_date=date(2026, 5, 1),
+            holiday_days=[], day_overrides={},
+        )
+        resultado_com_feriado_nacional = base_forecast(
+            year=2026, month=5, cycle_type="4x2",
+            anchor_date=date(2026, 5, 1),
+            holiday_days=[3], day_overrides={},   # 03/05 é domingo E feriado nacional
+        )
+        if resultado_sem_feriado["days_legal"] > 0:
+            self.assertEqual(
+                resultado_com_feriado_nacional["days_legal"],
+                resultado_sem_feriado["days_legal"],
+            )
+            self.assertEqual(
+                resultado_com_feriado_nacional["gross"],
+                resultado_sem_feriado["gross"],
+            )
 
 
 class TestJikyuuVigentePorMes(unittest.TestCase):

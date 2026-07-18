@@ -990,6 +990,7 @@ def compute_monthly_forecast(
     deduction_mode: str, fixed_deduction: int, history_avg_deduction: float, block: int,
     shift_type_cfg: str = "", cfg_start: str = "", cfg_end: str = "",
     cfg_break: int = 65, cfg_ot: str = "",
+    corp_holiday_days: list = None,
     cycle_type: str = "4x2",
     alt_start_day: str = "08:35", alt_end_day: str = "20:35",
     alt_start_night: str = "20:35", alt_end_night: str = "08:35",
@@ -1057,6 +1058,12 @@ def compute_monthly_forecast(
         day_abono = int(ov.get("abono", 0) or 0)   # abono/vale do dia
         day_extra_min = int(ov.get("extra_minutes", 0) or 0)  # 延長 do dia
         is_holiday = day_num in holiday_days
+        # Feriado CORPORATIVO especificamente — separado do is_holiday
+        # mesclado (nacional+corporativo) acima. Só feriado corporativo
+        # significa "fábrica fechada por decisão da empresa"; feriado
+        # NACIONAL sozinho não implica isso — muitas fábricas funcionam
+        # normal em feriado nacional, seguindo a escala normalmente.
+        is_corp_hol = day_num in (corp_holiday_days or [])
 
         try:
             weekday = date(year, month, day_num).weekday()
@@ -1112,40 +1119,51 @@ def compute_monthly_forecast(
 
         else:
             # Dia PREVISTO pra trabalho pela escala (cycle_status=="work").
-            # ORDEM CORRIGIDA (v2.52): feriado (nacional/corporativo) SEM
-            # horário registrado vence sobre domingo — fábrica fechada é
-            # fábrica fechada, mesmo caindo num domingo. Só vira "domingo
-            # trabalhado" se tiver horário registrado (trabalhou mesmo
-            # com a fábrica fechada) ou se não houver feriado nenhum
-            # marcado nesse dia. Confirmado com caso real: dia 3 de
-            # maio/2026 era domingo E feriado corporativo — a fábrica
-            # estava fechada, ninguém trabalhou, e o dia devia ficar
-            # como "não trabalhou" (¥0), não como domingo pago. A versão
-            # anterior desta correção invertia essa prioridade (domingo
-            # sempre vencia), o que resolvia o bug original mas quebrava
-            # esse caso — feriado corporativo passava a não ter nenhum
-            # efeito nos domingos, mesmo quando a fábrica realmente
-            # fechava.
-            if is_holiday and has_time:
-                shift_type = "holiday"   # trabalhou no feriado/domingo → +35%
-            elif is_holiday and yukyu_hol:
-                shift_type = "yukyu"     # yukyu em feriado
-            elif is_holiday:
-                continue   # feriado (nacional/corporativo) sem registro → fábrica fechada, não trabalhou
+            # v2.54: usa is_corp_hol especificamente, NÃO o is_holiday
+            # mesclado (nacional+corporativo) — bug real corrigido:
+            # feriado NACIONAL sozinho (sem feriado corporativo marcado
+            # em cima) estava sendo tratado como "fábrica fechada por
+            # padrão", igual feriado corporativo. Confirmado com caso
+            # real: 29/04/2026 é 昭和の日 (feriado nacional) e dia normal
+            # de trabalho na escala do usuário — a fábrica dele funciona
+            # normal em feriado nacional, só fecha quando o feriado
+            # CORPORATIVO é explicitamente marcado. Feriado nacional
+            # sozinho agora é só informativo (bandeira + borda no
+            # calendário), sem nenhum efeito no cálculo — segue a
+            # escala normalmente, a menos que também seja domingo ou
+            # tenha outra marcação (falta, yukyu, feriado corporativo).
+            #
+            # Feriado CORPORATIVO sem horário registrado continua vencendo
+            # sobre domingo — fábrica fechada é fábrica fechada, mesmo
+            # caindo num domingo. Só vira "domingo trabalhado" se tiver
+            # horário registrado (trabalhou mesmo com a fábrica fechada)
+            # ou status "early" (Saída Antecipada, marcado deliberadamente
+            # mesmo sem preencher os campos de horário).
+            if is_corp_hol and (has_time or status == "early"):
+                shift_type = "holiday"   # trabalhou apesar do feriado corporativo → +35%
+            elif is_corp_hol and yukyu_hol:
+                shift_type = "yukyu"     # yukyu em feriado corporativo
+            elif is_corp_hol:
+                continue   # feriado corporativo sem registro → fábrica fechada, não trabalhou
             elif is_sunday:
-                shift_type = "holiday"   # domingo normal trabalhado, sem feriado marcado
+                shift_type = "holiday"   # domingo trabalhado — sempre conta, feriado nacional ou não
             elif status == "early":
                 shift_type = default_shift   # horário real descontado automaticamente
             else:
-                shift_type = default_shift   # dia normal de trabalho
+                shift_type = default_shift   # dia normal de trabalho (inclusive feriado nacional sozinho)
 
 
         # Horários: override manual > configuração do usuário > padrão
         eff_start = start_str if start_str else _start
         eff_end   = end_str   if end_str   else _end
         eff_break = break_min if break_min != 65 else _break
-        # Domingo (法定休日) também conta como feriado para o cálculo +35%
-        is_pay_holiday = is_holiday or is_sunday
+        # Taxa premium (1,35x) segue o shift_type JÁ DECIDIDO acima, não
+        # um recálculo separado com is_holiday mesclado (nacional+
+        # corporativo) — bug real corrigido: usar is_holiday aqui
+        # forçava a taxa de feriado mesmo em dias que a decisão de
+        # shift_type já tinha corretamente tratado como "dia normal"
+        # (feriado nacional sozinho, sem fábrica fechada).
+        is_pay_holiday = (shift_type == "holiday")
         pay = calculate_shift_pay(
             jikyuu=jikyuu, shift_type=shift_type,
             start_str=eff_start, end_str=eff_end,
@@ -1584,7 +1602,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607181325"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607111713"   # atualizado automaticamente pelo deploy.ps1
 APP_VERSION    = "2.53.0"       # sincronizar manualmente com pyproject.toml/CHANGELOG.md a cada bump de versão
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
@@ -1859,8 +1877,13 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
             _addon_hrs = float(state["settings"].get("leader_addon_hours") or 168)
             _night_int_min = int(state["settings"].get("night_interval_minutes") or 0)
             is_hol_day = day_num in month_holidays
+            # v2.54: usa feriado CORPORATIVO especificamente pra decidir
+            # se o dia é "sem trabalho por padrão" — feriado NACIONAL
+            # sozinho não implica fábrica fechada (mesma correção do
+            # motor de cálculo mensal, aqui só pro preview do modal).
+            is_corp_hol_day = day_num in month_hol_corp
             cycle_st   = cycle.get(day_num, "off")
-            is_off_day = (cycle_st == "off") or is_hol_day
+            is_off_day = (cycle_st == "off") or is_corp_hol_day
 
             if st == "absent":
                 preview_text.value = "欠勤: ¥0 — falta não remunerada"
@@ -2451,6 +2474,7 @@ def build_holerite_tab(page: ft.Page, state: dict, refresh_all):
             jikyuu=_jikyuu_efetivo,
             anchor_date=anchor, group=settings.get("group", "B"),
             holiday_days=_all_holidays_month,
+            corp_holiday_days=_corp_hols,
             day_overrides=overrides.get(month_key, {}),
             odd_month_bonus=int(settings.get("odd_bonus") or 50000),
             extra_bonus=int(settings.get("extra_bonus") or 0),
