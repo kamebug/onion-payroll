@@ -362,9 +362,10 @@ class TestCiclosNoForecast(unittest.TestCase):
 
     def test_feriado_corporativo_trabalhado_gera_adicional_35(self):
         # Simula: dia 10 marcado como feriado corporativo na aba 🏭,
-        # e o usuário registrou que trabalhou nesse dia
+        # e o usuário registrou que trabalhou nesse dia.
+        # v2.54: corp_holiday_days precisa ser passado explicitamente.
         resultado = base_forecast(
-            holiday_days=[10],  # feriado corp já mesclado pela UI
+            holiday_days=[10], corp_holiday_days=[10],
             day_overrides={
                 "10": {"status": "normal", "start": "20:35",
                        "end": "08:35", "break_min": 65}
@@ -1245,6 +1246,27 @@ class TestFeriadoNacionalNaoAfetaCalculo(unittest.TestCase):
                 resultado_com_feriado_nacional["gross"],
                 resultado_sem_feriado["gross"],
             )
+
+    def test_feriado_nacional_nao_vai_pra_categoria_feriado_na_agregacao(self):
+        # v2.54 (2ª rodada) — bug real: a DECISÃO de shift_type já
+        # tratava feriado nacional sozinho como dia normal
+        # corretamente, mas um bloco de AGREGAÇÃO separado (que soma
+        # os totais do mês por categoria) ainda usava is_holiday
+        # mesclado (nacional+corporativo) numa condição própria —
+        # fazendo o dia cair em "days_holiday"/"total_holiday" mesmo
+        # com shift_type já corretamente "não é holiday". Terceira vez
+        # que esse padrão de bug aparece nessa mesma área (decisão vs.
+        # agregação divergindo) — corrigido de vez usando shift_type
+        # diretamente na agregação, eliminando a duplicata de lógica.
+        resultado = base_forecast(
+            year=2026, month=4, cycle_type="4x2",
+            anchor_date=date(2026, 4, 1),
+            holiday_days=[29], day_overrides={},   # 29/04 é feriado nacional, dia normal de trabalho
+        )
+        self.assertEqual(resultado["days_holiday"], 0,
+            "Feriado nacional sozinho não deve contar como 'dia de feriado trabalhado'")
+        self.assertGreater(resultado["days_normal"], 0,
+            "Feriado nacional sozinho deve contar como dia normal de trabalho")
 
 
 class TestJikyuuVigentePorMes(unittest.TestCase):

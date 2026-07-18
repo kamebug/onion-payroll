@@ -1200,7 +1200,16 @@ def compute_monthly_forecast(
             total_legal_min += pay["net_minutes"]
             total_night_min += pay["night_minutes"]  # mesmo em domingo
             days_legal  += 1
-        elif status == "holiday" or is_holiday:
+        elif shift_type == "holiday":
+            # v2.54: usa shift_type diretamente (já decidido acima),
+            # não status=="holiday" or is_holiday recalculado à parte —
+            # bug real corrigido: is_holiday mesclado (nacional+
+            # corporativo) fazia QUALQUER feriado nacional cair nessa
+            # categoria aqui, mesmo quando a decisão de shift_type já
+            # tinha corretamente tratado o dia como "normal" (feriado
+            # nacional sozinho, sem fábrica fechada). Usar shift_type
+            # direto elimina de vez o risco dessas duas lógicas
+            # divergirem de novo no futuro.
             total_holiday_min += pay["net_minutes"]
             total_night_min += pay["night_minutes"]
             days_holiday  += 1
@@ -1602,7 +1611,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607181641"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607111713"   # atualizado automaticamente pelo deploy.ps1
 APP_VERSION    = "2.53.0"       # sincronizar manualmente com pyproject.toml/CHANGELOG.md a cada bump de versão
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
