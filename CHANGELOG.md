@@ -1,5 +1,68 @@
 # Changelog — Onion Payroll
 
+## [2.53.0] — 2026-07-17 — CRÍTICO: APP NÃO ABRIA (NameError) + BUSCA AUTOMÁTICA DE FERIADOS DA EMPRESA
+
+### 🔴 Corrigido — CRÍTICO: app travava no boot com NameError
+
+`fetch_updated_holidays()` parou de existir como função chamável — numa
+edição anterior (ao adicionar `fetch_feriados_empresa`), a linha
+`async def fetch_updated_holidays()...` foi perdida. O corpo da função
+ficou com a mesma indentação da função anterior, sem nenhum erro de
+sintaxe detectável (`py_compile` passava normalmente) — só virou
+código morto, nunca executado, dentro da função vizinha. Resultado:
+`NameError: name 'fetch_updated_holidays' is not defined` no boot,
+app inteiro travando com tela de fundo, sem carregar nada. Corrigido,
+restaurando a função como definição própria e independente.
+
+### 🟢 Adicionado — busca automática de feriados corporativos
+
+Novo botão **"🔄 Buscar Feriados da Empresa"** na aba 🏭 Feriados —
+busca `feriados-empresa.csv` (publicado manualmente pelo mantenedor
+na raiz do repositório) em tempo de execução via `pyfetch()`, mesmo
+padrão dos feriados nacionais. Mensagem de status mostra quantos dias
+novos foram importados, ou avisa se não conseguiu buscar (offline,
+arquivo ainda não publicado). Dias vindos do CSV continuam editáveis
+normalmente — tocar num dia desmarca, e uma busca futura não
+sobrescreve edição manual já feita (só adiciona dias novos).
+
+### 🔴 Corrigido — texto do feriado no modal quase invisível
+
+Romaji e nome em português do feriado nacional usavam cores claras
+(`TEXT_PRIMARY`/`TEXT_SECONDARY`, feitas pro tema escuro do resto do
+app) sobre o fundo claro (rosa) da caixa de feriado — texto quase
+ilegível. Trocado por tons escuros avermelhados, com contraste
+correto contra esse fundo específico.
+
+### 🔴 Corrigido — feriado nacional confundindo com outras cores
+
+Feriado nacional sozinho estava preenchendo a célula inteira de
+vermelho, confundindo com falta/folga/yukyu. Ajustado em duas rodadas
+até o resultado final: fundo da célula sempre segue a categoria real
+do dia (trabalho/folga/falta/yukyu/feriado corporativo), com borda
+vermelha SEMPRE presente quando for feriado nacional (somando, nunca
+substituindo). Bandeira 🎌 empilha embaixo de outro indicador (🏭,
+欠, 有, ↓, ●) quando os dois aparecem no mesmo dia, em vez de ficar
+apertada ao lado.
+
+### 🟢 Corrigido — campo de Desconto Fixo ficava visível sem necessidade
+
+Campo "Valor de Desconto Fixo" continuava aparecendo preenchido
+mesmo com "Média Histórica" selecionado, dando a impressão errada de
+estar em uso (o cálculo já ignorava certo, só a tela confundia).
+Agora esconde/mostra conforme o modo ativo. Removido também um
+`print` de depuração esquecido no código.
+
+### 🟢 Padronizado — 時給 (Jikyuu) com kanji + romaji + português
+
+Campos e textos relacionados a 時給 em ⚙️ Config, 📋 Histórico e
+❓ Ajuda agora seguem "時給 Jikyuu — Valor por Hora" consistentemente.
+Levantamento completo dos demais termos japoneses do app registrado
+em `PROBLEMAS_RECORRENTES.md` — padrão definido pra aplicações
+futuras é kanji + português (sem romaji), com exceção do 時給 que já
+foi implementado com romaji e fica como está.
+
+---
+
 ## [2.52.0] — 2026-07-16 — MUDANÇA DE 時給/DESCONTO REAL NO HISTÓRICO + FIX DE PRIORIDADE DOMINGO/FERIADO
 
 ### 🔴 Corrigido — CRÍTICO: prioridade domingo vs feriado corporativo estava invertida

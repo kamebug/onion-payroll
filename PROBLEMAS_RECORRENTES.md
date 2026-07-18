@@ -340,6 +340,29 @@ carregamento, seguindo exatamente o que está declarado em
     os DOIS casos práticos (com e sem ação manual do usuário) antes de
     declarar a correção completa — não só o caso que gerou o relatório
     original
+29. **`str_replace` pode engolir uma função inteira sem gerar erro de
+    sintaxe.** Ao inserir `fetch_feriados_empresa` logo antes de
+    `fetch_updated_holidays`, a linha `async def fetch_updated_
+    holidays()...` foi perdida — o corpo dela ficou com a mesma
+    indentação da função anterior, viraram código morto dentro dela,
+    sem nenhum erro detectável no `py_compile` (sintaticamente 100%
+    válido, só semanticamente quebrado). Só apareceu como `NameError`
+    no boot do app de verdade. **Lição prática:** depois de qualquer
+    edição perto de uma definição de função (`async def`/`def`),
+    sempre `grep -n "^def nome_da_funcao\|^async def nome_da_funcao"`
+    pra confirmar que a linha de definição ainda existe como tal —
+    `py_compile` sozinho não garante que uma função continua sendo
+    uma função
+30. **Cor de texto "global" do app pode ficar ilegível em um fundo
+    "local" diferente.** O nome do feriado no modal usava `TEXT_
+    PRIMARY`/`TEXT_SECONDARY` (cores claras, calibradas pro tema
+    escuro predominante do app) dentro de uma caixa com fundo CLARO
+    (rosa) — texto quase invisível por baixo contraste, mas sem
+    nenhum erro técnico, só um problema visual que só aparece
+    olhando a tela de verdade. Sempre que um elemento tiver um fundo
+    diferente do padrão do app (claro em vez de escuro, ou vice-
+    versa), definir cores de texto ESPECÍFICAS pra esse fundo, nunca
+    reaproveitar as constantes globais sem verificar o contraste
 
 ---
 

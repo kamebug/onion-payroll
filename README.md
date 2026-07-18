@@ -19,7 +19,7 @@ Calcula automaticamente salário base, hora extra, adicional noturno e trabalho 
   - 🔁 **Alternado Mensal** — 1 mês diurno + 1 mês noturno, com padrão de folga configurável (5×2 fim de semana, ou 4×2 com Grupo A/B/C)
 - **Turno configurável** — defina entrada, saída, intervalo e início de hora extra
 - **Feriados japoneses se atualizam sozinhos** — buscados automaticamente uma vez por ano (GitHub Action + fonte oficial do governo), com reserva embutida se estiver offline. Aparecem com moldura vermelha no calendário e nome completo (japonês/romaji/português) ao tocar no dia
-- **Feriados corporativos** afetam o cálculo, não só a cor do calendário
+- **Feriados corporativos** afetam o cálculo, não só a cor do calendário — busca automática (`🔄 Buscar Feriados da Empresa`) se o mantenedor publicar um `feriados-empresa.csv`, ou marque manualmente tocando nos dias
 - **Cálculo conforme a lei japonesa:**
   - 残業手当 Hora Extra → +25%
   - 深夜手当 Adicional Noturno → +25% (22:00–05:00)

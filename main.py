@@ -1584,7 +1584,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607181253"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607111713"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -4677,7 +4677,7 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
             _item("1️⃣", "Configure seu perfil",
                   "Abra ⚙️ Config. → insira seu 時給 Jikyuu (Valor por Hora), escolha o Tipo de Ciclo (4×2, 5×2 ou Alternado) e a Data Início."),
             _item("2️⃣", "Importe os feriados",
-                  "Feriados nacionais já vêm embutidos, e se atualizam sozinhos automaticamente quando o app tem conexão com a internet. Para feriados corporativos, acesse 🏭 Feriados e marque manualmente."),
+                  "Feriados nacionais já vêm embutidos, e se atualizam sozinhos automaticamente quando o app tem conexão com a internet. Para feriados corporativos, acesse 🏭 Feriados — toque em \"🔄 Buscar Feriados da Empresa\" pra importar automaticamente (se o mantenedor tiver publicado uma lista), ou marque manualmente tocando nos dias."),
             _item("3️⃣", "Acompanhe no Calendário",
                   "A aba 📅 gera automaticamente o ciclo escolhido. Toque em qualquer dia para registrar horários, faltas ou férias."),
             _item("4️⃣", "Consulte o Holerite",
@@ -4886,7 +4886,7 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
 
             # ── CSV de feriados ──────────────────────────────────────
             _title("📄 Formato do CSV de Feriados Corporativos"),
-            _p("Feriados nacionais se atualizam sozinhos automaticamente — esse CSV é só para feriados da sua empresa (recessos, aniversário da fábrica, etc.)."),
+            _p("Feriados nacionais se atualizam sozinhos automaticamente. Esse CSV é só para feriados da sua empresa (recessos, aniversário da fábrica, etc.) — o botão \"🔄 Buscar Feriados da Empresa\" em 🏭 Feriados importa automaticamente, se o mantenedor tiver publicado uma lista. Sem isso, cole o conteúdo manualmente com o formato abaixo."),
             ft.Container(
                 content=ft.Column(controls=[
                     ft.Text("2025-08-13  ← aniversário da fábrica",
