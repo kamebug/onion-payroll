@@ -80,6 +80,11 @@ $headInjection = @"
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
+  <!-- Cor da status bar/barra de endereco: precisa bater com theme_color
+       do assets/manifest.json (#00C2A8), senao o Flet/Flutter usa o azul
+       padrao dele quando o app roda numa aba normal do navegador (nao
+       instalado como PWA) -->
+  <meta name="theme-color" content="#00C2A8">
   <!-- Google Analytics -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-2Z4173R5NS"></script>
   <script>
@@ -219,6 +224,11 @@ $headInjection = @"
   </script>
 "@
 $html = Get-Content "$ROOT\docs\index.html" -Raw
+# Remove qualquer <meta name="theme-color" ...> que o Flet ja tenha
+# gerado sozinho no build -- se sobrar duplicada, o navegador usa a
+# PRIMEIRA que encontrar no <head>, que ficaria antes da nossa (injetada
+# perto do </head>), ignorando o #00C2A8 configurado.
+$html = $html -replace '<meta\s+name="theme-color"[^>]*>\s*', ''
 $html = $html -replace "</head>", "$headInjection`n</head>"
 
 # Tela de carregamento instantanea — injetada logo apos <body>, para
