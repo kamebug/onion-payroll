@@ -1,5 +1,58 @@
 # Changelog — Onion Payroll
 
+## [2.54.0] — 2026-07-18 — CRÍTICO: FERIADO NACIONAL DESCONTAVA DIAS TRABALHADOS
+
+### 🔴 Corrigido — CRÍTICO: feriado nacional tratado como "fábrica fechada"
+
+Confirmado com holerite real de abril/2026: um dia normal de trabalho
+escalado (sem nenhuma marcação manual) que também calhava de ser
+feriado nacional (29/04 é 昭和の日) estava sendo descontado do total
+de dias trabalhados do mês — 19 dias esperados, só 16 contados.
+
+**Causa raiz:** o código tratava feriado NACIONAL e feriado
+CORPORATIVO como a mesma coisa (`is_holiday`, uma variável só,
+mesclando as duas listas). A regra "sem registro manual = não
+trabalhou" foi pensada especificamente pro cenário de feriado
+CORPORATIVO (decisão da empresa de fechar a fábrica) — mas feriado
+nacional sozinho não implica isso. Muitas fábricas (a do usuário,
+inclusive) funcionam normalmente em feriados nacionais, só fecham
+quando o feriado corporativo é explicitamente marcado.
+
+**Corrigido em duas partes, ao longo do dia:**
+1. `compute_monthly_forecast` ganhou um parâmetro separado,
+   `corp_holiday_days`, distinto do `holiday_days` mesclado — a
+   decisão de `shift_type` passou a usar `is_corp_hol`
+   especificamente. Feriado nacional sozinho virou puramente
+   informativo (bandeira 🎌 + borda vermelha no calendário), sem
+   nenhum efeito no cálculo.
+2. **Reaberto e corrigido de novo horas depois:** um bloco de
+   AGREGAÇÃO separado (que soma os totais do mês por categoria) ainda
+   usava o `is_holiday` mesclado numa condição própria
+   (`status == "holiday" or is_holiday`), fazendo o dia cair de volta
+   na categoria "feriado trabalhado" mesmo com a decisão de
+   `shift_type` já corrigida. **Terceira vez que esse padrão exato de
+   bug aparece nessa mesma área** (decisão vs. agregação divergindo)
+   — corrigido de vez usando `shift_type` diretamente na agregação,
+   eliminando a duplicata de lógica que permitia essa divergência.
+
+**Também corrigido:** status "Saída Antecipada" (early) sem os campos
+de horário explicitamente preenchidos agora também conta como
+"trabalhou apesar do feriado corporativo", igual `has_time` — e o
+preview do modal de ponto foi alinhado com a mesma distinção
+nacional/corporativo, pra não mostrar texto incoerente com o que a
+aba Holerite realmente calcula.
+
+### 🟢 Testes — 4 novos, 3 corrigidos, 123 no total
+
+Testes antigos que usavam `holiday_days` sozinho pra representar
+feriado corporativo foram corrigidos pra passar `corp_holiday_days`
+explicitamente. Nova classe `TestFeriadoNacionalNaoAfetaCalculo` trava
+especificamente que feriado nacional sozinho não muda nada no
+cálculo, mesmo caindo num domingo — e um teste dedicado trava o bug
+de agregação da segunda rodada, pra nunca mais divergir da decisão.
+
+---
+
 ## [2.53.0] — 2026-07-17 — CRÍTICO: APP NÃO ABRIA (NameError) + BUSCA AUTOMÁTICA DE FERIADOS DA EMPRESA
 
 ### 🔴 Corrigido — CRÍTICO: app travava no boot com NameError

@@ -363,6 +363,26 @@ carregamento, seguindo exatamente o que está declarado em
     diferente do padrão do app (claro em vez de escuro, ou vice-
     versa), definir cores de texto ESPECÍFICAS pra esse fundo, nunca
     reaproveitar as constantes globais sem verificar o contraste
+31. **O mesmo bug de "decisão vs. agregação divergindo" apareceu TRÊS
+    vezes seguidas na mesma área de código.** Primeiro no bug original
+    de domingo+feriado corporativo (decisão certa, agregação errada).
+    Depois na inversão de prioridade (feriado sem registro deveria
+    vencer, não domingo). Agora de novo, separando feriado nacional
+    de corporativo (decisão corrigida pra usar `is_corp_hol`, mas a
+    agregação continuou usando `is_holiday` mesclado numa condição
+    PRÓPRIA, sem eu ter atualizado junto). Padrão claro: sempre que
+    uma variável de classificação (`is_holiday`, `shift_type`, etc.)
+    tiver mais de um lugar no código decidindo algo com base nela,
+    ESSES LUGARES VÃO DIVERGIR eventualmente — a correção definitiva
+    não é "lembrar de atualizar os dois toda vez", é ELIMINAR A
+    DUPLICATA: fazer a agregação ler o `shift_type` já decidido
+    (fonte única), em vez de recalcular uma condição parecida-mas-
+    diferente a partir das variáveis brutas (`is_holiday`, `status`,
+    etc.). Antes de considerar uma correção de prioridade/decisão
+    completa, `grep` por QUALQUER outro lugar que leia as MESMAS
+    variáveis brutas (não só a variável derivada tipo `shift_type`) e
+    avaliar se deveria estar lendo o resultado já decidido em vez de
+    recalcular
 
 ---
 
