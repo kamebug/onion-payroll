@@ -383,6 +383,30 @@ carregamento, seguindo exatamente o que está declarado em
     variáveis brutas (não só a variável derivada tipo `shift_type`) e
     avaliar se deveria estar lendo o resultado já decidido em vez de
     recalcular
+32. **Switch que salva uma configuração mas nenhum código lê de
+    volta é um "switch fantasma".** "Ativar Bloqueio PIN / Biométrico"
+    existia desde sempre em Config, com `on_change` salvando
+    `pin_enabled` no settings — só que nenhum outro lugar do app
+    JAMAIS verificava esse valor. O switch "funcionava" visualmente
+    (ligava/desligava, persistia entre sessões), mas não tinha
+    nenhuma funcionalidade real por trás — só foi descoberto quando o
+    usuário tentou usar e notou que "não fez nada". Lição: ao herdar
+    ou revisar um campo de configuração já existente, sempre `grep`
+    pelo NOME da chave (`pin_enabled`, nesse caso) em todo o arquivo —
+    se o único resultado for "onde é salvo" e nunca "onde é lido pra
+    decidir alguma coisa", é sinal de uma feature pela metade
+33. **Pesquisar compatibilidade de plataforma ANTES de prometer uma
+    funcionalidade, não depois de começar a implementar.** Ao ser
+    perguntado sobre biometria, pesquisei antes de responder e achei
+    que o pacote de biometria do Flet (`flet_auth`) é pra apps NATIVOS
+    compilados (`flet build apk`/`ipa`) — inútil pro Onion Payroll,
+    que é 100% web (`flet build web`, roda via Pyodide no navegador).
+    Web apps só têm acesso a biometria através da API WebAuthn do
+    próprio navegador, que exigiria JavaScript customizado fora do
+    Flet, com risco real de não funcionar de forma confiável. Evitar
+    prometer/começar a implementar algo assim sem antes confirmar que
+    a arquitetura de deploy do projeto (web vs. nativo) realmente
+    suporta a tecnologia envolvida
 
 ---
 

@@ -9,6 +9,8 @@ import json
 import math
 import calendar
 import asyncio
+import hashlib
+import secrets
 from datetime import date, datetime, timedelta
 from typing import Optional
 
@@ -149,6 +151,17 @@ def desconto_real_para_mes(month_key: str, history: list) -> Optional[int]:
     if registro is not None and registro.get("deductions", 0) > 0:
         return int(registro["deductions"])
     return None
+
+
+def hash_pin(pin: str, salt: str) -> str:
+    """Hash do PIN — nunca guardado em texto puro. O salt (fixo por
+    instalação, gerado uma vez) evita que dois usuários com o mesmo
+    PIN tenham o mesmo hash salvo, dificultando ataques por tabela
+    pré-computada. Não é criptografia de nível bancário (é um app
+    local, sem servidor, sem dado sensível de terceiros) — só o
+    suficiente pra não deixar o PIN em texto puro no armazenamento
+    local do navegador."""
+    return hashlib.sha256(f"{salt}:{pin}".encode("utf-8")).hexdigest()
 
 
 def normalize_yyyymm(s: str) -> str:
@@ -1611,8 +1624,8 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607181817"   # atualizado automaticamente pelo deploy.ps1
-APP_VERSION    = "2.54.0"       # sincronizar manualmente com pyproject.toml/CHANGELOG.md a cada bump de versão
+BUILD_ID       = "2607111713"   # atualizado automaticamente pelo deploy.ps1
+APP_VERSION    = "2.55.0"       # sincronizar manualmente com pyproject.toml/CHANGELOG.md a cada bump de versão
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -4057,12 +4070,221 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
     fixed_deduction_f.visible = (_cur == "fixed")
 
     pin_switch = ft.Switch(
-        label="Ativar Bloqueio PIN / Biométrico",
+        label="Ativar Bloqueio por PIN",
         value=settings.get("pin_enabled", False),
         active_color=ACCENT,
         label_text_style=ft.TextStyle(color=TEXT_SECONDARY),
     )
-    pin_switch.on_change = lambda e: [settings.__setitem__("pin_enabled", e.control.value), save_json(page, KEY_SETTINGS, settings)]
+
+    def _fechar_overlay_pin(ov):
+        if ov in page.overlay:
+            page.overlay.remove(ov)
+        page.update()
+
+    def _abrir_criar_pin(_=None):
+        """Modal de criar PIN novo — passo 1: pede o PIN duas vezes
+        (criar + confirmar); passo 2: escolhe o método de recuperação
+        (código de recuperação, ou resetar tudo se esquecer)."""
+        pin1_f = ft.TextField(
+            label="Digite um PIN de 4 dígitos", password=True,
+            keyboard_type=ft.KeyboardType.NUMBER, max_length=4,
+            bgcolor="#2A2A2A", color="#F0F0F0",
+            border_color="#333333", focused_border_color="#00D2C6",
+            label_style=ft.TextStyle(color="#A0A0A0"),
+        )
+        pin2_f = ft.TextField(
+            label="Confirme o PIN", password=True,
+            keyboard_type=ft.KeyboardType.NUMBER, max_length=4,
+            bgcolor="#2A2A2A", color="#F0F0F0",
+            border_color="#333333", focused_border_color="#00D2C6",
+            label_style=ft.TextStyle(color="#A0A0A0"),
+        )
+        erro_txt = ft.Text("", size=11, color=DANGER)
+        ov_ref = [None]
+        panel_ref = [None]
+        pin_confirmado = [None]   # guarda o PIN validado do passo 1
+
+        def _cancelar(_=None):
+            pin_switch.value = False   # reverte o switch, já que o usuário cancelou
+            pin_switch.update()
+            _fechar_overlay_pin(ov_ref[0])
+
+        def _finalizar(recovery_method: str, recovery_code: str = None):
+            salt = secrets.token_hex(16)
+            settings["pin_salt"] = salt
+            settings["pin_hash"] = hash_pin(pin_confirmado[0], salt)
+            settings["pin_enabled"] = True
+            settings["pin_recovery_method"] = recovery_method   # "code" ou "wipe"
+            if recovery_code:
+                code_salt = secrets.token_hex(16)
+                settings["pin_recovery_salt"] = code_salt
+                settings["pin_recovery_hash"] = hash_pin(recovery_code, code_salt)
+            else:
+                settings.pop("pin_recovery_salt", None)
+                settings.pop("pin_recovery_hash", None)
+            save_json(page, KEY_SETTINGS, settings)
+            _fechar_overlay_pin(ov_ref[0])
+
+        def _escolher_codigo(_=None):
+            codigo = "".join(secrets.choice("0123456789") for _ in range(8))
+            salvei_cb = ft.Checkbox(label="Já salvei o código em lugar seguro", value=False)
+            erro2 = ft.Text("", size=11, color=DANGER)
+
+            def _confirmar_salvou(_=None):
+                if not salvei_cb.value:
+                    erro2.value = "Marque a caixinha confirmando que salvou o código."
+                    erro2.update()
+                    return
+                _finalizar("code", codigo)
+
+            panel_ref[0].content = ft.Column(controls=[
+                ft.Text("📝 Seu Código de Recuperação", size=14, color=TEXT_PRIMARY,
+                        weight=ft.FontWeight.W_700),
+                ft.Text("Guarde esse código em lugar seguro (papel, gerenciador "
+                        "de senha). Ele NÃO será mostrado de novo — se perder "
+                        "o PIN e o código, só resetando tudo.",
+                        size=10, color=TEXT_MUTED),
+                ft.Container(
+                    content=ft.Text(codigo, size=22, color=ACCENT,
+                                     weight=ft.FontWeight.W_800,
+                                     text_align=ft.TextAlign.CENTER),
+                    bgcolor="#1A2E2C", border_radius=8, padding=14,
+                    alignment=ft.Alignment(0, 0),
+                ),
+                salvei_cb, erro2,
+                ft.Row(controls=[
+                    ft.FilledButton("Confirmar", on_click=_confirmar_salvou,
+                                    style=ft.ButtonStyle(bgcolor=ACCENT_DARK)),
+                ], alignment=ft.MainAxisAlignment.END),
+            ], spacing=10, tight=True)
+            panel_ref[0].update()
+
+        def _escolher_resetar(_=None):
+            _finalizar("wipe")
+
+        def _ir_pra_passo2(_=None):
+            p1, p2 = (pin1_f.value or "").strip(), (pin2_f.value or "").strip()
+            if len(p1) != 4 or not p1.isdigit():
+                erro_txt.value = "O PIN precisa ter exatamente 4 números."
+                erro_txt.update()
+                return
+            if p1 != p2:
+                erro_txt.value = "Os dois PINs não são iguais — tenta de novo."
+                erro_txt.update()
+                return
+            pin_confirmado[0] = p1
+            panel_ref[0].content = ft.Column(controls=[
+                ft.Text("🔑 Como recuperar se esquecer o PIN?", size=14,
+                        color=TEXT_PRIMARY, weight=ft.FontWeight.W_700),
+                ft.Text("Como o app não tem servidor, escolha agora como "
+                        "prefere entrar de novo caso esqueça o PIN.",
+                        size=10, color=TEXT_MUTED),
+                ft.FilledButton(
+                    "📝 Código de Recuperação (não perde dados)",
+                    on_click=_escolher_codigo,
+                    style=ft.ButtonStyle(bgcolor=ACCENT_DARK),
+                ),
+                ft.Text("Gera um código pra guardar em outro lugar — "
+                        "digitando ele, você entra sem perder nada.",
+                        size=9, color=TEXT_MUTED),
+                ft.Container(height=4),
+                ft.OutlinedButton(
+                    "🗑️ Resetar Tudo se Esquecer",
+                    on_click=_escolher_resetar,
+                ),
+                ft.Text("Mais simples, mas se esquecer o PIN, a única "
+                        "saída é apagar todos os dados salvos.",
+                        size=9, color=TEXT_MUTED),
+            ], spacing=8, tight=True)
+            panel_ref[0].update()
+
+        panel = ft.Container(
+            content=ft.Column(controls=[
+                ft.Text("🔒 Criar PIN", size=14, color=TEXT_PRIMARY,
+                        weight=ft.FontWeight.W_700),
+                ft.Text("Esse PIN será pedido toda vez que o app abrir.",
+                        size=10, color=TEXT_MUTED),
+                pin1_f, pin2_f, erro_txt,
+                ft.Row(controls=[
+                    ft.TextButton("Cancelar", on_click=_cancelar),
+                    ft.FilledButton("Continuar", on_click=_ir_pra_passo2,
+                                    style=ft.ButtonStyle(bgcolor=ACCENT_DARK)),
+                ], alignment=ft.MainAxisAlignment.END),
+            ], spacing=10, tight=True),
+            bgcolor=BG_CARD, border_radius=12, padding=16,
+            width=320,
+        )
+        panel_ref[0] = panel
+        ov = ft.Container(
+            content=ft.Row([panel], alignment=ft.MainAxisAlignment.CENTER),
+            alignment=ft.Alignment(0, 0),
+            bgcolor="#000000CC", expand=True,
+        )
+        ov_ref[0] = ov
+        page.overlay.append(ov)
+        page.update()
+
+    def _abrir_confirmar_desativar(_=None):
+        """Pede o PIN atual antes de desativar o bloqueio — evita que
+        qualquer pessoa com acesso ao app desligue a proteção sem
+        saber o PIN."""
+        pin_f = ft.TextField(
+            label="Digite o PIN atual", password=True,
+            keyboard_type=ft.KeyboardType.NUMBER, max_length=4,
+            bgcolor="#2A2A2A", color="#F0F0F0",
+            border_color="#333333", focused_border_color="#00D2C6",
+            label_style=ft.TextStyle(color="#A0A0A0"),
+        )
+        erro_txt = ft.Text("", size=11, color=DANGER)
+        ov_ref = [None]
+
+        def _cancelar(_=None):
+            pin_switch.value = True   # reverte o switch, continua ativado
+            pin_switch.update()
+            _fechar_overlay_pin(ov_ref[0])
+
+        def _confirmar(_=None):
+            digitado = (pin_f.value or "").strip()
+            salt = settings.get("pin_salt", "")
+            if hash_pin(digitado, salt) != settings.get("pin_hash", ""):
+                erro_txt.value = "PIN incorreto."
+                erro_txt.update()
+                return
+            settings["pin_enabled"] = False
+            settings.pop("pin_hash", None)
+            settings.pop("pin_salt", None)
+            save_json(page, KEY_SETTINGS, settings)
+            _fechar_overlay_pin(ov_ref[0])
+
+        panel = ft.Container(
+            content=ft.Column(controls=[
+                ft.Text("🔓 Desativar Bloqueio", size=14, color=TEXT_PRIMARY,
+                        weight=ft.FontWeight.W_700),
+                pin_f, erro_txt,
+                ft.Row(controls=[
+                    ft.TextButton("Cancelar", on_click=_cancelar),
+                    ft.FilledButton("Confirmar", on_click=_confirmar,
+                                    style=ft.ButtonStyle(bgcolor=ACCENT_DARK)),
+                ], alignment=ft.MainAxisAlignment.END),
+            ], spacing=10, tight=True),
+            bgcolor=BG_CARD, border_radius=12, padding=16,
+            width=320,
+        )
+        ov = ft.Container(
+            content=ft.Row([panel], alignment=ft.MainAxisAlignment.CENTER),
+            alignment=ft.Alignment(0, 0),
+            bgcolor="#000000CC", expand=True,
+        )
+        ov_ref[0] = ov
+        page.overlay.append(ov)
+        page.update()
+
+    def _on_pin_switch_change(e):
+        if e.control.value:
+            _abrir_criar_pin()
+        else:
+            _abrir_confirmar_desativar()
+    pin_switch.on_change = _on_pin_switch_change
 
     def _import_csv(_):
         """No PWA, FilePicker não funciona — usar textarea para colar o CSV."""
@@ -4939,6 +5161,16 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
             ),
 
             # ── Privacidade ──────────────────────────────────────────
+            _title("🔒 Bloqueio por PIN"),
+            _item("Ativar Bloqueio por PIN", "Switch em ⚙️ Config → Segurança, desligado por padrão.",
+                  "Pede um PIN de 4 dígitos toda vez que o app abrir. Ao ativar, você cria o PIN (digitado duas vezes pra confirmar) e escolhe como recuperar caso esqueça — não tem servidor nem conta, então não existe recuperação por e-mail."),
+            _item("Método de recuperação", "Escolhido na hora de criar o PIN.",
+                  "\"Código de Recuperação\" gera um código de 8 dígitos mostrado uma única vez — guarde em lugar seguro (papel, gerenciador de senha). Digitando esse código na tela de bloqueio, você entra sem perder nenhum dado. \"Resetar Tudo se Esquecer\" é mais simples de configurar, mas se esquecer o PIN, a única saída é apagar todos os dados salvos e começar do zero."),
+            _item("Esqueci o PIN", "Link na própria tela de bloqueio.",
+                  "Depois de 5 tentativas incorretas, o campo trava e só resta usar esse link. Se você configurou código de recuperação, digite ele ali — e mesmo esquecendo o código também, o botão \"Resetar Tudo\" continua disponível como última saída, sem precisar tentar (e falhar) o código primeiro."),
+            _item("Desativar o Bloqueio", "Mesmo switch em ⚙️ Config.",
+                  "Pede o PIN atual antes de desligar — evita que qualquer pessoa com acesso ao app desative a proteção sem saber o PIN."),
+
             _title("🔒 Privacidade e Dados"),
             _p("✅ 100% offline — nenhum dado sai do seu dispositivo."),
             _p("✅ Tudo salvo localmente via localStorage do navegador."),
@@ -5270,12 +5502,187 @@ async def main(page: ft.Page):
         page.add(main_layout)
         refresh_all()
 
+    def _iniciar_app_com_pin():
+        """Verifica se o bloqueio por PIN está ativado antes de mostrar
+        o app — se não estiver, pula direto pra _iniciar_app()."""
+        if not settings.get("pin_enabled"):
+            _iniciar_app()
+            return
+
+        MAX_TENTATIVAS = 5
+        tentativas = [0]
+
+        pin_f = ft.TextField(
+            label="Digite seu PIN", password=True, autofocus=True,
+            keyboard_type=ft.KeyboardType.NUMBER, max_length=4,
+            bgcolor="#2A2A2A", color="#F0F0F0", text_align=ft.TextAlign.CENTER,
+            border_color="#333333", focused_border_color="#00D2C6",
+            label_style=ft.TextStyle(color="#A0A0A0"),
+            width=200,
+        )
+        erro_txt = ft.Text("", size=12, color=DANGER)
+        entrar_btn = ft.FilledButton("Entrar",
+                                      style=ft.ButtonStyle(bgcolor=ACCENT_DARK))
+        esqueci_link = ft.TextButton("Esqueci o PIN", style=ft.ButtonStyle(color=TEXT_MUTED))
+
+        def _bloquear_tentativas():
+            pin_f.disabled = True
+            entrar_btn.disabled = True
+            erro_txt.value = (f"Muitas tentativas incorretas ({MAX_TENTATIVAS}). "
+                               f"Use \"Esqueci o PIN\" abaixo pra continuar.")
+            pin_f.update()
+            entrar_btn.update()
+            erro_txt.update()
+
+        def _tentar(_=None):
+            digitado = (pin_f.value or "").strip()
+            salt = settings.get("pin_salt", "")
+            if hash_pin(digitado, salt) == settings.get("pin_hash", ""):
+                page.clean()
+                _iniciar_app()
+                return
+            tentativas[0] += 1
+            restantes = MAX_TENTATIVAS - tentativas[0]
+            pin_f.value = ""
+            pin_f.update()
+            if restantes <= 0:
+                _bloquear_tentativas()
+            else:
+                erro_txt.value = f"PIN incorreto — {restantes} tentativa(s) restante(s)."
+                erro_txt.update()
+
+        pin_f.on_submit = _tentar
+        entrar_btn.on_click = _tentar
+
+        def _wipe_e_reiniciar():
+            for k in (KEY_SETTINGS, KEY_HISTORY, KEY_OVERRIDES,
+                      KEY_HOLIDAYS, "onion_holidays_corp"):
+                remove_storage(page, k)
+            settings.clear()
+            settings.update(DEFAULT_SETTINGS)
+            _mem_cache[KEY_SETTINGS] = settings
+            page.clean()
+            _iniciar_app()
+
+        def _abrir_esqueci_pin(_=None):
+            metodo = settings.get("pin_recovery_method", "wipe")
+            ov_ref = [None]
+
+            def _fechar_local(ov):
+                if ov in page.overlay:
+                    page.overlay.remove(ov)
+                page.update()
+
+            def _fechar(_=None):
+                _fechar_local(ov_ref[0])
+
+            if metodo == "code":
+                codigo_f = ft.TextField(
+                    label="Digite seu código de recuperação (8 dígitos)",
+                    password=True, keyboard_type=ft.KeyboardType.NUMBER,
+                    max_length=8, bgcolor="#2A2A2A", color="#F0F0F0",
+                    border_color="#333333", focused_border_color="#00D2C6",
+                    label_style=ft.TextStyle(color="#A0A0A0"),
+                )
+                erro2 = ft.Text("", size=11, color=DANGER)
+
+                def _validar_codigo(_=None):
+                    digitado = (codigo_f.value or "").strip()
+                    salt = settings.get("pin_recovery_salt", "")
+                    if hash_pin(digitado, salt) == settings.get("pin_recovery_hash", ""):
+                        _fechar()
+                        page.clean()
+                        _iniciar_app()
+                    else:
+                        erro2.value = "Código incorreto."
+                        erro2.update()
+
+                conteudo = ft.Column(controls=[
+                    ft.Text("🔑 Código de Recuperação", size=14, color=TEXT_PRIMARY,
+                            weight=ft.FontWeight.W_700),
+                    ft.Text("Digite o código de 8 dígitos que você salvou "
+                            "ao criar o PIN.", size=10, color=TEXT_MUTED),
+                    codigo_f, erro2,
+                    ft.Row(controls=[
+                        ft.TextButton("Cancelar", on_click=_fechar),
+                        ft.FilledButton("Confirmar", on_click=_validar_codigo,
+                                        style=ft.ButtonStyle(bgcolor=ACCENT_DARK)),
+                    ], alignment=ft.MainAxisAlignment.END),
+                    ft.Divider(height=1, color="#333333"),
+                    ft.Text("Perdeu o código também? A única saída é "
+                            "resetar tudo (apaga os dados salvos).",
+                            size=9, color=TEXT_MUTED),
+                    ft.OutlinedButton("🗑️ Resetar Tudo", on_click=lambda _: _confirmar_wipe()),
+                ], spacing=10, tight=True)
+            else:
+                conteudo = ft.Column(controls=[], spacing=10, tight=True)
+
+            def _confirmar_wipe(_=None):
+                aviso_f = ft.Text(
+                    "⚠️ Isso vai apagar TODOS os dados salvos (calendário, "
+                    "histórico, configurações) — sem volta. Confirma?",
+                    size=11, color=DANGER,
+                )
+                conteudo.controls = [
+                    ft.Text("🗑️ Resetar Tudo", size=14, color=TEXT_PRIMARY,
+                            weight=ft.FontWeight.W_700),
+                    aviso_f,
+                    ft.Row(controls=[
+                        ft.TextButton("Cancelar", on_click=_fechar),
+                        ft.FilledButton("Apagar Tudo e Reiniciar",
+                                        on_click=lambda _: (_fechar(), _wipe_e_reiniciar()),
+                                        style=ft.ButtonStyle(bgcolor=DANGER)),
+                    ], alignment=ft.MainAxisAlignment.END),
+                ]
+                conteudo.update()
+
+            if metodo != "code":
+                _confirmar_wipe()
+
+            panel = ft.Container(
+                content=conteudo, bgcolor=BG_CARD, border_radius=12,
+                padding=16, width=320,
+            )
+            ov = ft.Container(
+                content=ft.Row([panel], alignment=ft.MainAxisAlignment.CENTER),
+                alignment=ft.Alignment(0, 0),
+                bgcolor="#000000CC", expand=True,
+            )
+            ov_ref[0] = ov
+            page.overlay.append(ov)
+            page.update()
+
+        esqueci_link.on_click = _abrir_esqueci_pin
+
+        lock_screen = ft.Container(
+            content=ft.Column(
+                controls=[
+                    ft.Text("🧅", size=48),
+                    ft.Text("Onion Payroll", size=18, color=TEXT_PRIMARY,
+                            weight=ft.FontWeight.W_800),
+                    ft.Container(height=16),
+                    ft.Text("🔒 Digite seu PIN pra continuar", size=13,
+                            color=TEXT_SECONDARY),
+                    pin_f, erro_txt,
+                    entrar_btn,
+                    ft.Container(height=8),
+                    esqueci_link,
+                ],
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                alignment=ft.MainAxisAlignment.CENTER,
+                spacing=10,
+            ),
+            alignment=ft.Alignment(0, 0),
+            bgcolor=BG_DEEP, expand=True,
+        )
+        page.add(lock_screen)
+
     # ── Disclaimer de primeiro uso (v2.29) ─────────────────────
     # "Clickwrap": só mostra 1 vez, salvo em settings. Recusar
     # bloqueia o app nesta sessão (recarregar a página = nova chance,
     # sem travar o usuário definitivamente sem saída).
     if settings.get("disclaimer_accepted"):
-        _iniciar_app()
+        _iniciar_app_com_pin()
         return
 
     def _aceitar_disclaimer(e):
@@ -5284,7 +5691,7 @@ async def main(page: ft.Page):
         _mem_cache[KEY_SETTINGS] = settings
         save_json(page, KEY_SETTINGS, settings)
         page.clean()
-        _iniciar_app()
+        _iniciar_app_com_pin()
 
     def _recusar_disclaimer(e):
         page.clean()

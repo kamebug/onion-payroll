@@ -1,5 +1,62 @@
 # Changelog — Onion Payroll
 
+## [2.55.0] — 2026-07-18 — BLOQUEIO POR PIN + FIX DE COR DA STATUS BAR
+
+### 🟢 Adicionado — bloqueio por PIN de verdade
+
+O switch "Ativar Bloqueio PIN / Biométrico" existia desde sempre em
+⚙️ Config → Segurança, mas nunca teve nenhuma funcionalidade real por
+trás — só salvava um valor, sem nenhuma tela de criar PIN, nenhuma
+verificação, nenhum bloqueio de fato. Implementado do zero:
+
+- **Criação do PIN** — 4 dígitos, digitado duas vezes pra confirmar
+- **Método de recuperação escolhido na criação** — "Código de
+  Recuperação" (8 dígitos, mostrado uma única vez, recupera sem
+  perder dados) ou "Resetar Tudo se Esquecer" (mais simples, mas
+  exige apagar tudo se esquecer)
+- **Tela de bloqueio no boot** — pede o PIN antes de mostrar qualquer
+  conteúdo do app, com limite de 5 tentativas (trava o campo depois,
+  direciona pro link "Esqueci o PIN")
+- **"Esqueci o PIN"** sempre acessível na tela de bloqueio — com
+  código de recuperação, digita o código e entra sem perder dados;
+  o botão "Resetar Tudo" fica visível de imediato mesmo nesse fluxo
+  (não escondido atrás de uma tentativa falha), pra quem esqueceu o
+  código também não precisar tentar e falhar antes de encontrar a
+  saída
+- **Desativar exige o PIN atual** — evita que qualquer pessoa com
+  acesso ao app desligue a proteção sem saber o PIN
+- **Armazenamento seguro** — PIN e código de recuperação nunca ficam
+  em texto puro, só hash SHA-256 com salt aleatório por instalação
+- Rótulo do switch corrigido para "Ativar Bloqueio por PIN" (sem
+  mencionar biometria — investigado e não é viável pra esse app, que
+  roda como web app via `flet build web`/Pyodide, não como app nativo
+  compilado; pacotes de biometria do Flet como `flet_auth` só
+  funcionam em builds nativos)
+- Documentado na aba Ajuda, seção "🔒 Bloqueio por PIN" (não existia
+  nenhuma menção a essa funcionalidade no manual antes)
+
+### 🔴 Corrigido — cor da status bar/barra de endereço aparecia azul
+
+O `assets/manifest.json` já tinha `theme_color: "#00C2A8"` configurado
+corretamente, mas só valia quando o app estava instalado (modo
+standalone) — numa aba normal do navegador, o Flet/Flutter usava sua
+própria cor azul padrão, porque faltava a tag
+`<meta name="theme-color">` no HTML. Adicionada a injeção dessa tag
+no `deploy.ps1`, removendo antes qualquer tag equivalente que o Flet
+já tenha gerado sozinho no build (evita duplicata/conflito). Testado
+e confirmado correto no app instalado; numa aba de navegador comum,
+alguns navegadores (principalmente iOS Safari) simplesmente não
+suportam essa tag fora do modo instalado — limitação da plataforma,
+não do app.
+
+### 🟢 Corrigido — contagem de testes desatualizada no README
+
+Mencionava 119 testes; o arquivo já tinha 123 desde a rodada anterior
+(bug do feriado nacional), só não tinha sido atualizado no README
+naquela hora.
+
+---
+
 ## [2.54.0] — 2026-07-18 — CRÍTICO: FERIADO NACIONAL DESCONTAVA DIAS TRABALHADOS
 
 ### 🔴 Corrigido — CRÍTICO: feriado nacional tratado como "fábrica fechada"
