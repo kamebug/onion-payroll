@@ -1611,7 +1611,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607181702"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607111713"   # atualizado automaticamente pelo deploy.ps1
 APP_VERSION    = "2.54.0"       # sincronizar manualmente com pyproject.toml/CHANGELOG.md a cada bump de versão
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
@@ -2955,11 +2955,15 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
                         "Só preencha se o 時給 (Jikyuu, valor por hora) "
                         "mudou A PARTIR deste mês (ex: aumento de "
                         "salário). A previsão de qualquer mês sem "
-                        "registro passa a usar esse valor, em vez do "
-                        "時給 atual de ⚙️ Config — evita que um aumento "
-                        "futuro mude retroativamente a previsão de meses "
-                        "passados que você não registrou aqui. Deixe "
-                        "vazio se não houve mudança nesse mês.",
+                        "registro passa a usar o marco mais recente "
+                        "IGUAL OU ANTERIOR ao mês visto — se nenhum "
+                        "marco existir antes, cai no 時給 atual de "
+                        "⚙️ Config. ⚠️ IMPORTANTE: pra meses passados não "
+                        "mudarem quando você registrar um aumento, "
+                        "preencha também UM marco no holerite mais "
+                        "antigo do seu histórico, com o valor ANTIGO — "
+                        "isso cobre todos os meses entre ele e o "
+                        "aumento, sem precisar preencher mês a mês.",
                         size=9, color=TEXT_MUTED,
                     ),
                     padding=ft.Padding(left=0, right=0, top=0, bottom=6),
@@ -3730,8 +3734,10 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
             "⚠️ Se seu 時給 (Jikyuu, valor por hora) mudou (aumento de "
             "salário), esse valor vale SEMPRE, inclusive pra meses "
             "passados sem registro. Pra manter a previsão de meses "
-            "anteriores ao aumento correta, registre em 📋 Histórico o "
-            "mês em que o aumento começou, preenchendo o campo "
+            "ANTERIORES ao aumento correta, você precisa de DOIS "
+            "registros em 📋 Histórico: um no holerite mais antigo do "
+            "seu histórico com o 時給 ANTIGO, e outro no mês em que o "
+            "aumento começou com o 時給 NOVO — ambos preenchendo "
             "\"時給 Jikyuu — Valor por Hora a partir deste mês\".",
             size=9, color=TEXT_MUTED,
         ),
@@ -4871,7 +4877,7 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
             # ── Mudança de 時給 ────────────────────────────────────────
             _title("📈 Mudança de 時給 Jikyuu — Valor por Hora (Aumento de Salário)"),
             _item("時給 Jikyuu — a partir deste mês", "Campo em 📋 Histórico, opcional.",
-                  "O 時給 (Jikyuu, valor por hora) configurado em ⚙️ Config vale sempre, inclusive retroativamente pra meses passados sem registro — se você teve um aumento, a previsão de meses ANTES do aumento ficaria errada sem esse campo. Ao registrar um holerite real no Histórico, preencha \"時給 Jikyuu — Valor por Hora a partir deste mês\" com o novo valor, no mês em que o aumento começou. A previsão de qualquer mês sem registro passa a usar automaticamente o 時給 vigente na época — o marco mais recente igual ou anterior ao mês sendo visto. Sem preencher nada, o app usa sempre o 時給 atual de Config, mesmo pra meses passados."),
+                  "O 時給 (Jikyuu, valor por hora) configurado em ⚙️ Config vale sempre, inclusive retroativamente pra meses passados sem registro — se você teve um aumento, a previsão de meses ANTES do aumento ficaria errada sem esse campo. A previsão de qualquer mês sem registro usa o marco mais recente IGUAL OU ANTERIOR ao mês sendo visto; se nenhum marco existir antes desse mês, cai no 時給 atual de Config. ⚠️ Por isso, pra corrigir meses passados, você precisa de DOIS marcos: um no holerite mais antigo do seu histórico com o valor ANTIGO, e outro no mês em que o aumento começou com o valor NOVO — sem o primeiro marco, meses entre o início do seu histórico e o aumento continuam usando o valor de Config (o mais recente), incorretamente."),
             _item("Desconto — Registro Real vs Previsão", "Automático, aba Holerite.",
                   "Ao registrar um holerite real no Histórico, o mês correspondente na aba Holerite deixa de usar a previsão de desconto (Média Histórica ou Fixo, conforme configurado em ⚙️ Config) e passa a mostrar o valor REAL registrado — já é um dado conhecido, não precisa mais estimar. A nota abaixo do valor muda pra \"📋 Registro real\". Meses sem registro continuam usando a previsão normalmente."),
 
