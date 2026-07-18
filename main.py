@@ -1584,7 +1584,8 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607181310"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607111713"   # atualizado automaticamente pelo deploy.ps1
+APP_VERSION    = "2.53.0"       # sincronizar manualmente com pyproject.toml/CHANGELOG.md a cada bump de versão
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -4960,7 +4961,7 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
                 ft.Text("❓  Manual de Uso", size=16,
                         color=TEXT_PRIMARY, weight=ft.FontWeight.W_800,
                         expand=True),
-                ft.Text("v2.1", size=10, color=TEXT_MUTED),
+                ft.Text(f"v{APP_VERSION}", size=10, color=TEXT_MUTED),
             ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
             ft.Container(
                 content=sections,
