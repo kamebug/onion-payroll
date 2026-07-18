@@ -1423,7 +1423,7 @@ async def fetch_feriados_empresa() -> Optional[str]:
         return None
 
 
-
+async def fetch_updated_holidays() -> Optional[dict]:
     """Busca holidays.json (gerado uma vez por ano por um GitHub Action,
     a partir do CSV oficial do Gabinete do Governo japonês) em tempo de
     execução. Só funciona no modo web (Pyodide) — em desktop, ou se a
@@ -1584,7 +1584,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607181234"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607111713"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
