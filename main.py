@@ -1624,7 +1624,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607190233"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607111713"   # atualizado automaticamente pelo deploy.ps1
 APP_VERSION    = "2.55.0"       # sincronizar manualmente com pyproject.toml/CHANGELOG.md a cada bump de versão
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
@@ -5654,10 +5654,32 @@ async def main(page: ft.Page):
 
         esqueci_link.on_click = _abrir_esqueci_pin
 
+        # Logo de verdade do app — mesmo padrão dual desktop/web usado
+        # em _iniciar_app(), não o emoji genérico 🧅 usado antes.
+        import os as _os_pin
+        _assets_dir_pin = _os_pin.path.join(
+            _os_pin.path.dirname(_os_pin.path.abspath(__file__)), "assets")
+        _logo_abs_pin = _os_pin.path.join(_assets_dir_pin, "logo_icon.png")
+        _is_web_pin = hasattr(page, "web") and page.web
+        if _is_web_pin:
+            _logo_src_pin = "logo_icon.png"
+        elif _os_pin.path.exists(_logo_abs_pin):
+            _logo_src_pin = _logo_abs_pin
+        else:
+            _logo_src_pin = None
+        logo_pin = (
+            ft.Container(
+                content=ft.Image(src=_logo_src_pin, width=60, height=60, fit="contain"),
+                width=72, height=72, border_radius=14, bgcolor=BG_CARD,
+                alignment=ft.Alignment(0, 0),
+                clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
+            ) if _logo_src_pin else ft.Text("🧅", size=48)  # reserva se a logo não existir
+        )
+
         lock_screen = ft.Container(
             content=ft.Column(
                 controls=[
-                    ft.Text("🧅", size=48),
+                    logo_pin,
                     ft.Text("Onion Payroll", size=18, color=TEXT_PRIMARY,
                             weight=ft.FontWeight.W_800),
                     ft.Container(height=16),
