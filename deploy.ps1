@@ -65,7 +65,7 @@ Copy-Item -Path "$ROOT\build_src\build\web\*" -Destination "$ROOT\docs\" -Recurs
 # 6b. Copiar arquivos que nao fazem parte do build do Flet (paginas
 # HTML extras e imagens usadas nelas) - precisam ser copiados
 # manualmente toda vez que docs/ e recriado do zero
-$arquivosExtras = @("feedback.html", "compartilhar.html", "qr-app.png", "logo-loading.gif", "holidays.json")
+$arquivosExtras = @("feedback.html", "compartilhar.html", "qr-app.png", "logo-loading.gif", "holidays.json", "feriados-empresa.csv")
 foreach ($arquivo in $arquivosExtras) {
     if (Test-Path "$ROOT\$arquivo") {
         Copy-Item "$ROOT\$arquivo" "$ROOT\docs\$arquivo" -Force
@@ -266,7 +266,7 @@ Write-Host ""
 $MSG = Read-Host "Mensagem do commit (Enter = Deploy $BUILD_ID)"
 if ([string]::IsNullOrWhiteSpace($MSG)) { $MSG = "Deploy $BUILD_ID" }
 
-git add docs\ main.py feedback.html compartilhar.html qr-app.png logo-loading.gif holidays.json
+git add docs\ main.py feedback.html compartilhar.html qr-app.png logo-loading.gif holidays.json feriados-empresa.csv
 git commit -m $MSG
 git push
 

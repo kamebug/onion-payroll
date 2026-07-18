@@ -117,6 +117,29 @@ def jikyuu_vigente_para_mes(month_key: str, history: list, default: int) -> int:
     return marcos[-1][1]
 
 
+def parse_e_mesclar_feriados_corp_csv(texto: str, hols_corp: dict) -> tuple:
+    """Faz o parse de um CSV de feriados corporativos (uma data por
+    linha, AAAA-MM-DD) e mescla no dict hols_corp passado (mutado in
+    place). Retorna (hols_corp atualizado, quantidade de dias novos).
+    Compartilhado entre o botão de colar CSV manualmente e o botão de
+    buscar feriados-empresa.csv publicado no repositório."""
+    lines = (texto or "").strip().splitlines()
+    ok = 0
+    for line in lines:
+        data_str = line.strip().split(",")[0].strip()
+        if not data_str:
+            continue
+        try:
+            d  = date.fromisoformat(data_str)
+            mk = f"{d.year}-{d.month:02d}"
+            if mk not in hols_corp: hols_corp[mk] = []
+            if d.day not in hols_corp[mk]:
+                hols_corp[mk].append(d.day); ok += 1
+        except Exception:
+            pass
+    return hols_corp, ok
+
+
 def desconto_real_para_mes(month_key: str, history: list) -> Optional[int]:
     """Valor de desconto REAL, se esse mês específico já tiver holerite
     registrado no Histórico (não é mais previsão, é dado conhecido).
@@ -1379,7 +1402,28 @@ JP_HOLIDAY_NAMES_BUILTIN = {
 }
 
 
-async def fetch_updated_holidays() -> Optional[dict]:
+async def fetch_feriados_empresa() -> Optional[str]:
+    """Busca feriados-empresa.csv (publicado manualmente pelo mantenedor
+    na raiz do repositório, uma data por linha) em tempo de execução.
+    Mesmo padrão de fetch_updated_holidays() — só funciona no modo web
+    (Pyodide), nunca lança exceção, retorna None em qualquer falha
+    (offline, arquivo ainda não publicado, timeout, etc.).
+    """
+    if pyfetch is None:
+        return None
+    try:
+        resp = await asyncio.wait_for(pyfetch("feriados-empresa.csv", method="GET"), timeout=5)
+        if resp.status != 200:
+            return None
+        texto = await asyncio.wait_for(resp.string(), timeout=5)
+        if not texto or not texto.strip():
+            return None
+        return texto
+    except Exception:
+        return None
+
+
+
     """Busca holidays.json (gerado uma vez por ano por um GitHub Action,
     a partir do CSV oficial do Gabinete do Governo japonês) em tempo de
     execução. Só funciona no modo web (Pyodide) — em desktop, ou se a
@@ -1540,7 +1584,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607180854"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607111713"   # atualizado automaticamente pelo deploy.ps1
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -3998,28 +4042,18 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
                 page.overlay.remove(ov_ref[0])
             page.update()
 
+        def _mesclar_csv_texto(texto: str) -> int:
+            hols_corp = state.get("holidays_corp", {})
+            hols_corp, ok = parse_e_mesclar_feriados_corp_csv(texto, hols_corp)
+            save_json(page, "onion_holidays_corp", hols_corp)
+            state["holidays_corp"] = hols_corp
+            return ok
+
         def _processar(_=None):
             # Só feriados corporativos aqui — os nacionais se atualizam
             # sozinhos automaticamente (busca em tempo de execução),
             # não precisam mais de importação manual via CSV.
-            texto = csv_field.value or ""
-            lines = texto.strip().splitlines()
-            hols_corp = state.get("holidays_corp", {})
-            ok = 0
-            for line in lines:
-                data_str = line.strip().split(",")[0].strip()
-                if not data_str:
-                    continue
-                try:
-                    d  = date.fromisoformat(data_str)
-                    mk = f"{d.year}-{d.month:02d}"
-                    if mk not in hols_corp: hols_corp[mk] = []
-                    if d.day not in hols_corp[mk]:
-                        hols_corp[mk].append(d.day); ok += 1
-                except Exception:
-                    pass
-            save_json(page, "onion_holidays_corp", hols_corp)
-            state["holidays_corp"] = hols_corp
+            _mesclar_csv_texto(csv_field.value or "")
             _close()
             refresh_all()
 
@@ -4444,6 +4478,44 @@ def build_holidays_tab(page: ft.Page, state: dict, refresh_all):
         padding=ft.Padding(left=8, right=8, top=4, bottom=4),
     )
 
+    # ── Buscar feriados-empresa.csv publicado no repositório ──────────
+    fetch_status = ft.Text("", size=11, color=TEXT_MUTED,
+                            text_align=ft.TextAlign.CENTER)
+
+    def _buscar_feriados_empresa(_=None):
+        async def _do_fetch():
+            fetch_status.value = "Buscando..."
+            fetch_status.update()
+            texto = await fetch_feriados_empresa()
+            if texto is None:
+                fetch_status.value = ("Não foi possível buscar agora — "
+                                       "sem internet, ou o arquivo ainda "
+                                       "não foi publicado.")
+                fetch_status.color = TEXT_MUTED
+                fetch_status.update()
+                return
+            hc = state.get("holidays_corp", {})
+            hc, novos = parse_e_mesclar_feriados_corp_csv(texto, hc)
+            state["holidays_corp"] = hc
+            save_json(page, "onion_holidays_corp", hc)
+            fetch_status.value = f"✅ {novos} dia(s) novo(s) importado(s)."
+            fetch_status.color = SUCCESS
+            fetch_status.update()
+            refresh_all()
+        page.run_task(_do_fetch)
+
+    fetch_empresa_btn = ft.Container(
+        content=ft.Column(controls=[
+            ft.FilledButton(
+                "🔄 Buscar Feriados da Empresa",
+                on_click=_buscar_feriados_empresa,
+                style=ft.ButtonStyle(bgcolor=ACCENT_DARK),
+            ),
+            fetch_status,
+        ], spacing=4, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+        padding=ft.Padding(left=8, right=8, top=4, bottom=8),
+    )
+
     # Total do ano
     total_corp = sum(len(v) for k, v in hols_corp.items()
                      if k.startswith(str(view_year)))
@@ -4461,6 +4533,7 @@ def build_holidays_tab(page: ft.Page, state: dict, refresh_all):
                               style=ft.ButtonStyle(color=ACCENT)),
             ]),
             instruction,
+            fetch_empresa_btn,
             ft.Container(
                 content=ft.Text(f"Total: {total_corp} dia(s) em {view_year}",
                                 size=12, color="#F59E0B",
