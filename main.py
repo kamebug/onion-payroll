@@ -1624,7 +1624,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607190311"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607111713"   # atualizado automaticamente pelo deploy.ps1
 APP_VERSION    = "2.55.0"       # sincronizar manualmente com pyproject.toml/CHANGELOG.md a cada bump de versão
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
@@ -2940,6 +2940,12 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
                     content=ft.Column(controls=[
                         ft.Text("⭐ OBRIGATÓRIO — necessário para o cálculo",
                                 size=10, color=ACCENT, weight=ft.FontWeight.W_700),
+                        ft.Text("É o \"控除合計\" (total de descontos) impresso "
+                                "no seu holerite real. Depois de salvo, esse "
+                                "valor passa a aparecer na aba 📊 Holerite "
+                                "desse mês como \"📋 Registro real\", no lugar "
+                                "da previsão (Média Histórica/Fixo).",
+                                size=9, color=TEXT_MUTED),
                         ft.Container(f_ded,
                             padding=ft.Padding(left=0, right=14, top=0, bottom=0)),
                     ], spacing=4, tight=True),
@@ -4945,7 +4951,7 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
             _item("4️⃣", "Consulte o Holerite",
                   "A aba 📋 mostra a previsão do mês selecionado — referente ao trabalho realizado naquele mês."),
             _item("5️⃣", "Registre o holerite real",
-                  "Na aba 🕐 Histórico, registre com o mês do TRABALHO, não o mês em que você recebeu o pagamento. Só o Total de Desconto é obrigatório."),
+                  "Na aba 🕐 Histórico, registre com o mês do TRABALHO, não o mês em que você recebeu o pagamento. Só o Total de Desconto é obrigatório — depois de salvo, esse mês passa a mostrar o valor real na aba 📊 Holerite, em vez da previsão."),
             _item("⚠️", "Atenção ao mês",
                   "No Japão o holerite geralmente chega no mês seguinte ao trabalho. Se você trabalhou em junho e recebeu o pagamento em julho, registre como '2026-06' no Histórico."),
 
@@ -5140,7 +5146,7 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
             _item("✏️ Desconto Fixo", "Botão em ⚙️ Config.",
                   "Usa o valor fixo em ¥ que você configurar, ignorando o histórico."),
             _item("⭐ Campo obrigatório", "Apenas 1 campo",
-                  "Total de Desconto é essencial — é o valor usado para calcular a média histórica. Total Bruto e Salário Líquido são opcionais, só para seu registro pessoal (não entram no cálculo)."),
+                  "Total de Desconto (控除合計 no seu holerite real) é essencial. Sem registro no mês, esse valor é usado pra calcular a média histórica de meses futuros. COM registro, o próprio mês passa a mostrar o valor real na aba 📊 Holerite (nota \"📋 Registro real\"), no lugar da previsão. Total Bruto e Salário Líquido são opcionais, só para seu registro pessoal (não entram no cálculo)."),
             _item("📅 Mês do Histórico", "Use o mês do TRABALHO",
                   "Se você recebeu o holerite em julho referente ao trabalho de junho, registre como '2026-06', não '2026-07'."),
             _item("✏️ Editar registro", "Toque em qualquer card",
