@@ -1,5 +1,15 @@
 # Changelog — Onion Payroll
 
+> **Nota de versionamento (a partir de 2026-07-18, pós v2.55.0):** o
+> projeto passou a seguir SemVer (MAJOR.MINOR.PATCH) rigorosamente:
+> **PATCH** sobe quando a versão é só correção de bug, sem nada novo;
+> **MINOR** sobe quando tem pelo menos uma funcionalidade nova (mesmo
+> que também tenha bugfixes junto); **MAJOR** fica reservado pra uma
+> mudança que quebre compatibilidade com dados/uso já existente (não
+> aconteceu até agora). Versões anteriores a essa data bumpavam MINOR
+> pra qualquer mudança, inclusive bugfix puro — não retroagidas, só
+> documentado aqui pra explicar a diferença de critério.
+
 ## [2.55.0] — 2026-07-18 — BLOQUEIO POR PIN + FIX DE COR DA STATUS BAR
 
 ### 🟢 Adicionado — bloqueio por PIN de verdade
