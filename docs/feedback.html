@@ -256,7 +256,7 @@
   const params = new URLSearchParams(window.location.search);
   const buildId = params.get("build") || "não informado";
   document.getElementById("build_id").value = buildId;
-  document.getElementById("buildTag").textContent = "Versão do app: " + buildId;
+  document.getElementById("buildTag").textContent = "Build ID: " + buildId;
 
   // ---- lista de palavras filtradas (baixo calão, PT-BR) ----
   // Lista enxuta e comum — cada entrada é checada como palavra inteira
