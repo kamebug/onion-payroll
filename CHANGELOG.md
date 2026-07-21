@@ -10,6 +10,67 @@
 > pra qualquer mudança, inclusive bugfix puro — não retroagidas, só
 > documentado aqui pra explicar a diferença de critério.
 
+## [2.56.0] — 2026-07-21 — TAXA CONFIGURÁVEL DE 休日出勤 (KYŪJITSU SHUKKIN)
+
+### 🟢 Adicionado
+
+- **Taxa configurável de 休日出勤** — nova opção em ⚙️ Config → "Taxa
+  de 休日出勤 (Kyūjitsu Shukkin)", com 3 modos: **1,35x integral**
+  (padrão, preserva o comportamento anterior a esta versão),
+  **1,25x integral**, e **Dia normal** (sem taxa de feriado nenhuma —
+  calcula como um dia comum de trabalho, 基本給 + 残業 só acima do
+  limiar configurado)
+- **Domingo (法定休日) continua SEMPRE 1,35x fixo** — folga legalmente
+  obrigatória pela lei japonesa, não é escolha da empresa, nunca lê a
+  nova configuração. Só 休日出勤 (所定休日 — folga que a empresa concede
+  além do mínimo legal, ex: sábado de folga trabalhado, feriado
+  corporativo marcado manualmente) usa a taxa configurável
+- `calculate_shift_pay()` ganhou os parâmetros `holiday_kind`
+  ("legal"|"kyujitsu") e `kyujitsu_rate_mode` ("1.35"|"1.25"|"normal");
+  `compute_monthly_forecast()` ganhou `kyujitsu_rate_mode`, propagado
+  a partir de ⚙️ Config
+- Modo "Dia normal" é uma ramificação de cálculo própria (não só troca
+  o multiplicador) — desvia pro mesmo caminho de um dia comum de
+  trabalho, inclusive pro 延長 (que passa a somar em hora extra 1,25x
+  em vez de dentro das horas de feriado)
+- 12 novos testes automatizados cobrindo os 3 modos, isolamento entre
+  domingo e 休日出勤, e um cenário de mês misto (domingo + 休日出勤 juntos)
+
+### 🐛 Corrigido (preventivo — achado durante esta implementação)
+
+- **Risco real de "decisão vs. agregação divergindo" pela 4ª vez**
+  (mesmo padrão do item #31 do PROBLEMAS_RECORRENTES.md): a agregação
+  mensal usava uma ÚNICA variável `_rate_holiday`, sobrescrita a cada
+  dia iterado no loop, compartilhada entre domingo e 休日出勤. Isso
+  nunca causou bug até agora porque as duas categorias sempre tiveram
+  a mesma taxa (0,35 fixo). Com 休日出勤 podendo ter taxa DIFERENTE de
+  domingo, um mês com os dois tipos coexistindo faria `total_holiday`
+  ou `total_legal` usar a taxa do último dia iterado, não a taxa certa
+  de cada categoria — corrigido separando em `_rate_legal` e
+  `_rate_kyujitsu`, cada uma capturada só dentro do branch
+  correspondente. Coberto pelo teste
+  `test_mes_misto_domingo_e_kyujitsu_nao_diverge`
+
+### 📝 Nota
+
+- Status "Feriado 1,35x" → "休日出勤 Kyūjitsu Shukkin" (v2.55.1) estava
+  registrado como concluído no handoff da sessão anterior, mas não
+  estava presente no arquivo — aplicado nesta sessão como parte da
+  v2.56.0 (ver entrada [2.55.1] abaixo para o que teria sido o
+  changelog isolado dessa mudança)
+
+---
+
+## [2.55.1] — 2026-07-18 — RENOMEAÇÃO DE STATUS (PATCH)
+
+### 🔧 Alterado
+
+- Status "Feriado 1,35x" (chave `holiday`) renomeado para "休日出勤
+  Kyūjitsu Shukkin" — nome mais preciso, já que a taxa deixou de ser
+  fixa em 1,35x a partir da v2.56.0
+
+---
+
 ## [2.55.0] — 2026-07-18 — BLOQUEIO POR PIN + FIX DE COR DA STATUS BAR
 
 ### 🟢 Adicionado — bloqueio por PIN de verdade

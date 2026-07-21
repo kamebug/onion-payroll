@@ -434,6 +434,19 @@ def calculate_shift_pay(
                                        # a posição exata do intervalo
     extra_minutes: int = 0,  # 延長 — minutos extras solicitados além do
                               # turno, à taxa cheia de hora extra (1,25x)
+    holiday_kind: str = "legal",  # v2.56: distingue os DOIS tipos de
+        # is_holiday=True — "legal" (domingo, 法定休日 — folga legalmente
+        # obrigatória, SEMPRE 1,35x, não é escolha da empresa) ou
+        # "kyujitsu" (休日出勤/所定休日 — folga que a empresa concede além
+        # do mínimo legal, empresa escolhe o adicional, lê
+        # kyujitsu_rate_mode abaixo). Default "legal" preserva o
+        # comportamento antigo (0,35 fixo) para qualquer chamada que não
+        # informar esse parâmetro.
+    kyujitsu_rate_mode: str = "1.35",  # só usado quando holiday_kind=
+        # "kyujitsu": "1.35" (padrão, preserva comportamento antigo),
+        # "1.25", ou "normal" (sem taxa de feriado nenhuma — desvia pro
+        # cálculo de DIA COMUM inteiro: 基本給 + hora extra 1,25x só
+        # acima do limiar, nada de holiday_pay).
 ) -> dict:
     """
     shift_type: "night"|"day"|"holiday"|"yukyu"|"absent" — determina o
@@ -501,7 +514,24 @@ def calculate_shift_pay(
     # pay["_ot_rate_full"]. CONSTANTES o mês inteiro (dependem só de
     # jikyuu/adicional/modo de arredondamento configurados, nunca do dia
     # específico ou do shift_type).
-    _holiday_premium_fixo = 0.35
+    # v2.56: domingo (holiday_kind="legal", 法定休日) continua SEMPRE
+    # 0,35 fixo — exigência legal, não é escolha da empresa. 休日出勤
+    # manual (holiday_kind="kyujitsu", 所定休日) lê kyujitsu_rate_mode:
+    # "1.35" (padrão, preserva comportamento antigo de QUALQUER
+    # is_holiday=True), "1.25", ou "normal" (_kyujitsu_normal_day=True
+    # — desvia pra ramificação de cálculo de DIA COMUM mais abaixo, não
+    # é só trocar o multiplicador).
+    _kyujitsu_normal_day = False
+    if holiday_kind == "kyujitsu":
+        if kyujitsu_rate_mode == "1.25":
+            _holiday_premium_fixo = 0.25
+        elif kyujitsu_rate_mode == "normal":
+            _holiday_premium_fixo = 0.35  # exposto só p/ consistência, não usado nesse modo
+            _kyujitsu_normal_day = True
+        else:  # "1.35" (padrão)
+            _holiday_premium_fixo = 0.35
+    else:  # "legal" (domingo) — sempre fixo
+        _holiday_premium_fixo = 0.35
     addon_per_hour = (leader_addon_amount / leader_addon_hours
                        if (use_leader_addon and leader_addon_hours > 0) else 0.0)
 
@@ -720,7 +750,14 @@ def calculate_shift_pay(
     # dessas horas aparece em 基本給. Comparado direto contra os 5
     # holerites reais (fev/mar/abr 2026): confirma ¥0 de diferença tanto
     # no total quanto em cada rubrica individual, agora sim.
-    if is_holiday:
+    # v2.56: dia de 休日出勤 configurado como "normal" (kyujitsu_rate_mode
+    # ="normal") não é tratado como feriado aqui — é uma ramificação de
+    # cálculo DIFERENTE, não só uma troca de multiplicador. Sem essa
+    # separação explícita, bastaria zerar _holiday_premium_fixo e ainda
+    # cairia no bloco de baixo (holiday_pay=taxa×horas, base_pay=0),
+    # que não é o mesmo que 基本給+残業 de um dia comum.
+    _treat_as_holiday = is_holiday and not _kyujitsu_normal_day
+    if _treat_as_holiday:
         # holiday_pay = SÓ as horas trabalhadas × taxa cheia de domingo
         # (1,35x), sem noturno misturado dentro dessa linha — confere
         # exato com 公出手当/法定休出 do holerite real (¥23.892/domingo).
@@ -765,7 +802,7 @@ def calculate_shift_pay(
 
     # 延長 em dia NORMAL (não feriado) — hora extra genérica, à taxa
     # cheia de 1,25x, somada em overtime_pay/overtime_minutes.
-    if extra_minutes > 0 and not is_holiday:
+    if extra_minutes > 0 and not _treat_as_holiday:
         _extra_rate = _taxa_cheia(1.25)
         extra_pay = shisha_gofuuu((_extra_rate / 60.0) * extra_minutes, wage_round_mode)
         result["overtime_pay"]     += extra_pay
@@ -1018,6 +1055,11 @@ def compute_monthly_forecast(
     anchor_group: str = None,
     alt_monthly_rest_pattern: str = "5x2", shift_anchor_date: date = None,
     break_periods: list = None,
+    kyujitsu_rate_mode: str = "1.35",  # v2.56: taxa configurável de
+        # 休日出勤 (所定休日) — "1.35" (padrão), "1.25", ou "normal" (dia
+        # comum, sem taxa de feriado). Domingo (法定休日) NUNCA usa esse
+        # parâmetro — continua sempre 1,35x fixo por lei, ver
+        # holiday_kind="legal" abaixo.
 ) -> dict:
     # ── Seleção do tipo de ciclo ──────────────────────────────────
     _alt_shift_map = {}  # dia -> "day"/"night" (só usado se cycle_type=alternating*)
@@ -1049,7 +1091,16 @@ def compute_monthly_forecast(
     total_yukyu = 0
     total_ot_min = total_night_min = total_regular_min = 0
     total_holiday_min = total_legal_min = total_yukyu_min = 0
-    _rate_ot = _rate_night = _rate_holiday = _rate_base = 0
+    # v2.56: _rate_holiday ÚNICO foi separado em _rate_legal (domingo,
+    # sempre 1,35x) e _rate_kyujitsu (休日出勤, taxa configurável) — bug
+    # real corrigido: com um único _rate_holiday capturado a cada
+    # iteração do loop (última sobrescreve), se domingo (1,35x) e
+    # 休日出勤 (ex: 1,25x) coexistissem no mesmo mês, total_holiday e
+    # total_legal no final usariam QUALQUER que fosse a taxa do último
+    # dia iterado, não a taxa correta de cada categoria — mesmo padrão
+    # de bug "decisão vs. agregação divergindo" do PROBLEMAS_RECORRENTES
+    # #31, prevenido aqui ANTES de acontecer.
+    _rate_ot = _rate_night = _rate_legal = _rate_kyujitsu = _rate_base = 0
     days_normal = days_holiday = days_legal = days_yukyu = 0
 
     for day_num, cycle_status in cycle.items():
@@ -1177,11 +1228,20 @@ def compute_monthly_forecast(
         # shift_type já tinha corretamente tratado como "dia normal"
         # (feriado nacional sozinho, sem fábrica fechada).
         is_pay_holiday = (shift_type == "holiday")
+        # v2.56: domingo (法定休日) vs 休日出勤 (所定休日) — MESMA condição
+        # usada na agregação abaixo (linha "if _is_domingo_legal:"),
+        # calculada uma vez só aqui e reaproveitada nos dois lugares —
+        # exatamente pra não repetir o bug de decisão-vs-agregação
+        # divergindo uma quarta vez (ver PROBLEMAS_RECORRENTES #31).
+        _is_domingo_legal = (is_sunday and status != "yukyu") or status == "legal"
+        _holiday_kind_pay = "legal" if _is_domingo_legal else "kyujitsu"
         pay = calculate_shift_pay(
             jikyuu=jikyuu, shift_type=shift_type,
             start_str=eff_start, end_str=eff_end,
             break_min=eff_break, block=block,
             is_holiday=is_pay_holiday, yukyu_on_holiday=yukyu_hol,
+            holiday_kind=_holiday_kind_pay,
+            kyujitsu_rate_mode=kyujitsu_rate_mode,
             base_shift=default_shift,  # turno real do funcionário (night/day),
                                         # usado para horários/limiar de OT mesmo
                                         # quando shift_type="holiday"
@@ -1196,7 +1256,19 @@ def compute_monthly_forecast(
             cfg_start_str=_start, cfg_end_str=_end,  # horário de entrada/saída configurado
             break_periods=break_periods,
         )
-        if (is_sunday and status != "yukyu") or status == "legal":
+        # v2.56: 休日出勤 com kyujitsu_rate_mode="normal" não entra mais
+        # aqui como feriado — calculate_shift_pay já devolveu o pay dict
+        # no formato de DIA COMUM (regular_minutes/overtime_minutes
+        # populados, holiday_pay=0), então a agregação precisa mandar
+        # esse dia pro MESMO bucket de "dia normal" lá embaixo, senão a
+        # decisão (calculate_shift_pay) e a agregação (aqui) divergem —
+        # o mesmo padrão de bug do PROBLEMAS_RECORRENTES #31, dessa vez
+        # prevenido antes de acontecer, não corrigido depois.
+        _is_kyujitsu_normal_day = (
+            shift_type == "holiday" and not _is_domingo_legal
+            and kyujitsu_rate_mode == "normal"
+        )
+        if _is_domingo_legal:
             # total_legal recebe SÓ a parcela de domingo (holiday_pay,
             # taxa 1,35x) — não pay["total_gross"] inteiro, porque agora
             # que night_pay deixou de ser zerado em dias de domingo,
@@ -1213,7 +1285,8 @@ def compute_monthly_forecast(
             total_legal_min += pay["net_minutes"]
             total_night_min += pay["night_minutes"]  # mesmo em domingo
             days_legal  += 1
-        elif shift_type == "holiday":
+            _rate_legal = pay["_holiday_rate_full"]  # sempre 1,35x (domingo)
+        elif shift_type == "holiday" and not _is_kyujitsu_normal_day:
             # v2.54: usa shift_type diretamente (já decidido acima),
             # não status=="holiday" or is_holiday recalculado à parte —
             # bug real corrigido: is_holiday mesclado (nacional+
@@ -1226,6 +1299,7 @@ def compute_monthly_forecast(
             total_holiday_min += pay["net_minutes"]
             total_night_min += pay["night_minutes"]
             days_holiday  += 1
+            _rate_kyujitsu = pay["_holiday_rate_full"]  # 1,35x ou 1,25x, conforme config
         elif shift_type == "yukyu":
             # Separado de total_base — sem isso, o valor do Yukyu ficava
             # misturado com dias normais de trabalho em "Salário Base",
@@ -1235,6 +1309,8 @@ def compute_monthly_forecast(
             if pay["base_pay"] > 0:
                 days_yukyu += 1
         else:
+            # Inclui dia normal de trabalho E 休日出勤 com
+            # kyujitsu_rate_mode="normal" (ver _is_kyujitsu_normal_day).
             total_regular_min += pay["regular_minutes"]
             total_ot_min      += pay["overtime_minutes"]
             total_night_min   += pay["night_minutes"]
@@ -1244,10 +1320,12 @@ def compute_monthly_forecast(
         # Taxas — CONSTANTES o mês inteiro (não dependem do dia
         # específico, só de jikyuu/adicional/modo configurados).
         # Capturadas a cada iteração por simplicidade — sempre o mesmo
-        # valor, sem custo real de recomputar.
+        # valor, sem custo real de recomputar. _rate_legal/_rate_kyujitsu
+        # só são capturadas DENTRO dos branches correspondentes acima
+        # (não aqui incondicionalmente) — ver comentário na declaração
+        # inicial de _rate_legal/_rate_kyujitsu sobre o bug que isso evita.
         _rate_ot      = pay["_ot_rate_full"]
         _rate_night   = pay["_night_rate_increment"]
-        _rate_holiday = pay["_holiday_rate_full"]
         _rate_base    = pay["_jikyuu_per_min"]
 
     # Totais finais — taxa (constante o mês inteiro) × MINUTOS TOTAIS do
@@ -1261,8 +1339,8 @@ def compute_monthly_forecast(
     total_base    = shisha_gofuuu(_rate_base * total_regular_min, wage_round_mode)
     total_ot      = shisha_gofuuu(_rate_ot * (total_ot_min / 60.0), wage_round_mode)
     total_night   = shisha_gofuuu(_rate_night * (total_night_min / 60.0), wage_round_mode)
-    total_holiday = shisha_gofuuu(_rate_holiday * (total_holiday_min / 60.0), wage_round_mode)
-    total_legal   = shisha_gofuuu(_rate_holiday * (total_legal_min / 60.0), wage_round_mode)
+    total_holiday = shisha_gofuuu(_rate_kyujitsu * (total_holiday_min / 60.0), wage_round_mode)
+    total_legal   = shisha_gofuuu(_rate_legal * (total_legal_min / 60.0), wage_round_mode)
     total_yukyu   = shisha_gofuuu(_rate_base * total_yukyu_min, wage_round_mode)
 
     applied_odd = odd_month_bonus if month % 2 == 1 else 0
@@ -1500,6 +1578,10 @@ DEFAULT_SETTINGS = {
     "wage_round_mode": "up", "use_leader_addon": False,
     "leader_addon_hours": 168,
     "night_interval_minutes": 0,
+    "kyujitsu_rate_mode": "1.35",  # v2.56: taxa de 休日出勤 (所定休日) —
+        # "1.35" (padrão, preserva comportamento anterior à v2.56),
+        # "1.25", ou "normal" (dia comum, sem taxa de feriado). Domingo
+        # (法定休日) nunca lê essa configuração — sempre 1,35x fixo.
     "anchor_group": None,
     "cycle_type_confirmed": False,
     "disclaimer_accepted": False,
@@ -1625,7 +1707,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
 BUILD_ID       = "2607201037"   # atualizado automaticamente pelo deploy.ps1
-APP_VERSION    = "2.55.0"       # sincronizar manualmente com pyproject.toml/CHANGELOG.md a cada bump de versão
+APP_VERSION    = "2.56.0"       # sincronizar manualmente com pyproject.toml/CHANGELOG.md a cada bump de versão
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -1793,7 +1875,7 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
             ("early",   "Saída Antecipada",   "",       "Saída Antecipada — horário real"),
             ("absent",  "Falta",              "欠勤",    "Falta 欠勤"),
             ("yukyu",   "Folga Remunerada",   "有休",    "有休 Yukyu — jornada normal, sem 残業/noturno"),
-            ("holiday", "Feriado 1,35x",      "休出",    "休出 Trabalho em Feriado (taxa cheia 1,35x)"),
+            ("holiday", "休日出勤",             "Kyūjitsu Shukkin", "休日出勤 Kyūjitsu Shukkin — trabalho em folga/feriado (taxa configurável em ⚙️ Config)"),
             ("legal",   "Domingo 1,35x",      "法定休出", "法定休出 Domingo/Folga Legal (taxa cheia 1,35x)"),
         ]
         status_desc = ft.Text(
@@ -1906,6 +1988,18 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
             is_corp_hol_day = day_num in month_hol_corp
             cycle_st   = cycle.get(day_num, "off")
             is_off_day = (cycle_st == "off") or is_corp_hol_day
+            # v2.56: mesma distinção domingo (法定休日, sempre 1,35x) vs.
+            # 休日出勤 (所定休日, taxa configurável) usada em
+            # compute_monthly_forecast — reaproveitada aqui pro preview
+            # do modal bater com o que o cálculo mensal de fato vai
+            # gerar pro mesmo dia.
+            try:
+                _is_sun_prev = date(view_year, view_month, day_num).weekday() == 6
+            except Exception:
+                _is_sun_prev = False
+            _is_domingo_legal_prev = (_is_sun_prev and st != "yukyu") or st == "legal"
+            _holiday_kind_prev = "legal" if _is_domingo_legal_prev else "kyujitsu"
+            _kyujitsu_mode_prev = state["settings"].get("kyujitsu_rate_mode", "1.35")
 
             if st == "absent":
                 preview_text.value = "欠勤: ¥0 — falta não remunerada"
@@ -1956,6 +2050,8 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
                 pay = calculate_shift_pay(jikyuu, "holiday",
                                           start_str=s, end_str=e,
                                           break_min=brk, is_holiday=True,
+                                          holiday_kind=_holiday_kind_prev,
+                                          kyujitsu_rate_mode=_kyujitsu_mode_prev,
                                           base_shift=stype, ot_start_str=ot_cfg,
                                           cfg_start_str=cfg_start, cfg_end_str=cfg_end,
                                           wage_round_mode=_wage_rm,
@@ -2521,6 +2617,7 @@ def build_holerite_tab(page: ft.Page, state: dict, refresh_all):
             use_leader_addon=bool(settings.get("use_leader_addon", False)),
             leader_addon_hours=float(settings.get("leader_addon_hours") or 168),
             night_interval_minutes=int(settings.get("night_interval_minutes") or 0),
+            kyujitsu_rate_mode=settings.get("kyujitsu_rate_mode", "1.35"),
             anchor_group=settings.get("anchor_group"),
             alt_monthly_rest_pattern=settings.get("alt_monthly_rest_pattern", "5x2"),
             shift_anchor_date=(date.fromisoformat(settings["shift_anchor_date"])
@@ -3998,6 +4095,64 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
         night_interval_result.update()
     night_interval_f.on_change = _save_night_interval
 
+    # ── Taxa de 休日出勤 (Kyūjitsu Shukkin) — v2.56 ───────────────────
+    # Domingo (法定休日) NUNCA aparece aqui — continua sempre 1,35x fixo,
+    # por exigência legal, não é escolha da empresa. Essa configuração
+    # só afeta 休日出勤 (所定休日): trabalho numa folga que a empresa
+    # concede ALÉM do mínimo legal (ex: sábado de folga na escala,
+    # feriado corporativo marcado manualmente como trabalhado). A lei
+    # não obriga nenhum adicional nesse caso — cada empresa decide.
+    kyujitsu_help = ft.Text(
+        "Domingo (法定休日) é sempre 1,35x por lei — não aparece aqui. "
+        "Isso configura só 休日出勤 (folga que sua empresa concede além "
+        "do mínimo legal, ex: sábado de folga trabalhado). Confirme com "
+        "seu RH ou compare com um holerite real antes de mudar do padrão.",
+        size=11, color="#A0A0A0", italic=True,
+    )
+
+    def _set_kyujitsu_mode(mode):
+        settings["kyujitsu_rate_mode"] = mode
+        _mem_cache[KEY_SETTINGS] = settings
+        save_json(page, KEY_SETTINGS, settings)
+        for m, btn in (("1.35", btn_kyujitsu_135), ("1.25", btn_kyujitsu_125),
+                       ("normal", btn_kyujitsu_normal)):
+            btn.style = ft.ButtonStyle(
+                bgcolor=ACCENT if mode == m else BG_SURFACE,
+                color="#121212" if mode == m else TEXT_PRIMARY,
+            )
+            btn.update()
+
+    _cur_kyujitsu = settings.get("kyujitsu_rate_mode", "1.35")
+    btn_kyujitsu_135 = ft.FilledButton(
+        "1,35x integral",
+        on_click=lambda _: _set_kyujitsu_mode("1.35"),
+        style=ft.ButtonStyle(
+            bgcolor=ACCENT if _cur_kyujitsu == "1.35" else BG_SURFACE,
+            color="#121212" if _cur_kyujitsu == "1.35" else TEXT_PRIMARY,
+        ), expand=1,
+    )
+    btn_kyujitsu_125 = ft.FilledButton(
+        "1,25x integral",
+        on_click=lambda _: _set_kyujitsu_mode("1.25"),
+        style=ft.ButtonStyle(
+            bgcolor=ACCENT if _cur_kyujitsu == "1.25" else BG_SURFACE,
+            color="#121212" if _cur_kyujitsu == "1.25" else TEXT_PRIMARY,
+        ), expand=1,
+    )
+    btn_kyujitsu_normal = ft.FilledButton(
+        "Dia normal",
+        on_click=lambda _: _set_kyujitsu_mode("normal"),
+        style=ft.ButtonStyle(
+            bgcolor=ACCENT if _cur_kyujitsu == "normal" else BG_SURFACE,
+            color="#121212" if _cur_kyujitsu == "normal" else TEXT_PRIMARY,
+        ), expand=1,
+    )
+    kyujitsu_row = ft.Row(
+        controls=[btn_kyujitsu_135, btn_kyujitsu_125, btn_kyujitsu_normal],
+        spacing=6,
+    )
+
+
     def _toggle_leader_addon(e):
         settings["use_leader_addon"] = e.control.value
         save_json(page, KEY_SETTINGS, settings)
@@ -4470,6 +4625,12 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
                 night_interval_help,
                 night_interval_f,
                 night_interval_result,
+            ], spacing=12, tight=True)),
+
+            card(ft.Column(controls=[
+                section_header("TAXA DE 休日出勤 (KYŪJITSU SHUKKIN)"),
+                kyujitsu_help,
+                kyujitsu_row,
             ], spacing=12, tight=True)),
 
             card(ft.Column(controls=[
@@ -5015,8 +5176,8 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
                   "+25% sobre base"),
             _rule("休出手当・法定休出 Folga/Feriado/Domingo",
                   "Trabalhou em dia de folga, feriado ou domingo",
-                  "Taxa cheia 1,35x (único adicional)"),
-            _p("⚠️ Domingo e feriado trabalhado recebem 1,35x sobre as horas trabalhadas nesse dia — essas horas não aparecem separadamente em 'Salário Base', e não soma noturno nem hora extra por cima, mesmo que o horário caia na madrugada. Mesma lógica para hora extra: as horas de 残業 saem 100% da linha 'Salário Base' e vão para 'Hora Extra' à taxa cheia de 1,25x — nunca as duas linhas juntas para a mesma hora. Validado com holerites reais da empresa."),
+                  "Domingo: sempre 1,35x. 休日出勤: taxa configurável (ver abaixo)"),
+            _p("⚠️ Domingo (法定休日 — folga legalmente obrigatória) SEMPRE recebe 1,35x sobre as horas trabalhadas, não é escolha da empresa. Já 休日出勤 (所定休日 — folga que a empresa concede além do mínimo legal, ex: sábado de folga na escala) tem taxa CONFIGURÁVEL em ⚙️ Config → \"Taxa de 休日出勤\": 1,35x integral (padrão), 1,25x integral, ou dia normal (sem taxa de feriado nenhuma — calcula como um dia comum de trabalho, com 残業 só acima do limiar). Nos dois casos com taxa integral, essas horas não aparecem separadamente em 'Salário Base', e não soma noturno nem hora extra por cima, mesmo que o horário caia na madrugada. Mesma lógica para hora extra normal: as horas de 残業 saem 100% da linha 'Salário Base' e vão para 'Hora Extra' à taxa cheia de 1,25x — nunca as duas linhas juntas para a mesma hora. Validado com holerites reais da empresa."),
 
             # ── Ponto diário ─────────────────────────────────────────
             _title("📅 Registrando o Ponto"),
@@ -5033,7 +5194,7 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
             _item("Abono / Vale / Bico extra (¥)", "Campo numérico no modal",
                   "Qualquer ganho extra do dia: vale, arubaito (バイト), gorjeta, ajuda de custo. Acumulado no holerite separadamente."),
             _item("Trabalho em Folga/Feriado", "Preencha Entrada e Saída",
-                  "Taxa cheia 1,35x sobre essas horas. Vale para folga, feriado e domingo."),
+                  "Domingo: sempre 1,35x. 休日出勤 (folga não-domingo): taxa configurável em ⚙️ Config → \"Taxa de 休日出勤\"."),
             _item("有休 em Feriado Corporativo",
                   "Ative o toggle 有休 em Feriado, sem preencher horário",
                   "Usa a jornada normal configurada (igual ao Yukyu comum) — não injeta mais 8h fixo. Se preencher Entrada/Saída, conta como trabalho no feriado (taxa cheia), não Yukyu."),

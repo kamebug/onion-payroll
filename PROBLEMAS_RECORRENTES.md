@@ -408,6 +408,28 @@ carregamento, seguindo exatamente o que está declarado em
     a arquitetura de deploy do projeto (web vs. nativo) realmente
     suporta a tecnologia envolvida
 
+34. **O padrão do item #31 quase se repetiu uma 4ª vez — dessa vez
+    achado ANTES de virar bug real, não depois.** Implementando a taxa
+    configurável de 休日出勤 (v2.56.0), encontrei `_rate_holiday` como
+    uma ÚNICA variável compartilhada entre domingo e 休日出勤 na
+    agregação mensal, sobrescrita a cada dia iterado no loop. Nunca
+    tinha causado problema porque as duas categorias sempre tiveram a
+    MESMA taxa (0,35 fixo) — o compartilhamento era inofensivo por
+    coincidência, não por design correto. No momento em que 休日出勤
+    ganhou uma taxa PRÓPRIA (podendo divergir de domingo), esse
+    compartilhamento silencioso teria produzido o valor errado em
+    qualquer mês com os dois tipos de dia coexistindo — sem nenhum
+    erro, sem nenhum aviso, só um número sutilmente errado no
+    holerite previsto. **Lição prática:** ao adicionar uma nova
+    dimensão de variação a uma regra que antes era uniforme (aqui:
+    "todo is_holiday paga 0,35" virou "depende do tipo de holiday"),
+    sempre `grep` por TODAS as variáveis que assumiam essa
+    uniformidade como premissa implícita — não só os `if`/`elif` que
+    decidem o quê aplicar, mas também acumuladores, caches e variáveis
+    "constantes o mês inteiro" que podem ter sido escritas quando a
+    premissa de uniformidade ainda era verdadeira e nunca precisaram
+    ser revisitadas até agora
+
 ---
 
 ## 🔮 Possível melhoria futura (não implementada)

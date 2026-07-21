@@ -1504,6 +1504,191 @@ class TestPresencaMensal(unittest.TestCase):
         self.assertEqual(r["dias_programados"], 0)
 
 
+class TestKyujitsuShukkinTaxaCalculateShiftPay(unittest.TestCase):
+    """Valida holiday_kind/kyujitsu_rate_mode direto em calculate_shift_pay."""
+
+    def _dia(self, **kw):
+        base = dict(
+            jikyuu=1500, shift_type="holiday",
+            start_str="20:35", end_str="08:35",
+            break_min=65, block=1, is_holiday=True,
+        )
+        base.update(kw)
+        return calculate_shift_pay(**base)
+
+    def test_default_holiday_kind_legal_preserva_1_35_fixo(self):
+        # Sem informar holiday_kind (default "legal") — comportamento
+        # idêntico a qualquer versão anterior à v2.56, mesmo passando
+        # kyujitsu_rate_mode="1.25" (que só deve valer p/ "kyujitsu").
+        pay = self._dia(kyujitsu_rate_mode="1.25")
+        pay_ref = self._dia()
+        self.assertEqual(pay["holiday_pay"], pay_ref["holiday_pay"])
+        self.assertGreater(pay["holiday_pay"], 0)
+
+    def test_kyujitsu_1_35_igual_ao_comportamento_antigo(self):
+        pay_kyujitsu = self._dia(holiday_kind="kyujitsu", kyujitsu_rate_mode="1.35")
+        pay_legal    = self._dia(holiday_kind="legal")
+        self.assertEqual(pay_kyujitsu["holiday_pay"], pay_legal["holiday_pay"])
+
+    def test_kyujitsu_1_25_reduz_o_valor(self):
+        pay_135 = self._dia(holiday_kind="kyujitsu", kyujitsu_rate_mode="1.35")
+        pay_125 = self._dia(holiday_kind="kyujitsu", kyujitsu_rate_mode="1.25")
+        self.assertLess(pay_125["holiday_pay"], pay_135["holiday_pay"])
+        self.assertGreater(pay_125["holiday_pay"], 0)
+
+    def test_kyujitsu_normal_zera_holiday_pay_e_usa_base_mais_extra(self):
+        pay_normal = self._dia(holiday_kind="kyujitsu", kyujitsu_rate_mode="normal",
+                                base_shift="night", ot_start_str="06:35")
+        self.assertEqual(pay_normal["holiday_pay"], 0)
+        self.assertGreater(pay_normal["base_pay"], 0)
+        # dia comum: base_pay + overtime_pay + night_pay, sem holiday_pay
+        self.assertEqual(
+            pay_normal["total_gross"],
+            pay_normal["base_pay"] + pay_normal["overtime_pay"] + pay_normal["night_pay"],
+        )
+
+    def test_kyujitsu_normal_bate_com_dia_comum_equivalente(self):
+        # Mesmo horário, mesmo turno-base — 休日出勤 "normal" deve dar
+        # EXATAMENTE o mesmo resultado que um dia comum de trabalho
+        # (não é só multiplicador zerado, é a MESMA ramificação de
+        # cálculo).
+        pay_kyujitsu_normal = self._dia(
+            holiday_kind="kyujitsu", kyujitsu_rate_mode="normal",
+            base_shift="night", ot_start_str="06:35",
+        )
+        pay_dia_comum = calculate_shift_pay(
+            jikyuu=1500, shift_type="night",
+            start_str="20:35", end_str="08:35",
+            break_min=65, block=1, is_holiday=False,
+            base_shift="night", ot_start_str="06:35",
+        )
+        self.assertEqual(pay_kyujitsu_normal["base_pay"], pay_dia_comum["base_pay"])
+        self.assertEqual(pay_kyujitsu_normal["overtime_pay"], pay_dia_comum["overtime_pay"])
+        self.assertEqual(pay_kyujitsu_normal["night_pay"], pay_dia_comum["night_pay"])
+        self.assertEqual(pay_kyujitsu_normal["total_gross"], pay_dia_comum["total_gross"])
+
+    def test_extra_minutes_em_kyujitsu_normal_vira_hora_extra_1_25(self):
+        pay_normal = self._dia(holiday_kind="kyujitsu", kyujitsu_rate_mode="normal",
+                                base_shift="night", ot_start_str="06:35",
+                                extra_minutes=30)
+        pay_135 = self._dia(holiday_kind="kyujitsu", kyujitsu_rate_mode="1.35",
+                             extra_minutes=30)
+        # No modo "normal", 延長 soma em overtime_minutes (dia comum);
+        # no modo 1,35x, soma dentro das horas de feriado (net_minutes).
+        self.assertGreaterEqual(pay_normal["overtime_minutes"], 30)
+        self.assertEqual(pay_135["overtime_minutes"], 0)
+
+
+class TestKyujitsuShukkinTaxaForecastMensal(unittest.TestCase):
+    """Valida kyujitsu_rate_mode em compute_monthly_forecast — inclusive
+    o cenário de mês misto (domingo + 休日出勤) que exercita a separação
+    de _rate_legal/_rate_kyujitsu (bug real evitado na implementação)."""
+
+    def test_default_1_35_preserva_comportamento_antigo(self):
+        # Dia 2/jun/2026 é folga real (não domingo) no ciclo 4x2 padrão
+        # — mesmo dia já usado em TestFeriadoEDomingo.
+        r_default = base_forecast(day_overrides={
+            "2": {"status": "normal", "start": "20:35",
+                  "end": "08:35", "break_min": 65},
+        })
+        r_explicito = base_forecast(day_overrides={
+            "2": {"status": "normal", "start": "20:35",
+                  "end": "08:35", "break_min": 65},
+        }, kyujitsu_rate_mode="1.35")
+        self.assertEqual(r_default["holiday_pay"], r_explicito["holiday_pay"])
+        self.assertGreater(r_default["holiday_pay"], 0)
+
+    def test_1_25_reduz_o_holiday_pay_do_mes(self):
+        r_135 = base_forecast(day_overrides={
+            "2": {"status": "normal", "start": "20:35",
+                  "end": "08:35", "break_min": 65},
+        }, kyujitsu_rate_mode="1.35")
+        r_125 = base_forecast(day_overrides={
+            "2": {"status": "normal", "start": "20:35",
+                  "end": "08:35", "break_min": 65},
+        }, kyujitsu_rate_mode="1.25")
+        self.assertLess(r_125["holiday_pay"], r_135["holiday_pay"])
+        self.assertGreater(r_125["holiday_pay"], 0)
+
+    def test_normal_zera_holiday_pay_e_soma_em_base_extra(self):
+        r_normal = base_forecast(day_overrides={
+            "2": {"status": "normal", "start": "20:35",
+                  "end": "08:35", "break_min": 65},
+        }, kyujitsu_rate_mode="normal")
+        r_sem_registro = base_forecast(day_overrides={})
+        self.assertEqual(r_normal["holiday_pay"], 0)
+        self.assertEqual(r_normal["days_holiday"], 0)
+        self.assertGreater(r_normal["days_normal"], r_sem_registro["days_normal"])
+        # Bruto ainda deve subir em relação a não ter trabalhado nada
+        self.assertGreater(r_normal["gross"], r_sem_registro["gross"])
+
+    def test_domingo_continua_1_35_independente_da_config_kyujitsu(self):
+        r_135 = base_forecast(day_overrides={
+            "14": {"status": "normal", "start": "20:35",
+                   "end": "08:35", "break_min": 65},
+        }, kyujitsu_rate_mode="1.35")
+        r_125 = base_forecast(day_overrides={
+            "14": {"status": "normal", "start": "20:35",
+                   "end": "08:35", "break_min": 65},
+        }, kyujitsu_rate_mode="1.25")
+        r_normal = base_forecast(day_overrides={
+            "14": {"status": "normal", "start": "20:35",
+                   "end": "08:35", "break_min": 65},
+        }, kyujitsu_rate_mode="normal")
+        # Domingo (dia 14) NUNCA lê kyujitsu_rate_mode — sempre 1,35x
+        self.assertEqual(r_135["legal_holiday_pay"], r_125["legal_holiday_pay"])
+        self.assertEqual(r_135["legal_holiday_pay"], r_normal["legal_holiday_pay"])
+        self.assertGreater(r_135["legal_holiday_pay"], 0)
+
+    def test_status_legal_explicito_ignora_kyujitsu_rate_mode(self):
+        # status="legal" marcado manualmente (não é domingo de verdade)
+        # também deve ficar sempre em 1,35x, nunca ler kyujitsu_rate_mode.
+        r_135 = base_forecast(day_overrides={
+            "3": {"status": "legal", "start": "20:35",
+                  "end": "08:35", "break_min": 65},
+        }, kyujitsu_rate_mode="1.35")
+        r_normal = base_forecast(day_overrides={
+            "3": {"status": "legal", "start": "20:35",
+                  "end": "08:35", "break_min": 65},
+        }, kyujitsu_rate_mode="normal")
+        self.assertEqual(r_135["legal_holiday_pay"], r_normal["legal_holiday_pay"])
+        self.assertGreater(r_135["legal_holiday_pay"], 0)
+
+    def test_mes_misto_domingo_e_kyujitsu_nao_diverge(self):
+        # Cenário exato que exercita o bug real evitado na implementação:
+        # domingo (dia 14, sempre 1,35x) E 休日出勤 (dia 2, configurado
+        # 1,25x) no MESMO mês — com uma única _rate_holiday compartilhada
+        # (arquitetura anterior à v2.56), o valor de UM dos dois sairia
+        # errado, usando a taxa do último dia iterado pelo loop.
+        r_misto = base_forecast(day_overrides={
+            "2":  {"status": "normal", "start": "20:35",
+                   "end": "08:35", "break_min": 65},
+            "14": {"status": "normal", "start": "20:35",
+                   "end": "08:35", "break_min": 65},
+        }, kyujitsu_rate_mode="1.25")
+
+        # Referências isoladas — cada categoria calculada sozinha no mês,
+        # pra comparar exatamente com a parcela correspondente do misto.
+        r_so_kyujitsu = base_forecast(day_overrides={
+            "2": {"status": "normal", "start": "20:35",
+                  "end": "08:35", "break_min": 65},
+        }, kyujitsu_rate_mode="1.25")
+        r_so_domingo = base_forecast(day_overrides={
+            "14": {"status": "normal", "start": "20:35",
+                   "end": "08:35", "break_min": 65},
+        }, kyujitsu_rate_mode="1.25")
+
+        self.assertEqual(r_misto["holiday_pay"], r_so_kyujitsu["holiday_pay"],
+                          "休日出勤 (1,25x) não pode ser afetado por domingo coexistir no mês")
+        self.assertEqual(r_misto["legal_holiday_pay"], r_so_domingo["legal_holiday_pay"],
+                          "Domingo (1,35x) não pode ser afetado por 休日出勤 coexistir no mês")
+        # E os dois têm que ser DIFERENTES entre si (taxas diferentes)
+        self.assertNotEqual(
+            r_misto["holiday_pay"] / max(r_misto.get("holiday_hours", 1) or 1, 0.0001),
+            r_misto["legal_holiday_pay"] / max(r_misto.get("legal_hours", 1) or 1, 0.0001),
+        )
+
+
 if __name__ == "__main__":
     print("=" * 60)
     print("ONION PAYROLL — SUITE DE TESTES AUTOMATIZADOS")
