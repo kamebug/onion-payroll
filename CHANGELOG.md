@@ -9,6 +9,31 @@
 > aconteceu até agora). Versões anteriores a essa data bumpavam MINOR
 > pra qualquer mudança, inclusive bugfix puro — não retroagidas, só
 > documentado aqui pra explicar a diferença de critério.
+>
+> **Critério pra REVERT de funcionalidade (caso zona-cinzenta, ver
+> v2.58.2):** remover uma feature já lançada, na SemVer oficial
+> (semver.org), tende a contar como mudança incompatível — candidata a
+> MAJOR. Como este projeto reserva MAJOR só pra ruptura de dados/uso
+> (não pra decisão de UX desfeita), a regra adotada aqui é: se o
+> revert é puramente uma correção de uma decisão de design/UX que
+> ficou ruim na prática (sem quebrar dado salvo, sem mudar o resultado
+> de nenhum cálculo já validado), sobe **PATCH**, tratado como
+> bugfix. Se o revert remove uma funcionalidade que dados/fluxos
+> já existentes passaram a depender (ex: um formato de arquivo, uma
+> config salva que outra versão não entende mais), sobe **MAJOR**.
+
+## [2.58.3] — 2026-07-21 — LEGENDA DA ABA CALENDÁRIO SINCRONIZADA COM A DE AJUDA (PATCH)
+
+### 🐛 Corrigido
+
+- A aba 📅 Calendário tem sua PRÓPRIA legenda de cores (`_leg`),
+  separada da legenda da aba Ajuda (`_color_legend`) — na v2.56.0/
+  v2.57.0, adicionei a Folga Trabalhada (休日出勤) na de Ajuda e
+  esqueci completamente da legenda do Calendário, que ficou com 7
+  cores enquanto a de Ajuda tinha 8. Adicionada a entrada que faltava;
+  as duas agora batem, 8 cores cada
+
+---
 
 ## [2.58.2] — 2026-07-21 — REVERTE COR DE DOMINGO DE FOLGA + CORRIGE TEXTO SOBRE NOTURNO (PATCH)
 

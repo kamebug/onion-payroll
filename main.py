@@ -1706,8 +1706,8 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607221106"   # atualizado automaticamente pelo deploy.ps1
-APP_VERSION    = "2.58.2"       # sincronizar manualmente com pyproject.toml/CHANGELOG.md a cada bump de versão
+BUILD_ID       = "2607201037"   # atualizado automaticamente pelo deploy.ps1
+APP_VERSION    = "2.58.3"       # sincronizar manualmente com pyproject.toml/CHANGELOG.md a cada bump de versão
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -2497,9 +2497,10 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
                 _leg("#00796B",       "Saída Antecipada"),
             ], spacing=4, tight=True),
             ft.Column(controls=[
-                _leg(OFF_COLOR,  "Folga"),
-                _leg(CAL_CORP,   "Feriado Corporativo"),
-                _leg("#7B1FA2",  "欠勤 Falta"),
+                _leg(OFF_COLOR,    "Folga"),
+                _leg(CAL_CORP,     "Feriado Corporativo"),
+                _leg("#7B1FA2",    "欠勤 Falta"),
+                _leg(CAL_KYUJITSU, "Folga Trabalhada (休日出勤)"),
             ], spacing=4, tight=True),
         ],
         spacing=16,
