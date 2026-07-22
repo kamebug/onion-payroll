@@ -10,6 +10,75 @@
 > pra qualquer mudança, inclusive bugfix puro — não retroagidas, só
 > documentado aqui pra explicar a diferença de critério.
 
+## [2.58.1] — 2026-07-21 — TEXTOS DO 休日出勤 MAIS CLAROS PRO PÚBLICO PT-BR (PATCH)
+
+### 🔧 Alterado
+
+- Corrigido o botão de status "休日出勤" que estava com kanji cru como
+  rótulo principal — quebrava o padrão de todos os outros status
+  (rótulo PT principal + kanji secundário, ex: "Falta" / 欠勤). Agora
+  é "Folga Trabalhada" / 休日出勤, igual ao resto
+- Adicionado gloss/romaji em todo texto visível ao usuário onde
+  休日出勤, 所定休日 ou 法定休日 apareciam sem tradução nem romaji:
+  texto de ajuda em ⚙️ Config, cabeçalho da seção, aba Ajuda (regra,
+  parágrafo de aviso, item de "Trabalho em Folga/Feriado"), e legenda
+  de cores do calendário
+- Nenhuma mudança de lógica — só texto. 135 testes automatizados
+  continuam passando sem alteração
+
+---
+
+## [2.58.0] — 2026-07-21 — DOMINGO DE FOLGA TAMBÉM FICA VERMELHO
+
+### 🟢 Adicionado
+
+- **Domingo de folga (não trabalhado) agora fica com fundo vermelho**
+  (`C_RED`, `#FF5252`) no calendário — antes só domingo TRABALHADO
+  tinha destaque visual próprio (vermelho escuro); domingo de folga
+  ficava com o mesmo azul de qualquer outra folga do ciclo, com a
+  distinção escondida só na cor do número, fácil de passar despercebido
+- Dois tons de vermelho agora distinguem os dois casos: `#FF5252`
+  (vermelho vivo) para domingo de folga, `#C62828`/`CAL_SUNDAY_WORK`
+  (vermelho escuro) para domingo trabalhado
+- Legenda de cores (aba Ajuda) atualizada com a nova entrada
+
+### 🐛 Corrigido
+
+- Código morto removido no cálculo da cor do número: um `elif is_sunday:`
+  no fim da cadeia tinha DUAS atribuições seguidas pra `num_color`
+  (`= C_RED` imediatamente sobrescrita por `= C_BLUE`), então a
+  primeira nunca tinha efeito — e na prática esse branch nem era mais
+  alcançável (domingo só pode ter `cycle_st` "work" ou "off", ambos já
+  tratados antes dele). Removido; o `else` final (`CAL_TEXT_WORK`) já
+  cobre corretamente os casos restantes
+
+---
+
+## [2.57.0] — 2026-07-21 — COR PRÓPRIA PRO 休日出勤 NO CALENDÁRIO
+
+### 🟢 Adicionado
+
+- **休日出勤 (Kyūjitsu Shukkin) ganha cor própria no calendário** —
+  azul claro (`#29B6F6`, `CAL_KYUJITSU`), com indicador "休" no canto.
+  Antes caía no mesmo teal genérico de "horário customizado" (mesma
+  cor de Saída Antecipada ou qualquer dia normal com horário editado
+  manualmente), sem nenhuma distinção visual — só perceptível abrindo
+  o dia no modal e olhando o status selecionado
+- Branch de prioridade `status == "holiday"` adicionado ANTES do
+  catch-all de `has_time` na decisão de cor da célula — necessário
+  porque todo dia de 休日出勤 tem horário preenchido, então cairia
+  sempre no catch-all genérico se não tivesse prioridade própria
+- Legenda de cores (aba Ajuda) atualizada com a nova entrada
+
+### 📝 Nota
+
+- Status "Domingo 1,35x" (`legal`, explícito) ainda cai no mesmo teal
+  genérico — não tem cor própria, mesma situação que 休日出勤 tinha
+  antes desta versão. Não alterado aqui por não ter sido pedido; considerar
+  se faz sentido dar uma cor própria também numa próxima sessão
+
+---
+
 ## [2.56.0] — 2026-07-21 — TAXA CONFIGURÁVEL DE 休日出勤 (KYŪJITSU SHUKKIN)
 
 ### 🟢 Adicionado

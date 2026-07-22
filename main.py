@@ -1706,8 +1706,8 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607211044"   # atualizado automaticamente pelo deploy.ps1
-APP_VERSION    = "2.56.0"       # sincronizar manualmente com pyproject.toml/CHANGELOG.md a cada bump de versão
+BUILD_ID       = "2607201037"   # atualizado automaticamente pelo deploy.ps1
+APP_VERSION    = "2.58.1"       # sincronizar manualmente com pyproject.toml/CHANGELOG.md a cada bump de versão
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -1783,6 +1783,9 @@ NAV_BORDER     = "#00C2A8"   # Linha turquesa separadora
 # CALENDÁRIO — texto e bordas
 CAL_YUKYU      = "#4a2800"   # Yukyu — laranja escuro
 CAL_CORP       = "#F4B400"   # Feriado corp — amarelo Google (Banana)
+CAL_KYUJITSU   = "#29B6F6"   # 休日出勤 Kyūjitsu Shukkin — azul claro (Google Light Blue),
+                              # distinto do azul de Folga (OFF_COLOR, mais escuro/peacock)
+CAL_TEXT_KYUJITSU = "#FFFFFF"  # branco sobre azul claro
 CAL_MODIF      = "#2d1a4a"   # Modificado — roxo escuro
 CAL_TEXT_WORK  = "#C8F7DC"   # verde claro
 CAL_TEXT_OFF   = "#DBEAFE"   # azul claro
@@ -1875,7 +1878,7 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
             ("early",   "Saída Antecipada",   "",       "Saída Antecipada — horário real"),
             ("absent",  "Falta",              "欠勤",    "Falta 欠勤"),
             ("yukyu",   "Folga Remunerada",   "有休",    "有休 Yukyu — jornada normal, sem 残業/noturno"),
-            ("holiday", "休日出勤",             "Kyūjitsu Shukkin", "休日出勤 Kyūjitsu Shukkin — trabalho em folga/feriado (taxa configurável em ⚙️ Config)"),
+            ("holiday", "Folga Trabalhada",     "休日出勤", "休日出勤 (Kyūjitsu Shukkin) — trabalho num dia de folga que a empresa concede além do mínimo legal, não é domingo. Taxa configurável em ⚙️ Config."),
             ("legal",   "Domingo 1,35x",      "法定休出", "法定休出 Domingo/Folga Legal (taxa cheia 1,35x)"),
         ]
         status_desc = ft.Text(
@@ -2294,18 +2297,31 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
 
         # ── Determinar fundo da célula por status ───────────────────
         is_corp_hol = day_num in month_hol_corp
-        modified    = (status in ("absent", "yukyu") or has_time or yukyu_hol)
+        modified    = (status in ("absent", "yukyu", "holiday") or has_time or yukyu_hol)
 
         if status == "absent":
             bg = "#7B1FA2"       # 欠勤 Falta — roxo Google Grape
         elif status == "yukyu":
             bg = "#FF6D00"       # 有休 Yukyu — laranja Google Tangerine
+        elif status == "holiday":
+            # v2.56: 休日出勤 ganha cor própria (azul claro) — antes caía
+            # no mesmo teal genérico de "horário customizado" (linha
+            # abaixo), sem nenhuma distinção visual no calendário.
+            # Prioridade ANTES do catch-all de has_time, senão nunca
+            # seria alcançado (todo dia de 休日出勤 tem horário preenchido).
+            bg = CAL_KYUJITSU     # 休日出勤 Kyūjitsu Shukkin — azul claro
         elif status == "early" or has_time or yukyu_hol:
             bg = "#00796B"       # Saiu mais cedo / horário customizado
         elif is_corp_hol:
             bg = C_HOL_CO        # Feriado corporativo — amarelo
         elif cycle_st == "off":
-            bg = C_OFF           # Folga — azul
+            # v2.57: domingo de folga (não trabalhado) também fica
+            # vermelho — antes só domingo TRABALHADO tinha destaque
+            # visual (CAL_SUNDAY_WORK, vermelho escuro); domingo de
+            # folga ficava igual a qualquer outra folga (azul), com a
+            # distinção escondida só no número (C_RED, ver bloco de
+            # num_color abaixo) — fácil de passar despercebido.
+            bg = C_RED if is_sunday else C_OFF   # Folga — vermelho se domingo, senão azul
         elif is_sunday:
             bg = CAL_SUNDAY_WORK # Domingo trabalhado — vermelho escuro
         else:
@@ -2318,22 +2334,21 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
             num_color = "#FFFFFF"
         elif status == "yukyu":
             num_color = "#FFFFFF"
+        elif status == "holiday":
+            num_color = CAL_TEXT_KYUJITSU
         elif has_time or yukyu_hol:
             num_color = "#FFFFFF"
         elif is_corp_hol:
             num_color = CAL_TEXT_CORP
         elif cycle_st == "off":
             if is_sunday:
-                num_color = C_RED
+                num_color = "#FFFFFF"   # branco sobre vermelho (domingo de folga)
             elif is_saturday:
                 num_color = C_BLUE
             else:
                 num_color = CAL_TEXT_OFF
         elif is_sunday and cycle_st == "work":
             num_color = "#FFFFFF"   # branco sobre vermelho escuro
-        elif is_sunday:
-            num_color = C_RED       # domingo folga — vermelho brilhante
-            num_color = C_BLUE
         else:
             num_color = CAL_TEXT_WORK
 
@@ -2347,6 +2362,9 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
         elif yukyu_hol:
             indicator = "有"
             ind_color  = "#FFE082"
+        elif status == "holiday":
+            indicator  = "休"
+            ind_color  = "#FFFFFF"
         elif status == "early":
             indicator  = "↓"
             ind_color  = "#FFFFFF"
@@ -4103,10 +4121,11 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
     # feriado corporativo marcado manualmente como trabalhado). A lei
     # não obriga nenhum adicional nesse caso — cada empresa decide.
     kyujitsu_help = ft.Text(
-        "Domingo (法定休日) é sempre 1,35x por lei — não aparece aqui. "
-        "Isso configura só 休日出勤 (folga que sua empresa concede além "
-        "do mínimo legal, ex: sábado de folga trabalhado). Confirme com "
-        "seu RH ou compare com um holerite real antes de mudar do padrão.",
+        "Domingo (法定休日 — folga obrigatória por lei) é sempre 1,35x "
+        "— não aparece aqui. Isso configura só 休日出勤 (Kyūjitsu Shukkin "
+        "— folga que sua empresa concede além do mínimo legal, ex: "
+        "sábado de folga trabalhado). Confirme com seu RH ou compare "
+        "com um holerite real antes de mudar do padrão.",
         size=11, color="#A0A0A0", italic=True,
     )
 
@@ -4628,7 +4647,7 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
             ], spacing=12, tight=True)),
 
             card(ft.Column(controls=[
-                section_header("TAXA DE 休日出勤 (KYŪJITSU SHUKKIN)"),
+                section_header("TAXA DE FOLGA TRABALHADA (休日出勤, KYŪJITSU SHUKKIN)"),
                 kyujitsu_help,
                 kyujitsu_row,
             ], spacing=12, tight=True)),
@@ -5174,10 +5193,10 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
                   "Taxa cheia 1,25x (separado da base)"),
             _rule("深夜手当 Adicional Noturno", "Minutos entre 22:00 e 05:00",
                   "+25% sobre base"),
-            _rule("休出手当・法定休出 Folga/Feriado/Domingo",
+            _rule("Folga/Feriado/Domingo Trabalhado (休出手当・法定休出)",
                   "Trabalhou em dia de folga, feriado ou domingo",
-                  "Domingo: sempre 1,35x. 休日出勤: taxa configurável (ver abaixo)"),
-            _p("⚠️ Domingo (法定休日 — folga legalmente obrigatória) SEMPRE recebe 1,35x sobre as horas trabalhadas, não é escolha da empresa. Já 休日出勤 (所定休日 — folga que a empresa concede além do mínimo legal, ex: sábado de folga na escala) tem taxa CONFIGURÁVEL em ⚙️ Config → \"Taxa de 休日出勤\": 1,35x integral (padrão), 1,25x integral, ou dia normal (sem taxa de feriado nenhuma — calcula como um dia comum de trabalho, com 残業 só acima do limiar). Nos dois casos com taxa integral, essas horas não aparecem separadamente em 'Salário Base', e não soma noturno nem hora extra por cima, mesmo que o horário caia na madrugada. Mesma lógica para hora extra normal: as horas de 残業 saem 100% da linha 'Salário Base' e vão para 'Hora Extra' à taxa cheia de 1,25x — nunca as duas linhas juntas para a mesma hora. Validado com holerites reais da empresa."),
+                  "Domingo: sempre 1,35x. Folga Trabalhada (休日出勤, Kyūjitsu Shukkin): taxa configurável (ver abaixo)"),
+            _p("⚠️ Domingo (法定休日 — folga legalmente obrigatória) SEMPRE recebe 1,35x sobre as horas trabalhadas, não é escolha da empresa. Já a Folga Trabalhada (休日出勤, Kyūjitsu Shukkin — tecnicamente 所定休日, folga que a empresa concede além do mínimo legal, ex: sábado de folga na escala) tem taxa CONFIGURÁVEL em ⚙️ Config → \"Taxa de Folga Trabalhada\": 1,35x integral (padrão), 1,25x integral, ou dia normal (sem taxa de feriado nenhuma — calcula como um dia comum de trabalho, com hora extra 残業 só acima do limiar). Nos dois casos com taxa integral, essas horas não aparecem separadamente em 'Salário Base', e não soma noturno nem hora extra por cima, mesmo que o horário caia na madrugada. Mesma lógica para hora extra normal: as horas de hora extra (残業) saem 100% da linha 'Salário Base' e vão para 'Hora Extra' à taxa cheia de 1,25x — nunca as duas linhas juntas para a mesma hora. Validado com holerites reais da empresa."),
 
             # ── Ponto diário ─────────────────────────────────────────
             _title("📅 Registrando o Ponto"),
@@ -5194,7 +5213,7 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
             _item("Abono / Vale / Bico extra (¥)", "Campo numérico no modal",
                   "Qualquer ganho extra do dia: vale, arubaito (バイト), gorjeta, ajuda de custo. Acumulado no holerite separadamente."),
             _item("Trabalho em Folga/Feriado", "Preencha Entrada e Saída",
-                  "Domingo: sempre 1,35x. 休日出勤 (folga não-domingo): taxa configurável em ⚙️ Config → \"Taxa de 休日出勤\"."),
+                  "Domingo: sempre 1,35x. Folga Trabalhada (休日出勤, Kyūjitsu Shukkin — folga não-domingo): taxa configurável em ⚙️ Config → \"Taxa de Folga Trabalhada\"."),
             _item("有休 em Feriado Corporativo",
                   "Ative o toggle 有休 em Feriado, sem preencher horário",
                   "Usa a jornada normal configurada (igual ao Yukyu comum) — não injeta mais 8h fixo. Se preencher Entrada/Saída, conta como trabalho no feriado (taxa cheia), não Yukyu."),
@@ -5250,7 +5269,9 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
             _color_legend(WORK_COLOR, "Verde — Dia de Trabalho",
                           "Turno normal conforme o ciclo escolhido"),
             _color_legend(OFF_COLOR, "Azul — Folga",
-                          "Dias de descanso do ciclo"),
+                          "Dias de descanso do ciclo (exceto domingo — ver abaixo)"),
+            _color_legend("#FF5252", "Vermelho — Domingo de Folga",
+                          "Domingo sem trabalho, dentro do ciclo de descanso — destacado por ser folga legalmente obrigatória (法定休日)"),
             _color_legend(CAL_SUNDAY_WORK, "Vermelho Escuro — Domingo Trabalhado",
                           "Taxa cheia 1,35x quando o ciclo marca domingo como trabalho"),
             _color_legend(CAL_CORP, "Amarelo — Feriado",
@@ -5259,6 +5280,8 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
                           "Dia de férias pagas registrado"),
             _color_legend("#7B1FA2", "Roxo — 欠勤 Falta",
                           "Dia de falta registrado"),
+            _color_legend(CAL_KYUJITSU, "Azul Claro — Folga Trabalhada (休日出勤, Kyūjitsu Shukkin)",
+                          "Trabalho em folga/feriado não-domingo — taxa configurável em ⚙️ Config"),
             _color_legend("#00796B", "Verde-azulado — Saída Antecipada",
                           "Horário customizado registrado manualmente"),
 
