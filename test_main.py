@@ -1536,6 +1536,29 @@ class TestKyujitsuShukkinTaxaCalculateShiftPay(unittest.TestCase):
         self.assertLess(pay_125["holiday_pay"], pay_135["holiday_pay"])
         self.assertGreater(pay_125["holiday_pay"], 0)
 
+    def test_kyujitsu_integral_soma_noturno_igual_domingo(self):
+        # Regra explícita: taxa integral de 休日出勤 (1,35x OU 1,25x) tem
+        # que seguir a MESMA regra do domingo quanto ao adicional
+        # noturno — 深夜手当 continua somado à parte, como linha
+        # independente (não é zerado nem embutido dentro do premium de
+        # feriado). Só a hora extra genérica que fica absorvida.
+        pay_domingo = self._dia(holiday_kind="legal",
+                                 base_shift="night", ot_start_str="06:35")
+        pay_kyujitsu_135 = self._dia(holiday_kind="kyujitsu", kyujitsu_rate_mode="1.35",
+                                      base_shift="night", ot_start_str="06:35")
+        pay_kyujitsu_125 = self._dia(holiday_kind="kyujitsu", kyujitsu_rate_mode="1.25",
+                                      base_shift="night", ot_start_str="06:35")
+        self.assertGreater(pay_domingo["night_pay"], 0)
+        self.assertEqual(pay_domingo["night_pay"], pay_kyujitsu_135["night_pay"])
+        self.assertEqual(pay_domingo["night_pay"], pay_kyujitsu_125["night_pay"])
+        # E o noturno tem que estar de fato somado dentro do total_gross,
+        # não só calculado e descartado
+        for pay in (pay_domingo, pay_kyujitsu_135, pay_kyujitsu_125):
+            self.assertEqual(
+                pay["total_gross"],
+                pay["base_pay"] + pay["overtime_pay"] + pay["night_pay"] + pay["holiday_pay"],
+            )
+
     def test_kyujitsu_normal_zera_holiday_pay_e_usa_base_mais_extra(self):
         pay_normal = self._dia(holiday_kind="kyujitsu", kyujitsu_rate_mode="normal",
                                 base_shift="night", ot_start_str="06:35")

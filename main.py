@@ -1706,8 +1706,8 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607221031"   # atualizado automaticamente pelo deploy.ps1
-APP_VERSION    = "2.58.1"       # sincronizar manualmente com pyproject.toml/CHANGELOG.md a cada bump de versão
+BUILD_ID       = "2607201037"   # atualizado automaticamente pelo deploy.ps1
+APP_VERSION    = "2.58.2"       # sincronizar manualmente com pyproject.toml/CHANGELOG.md a cada bump de versão
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -2315,13 +2315,7 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
         elif is_corp_hol:
             bg = C_HOL_CO        # Feriado corporativo — amarelo
         elif cycle_st == "off":
-            # v2.57: domingo de folga (não trabalhado) também fica
-            # vermelho — antes só domingo TRABALHADO tinha destaque
-            # visual (CAL_SUNDAY_WORK, vermelho escuro); domingo de
-            # folga ficava igual a qualquer outra folga (azul), com a
-            # distinção escondida só no número (C_RED, ver bloco de
-            # num_color abaixo) — fácil de passar despercebido.
-            bg = C_RED if is_sunday else C_OFF   # Folga — vermelho se domingo, senão azul
+            bg = C_OFF           # Folga — azul (domingo de folga: número fica vermelho, ver abaixo)
         elif is_sunday:
             bg = CAL_SUNDAY_WORK # Domingo trabalhado — vermelho escuro
         else:
@@ -2342,7 +2336,7 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
             num_color = CAL_TEXT_CORP
         elif cycle_st == "off":
             if is_sunday:
-                num_color = "#FFFFFF"   # branco sobre vermelho (domingo de folga)
+                num_color = C_RED       # domingo de folga — número vermelho sobre fundo azul
             elif is_saturday:
                 num_color = C_BLUE
             else:
@@ -5196,7 +5190,7 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
             _rule("Folga/Feriado/Domingo Trabalhado (休出手当・法定休出)",
                   "Trabalhou em dia de folga, feriado ou domingo",
                   "Domingo: sempre 1,35x. Folga Trabalhada (休日出勤, Kyūjitsu Shukkin): taxa configurável (ver abaixo)"),
-            _p("⚠️ Domingo (法定休日 — folga legalmente obrigatória) SEMPRE recebe 1,35x sobre as horas trabalhadas, não é escolha da empresa. Já a Folga Trabalhada (休日出勤, Kyūjitsu Shukkin — tecnicamente 所定休日, folga que a empresa concede além do mínimo legal, ex: sábado de folga na escala) tem taxa CONFIGURÁVEL em ⚙️ Config → \"Taxa de Folga Trabalhada\": 1,35x integral (padrão), 1,25x integral, ou dia normal (sem taxa de feriado nenhuma — calcula como um dia comum de trabalho, com hora extra 残業 só acima do limiar). Nos dois casos com taxa integral, essas horas não aparecem separadamente em 'Salário Base', e não soma noturno nem hora extra por cima, mesmo que o horário caia na madrugada. Mesma lógica para hora extra normal: as horas de hora extra (残業) saem 100% da linha 'Salário Base' e vão para 'Hora Extra' à taxa cheia de 1,25x — nunca as duas linhas juntas para a mesma hora. Validado com holerites reais da empresa."),
+            _p("⚠️ Domingo (法定休日 — folga legalmente obrigatória) SEMPRE recebe 1,35x sobre as horas trabalhadas, não é escolha da empresa. Já a Folga Trabalhada (休日出勤, Kyūjitsu Shukkin — tecnicamente 所定休日, folga que a empresa concede além do mínimo legal, ex: sábado de folga na escala) tem taxa CONFIGURÁVEL em ⚙️ Config → \"Taxa de Folga Trabalhada\": 1,35x integral (padrão), 1,25x integral, ou dia normal (sem taxa de feriado nenhuma — calcula como um dia comum de trabalho, com hora extra 残業 só acima do limiar). Nos dois casos com taxa integral, essas horas não aparecem separadamente em 'Salário Base', e a hora extra genérica (残業 1,25x) não é somada por cima — fica absorvida dentro da própria taxa integral do dia. O adicional noturno (深夜手当) segue a MESMA regra do domingo — continua sendo somado à parte, como linha independente do holerite, mesmo que o horário caia na madrugada; a Folga Trabalhada em taxa integral não muda isso. Mesma lógica para hora extra em dia normal: as horas de hora extra (残業) saem 100% da linha 'Salário Base' e vão para 'Hora Extra' à taxa cheia de 1,25x — nunca as duas linhas juntas para a mesma hora. Validado com holerites reais da empresa."),
 
             # ── Ponto diário ─────────────────────────────────────────
             _title("📅 Registrando o Ponto"),
@@ -5269,9 +5263,7 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
             _color_legend(WORK_COLOR, "Verde — Dia de Trabalho",
                           "Turno normal conforme o ciclo escolhido"),
             _color_legend(OFF_COLOR, "Azul — Folga",
-                          "Dias de descanso do ciclo (exceto domingo — ver abaixo)"),
-            _color_legend("#FF5252", "Vermelho — Domingo de Folga",
-                          "Domingo sem trabalho, dentro do ciclo de descanso — destacado por ser folga legalmente obrigatória (法定休日)"),
+                          "Dias de descanso do ciclo. Se cair domingo, o número do dia fica vermelho (folga legalmente obrigatória, 法定休日)"),
             _color_legend(CAL_SUNDAY_WORK, "Vermelho Escuro — Domingo Trabalhado",
                           "Taxa cheia 1,35x quando o ciclo marca domingo como trabalho"),
             _color_legend(CAL_CORP, "Amarelo — Feriado",

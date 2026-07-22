@@ -10,6 +10,36 @@
 > pra qualquer mudança, inclusive bugfix puro — não retroagidas, só
 > documentado aqui pra explicar a diferença de critério.
 
+## [2.58.2] — 2026-07-21 — REVERTE COR DE DOMINGO DE FOLGA + CORRIGE TEXTO SOBRE NOTURNO (PATCH)
+
+### 🔧 Alterado
+
+- **Revertida a v2.58.0**: domingo de folga (não trabalhado) volta a
+  ficar azul (mesma cor de qualquer folga do ciclo) com o NÚMERO em
+  vermelho — o fundo vermelho inteiro ficou confuso. Domingo
+  TRABALHADO continua vermelho escuro normalmente
+- Legenda da aba Ajuda atualizada de volta pra acompanhar — removida a
+  entrada "Vermelho — Domingo de Folga", texto de "Azul — Folga"
+  voltou a mencionar o número vermelho do domingo dentro da própria
+  descrição, em vez de linha separada
+
+### 🐛 Corrigido
+
+- **Texto do manual sobre Folga Trabalhada (休日出勤) estava incorreto
+  quanto ao adicional noturno.** Dizia "não soma noturno... por cima",
+  mas o código sempre somou (corretamente, seguindo a mesma regra do
+  domingo, validada contra holerite real: 深夜手当 é uma linha
+  independente que soma as horas noturnas de TODOS os dias, inclusive
+  domingo/feriado). Só a hora extra genérica (残業 1,25x) que de fato
+  não é somada separadamente — fica absorvida dentro da taxa integral
+  do dia. Texto corrigido pra distinguir os dois casos claramente
+- Nenhuma mudança de lógica de cálculo — o código já computava certo,
+  só o texto estava enganoso. Adicionado teste de regressão
+  (`test_kyujitsu_integral_soma_noturno_igual_domingo`) travando essa
+  regra pra não quebrar silenciosamente no futuro
+
+---
+
 ## [2.58.1] — 2026-07-21 — TEXTOS DO 休日出勤 MAIS CLAROS PRO PÚBLICO PT-BR (PATCH)
 
 ### 🔧 Alterado
