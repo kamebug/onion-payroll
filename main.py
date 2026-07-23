@@ -1706,8 +1706,8 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607231232"   # atualizado automaticamente pelo deploy.ps1
-APP_VERSION    = "2.59.8"       # sincronizar manualmente com pyproject.toml/CHANGELOG.md a cada bump de versão
+BUILD_ID       = "2607201037"   # atualizado automaticamente pelo deploy.ps1
+APP_VERSION    = "2.59.9"       # sincronizar manualmente com pyproject.toml/CHANGELOG.md a cada bump de versão
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -2386,13 +2386,13 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
         # símbolo — status, 延, ¥) descem pra uma linha própria embaixo,
         # tamanho reduzido e cor branca uniforme, em vez de ficarem do
         # lado do número competindo por espaço/tamanho com o emoji.
-        def _emoji_badge(char, box=11):
+        def _emoji_badge(char, box=16):
             return ft.Container(
                 width=scaled(box), height=scaled(box),
                 alignment=ft.Alignment(0, 0),
                 clip_behavior=ft.ClipBehavior.HARD_EDGE,
                 content=ft.Text(char, size=scaled(box)),
-                scale=0.62,
+                scale=0.85,
             )
 
         vertical_emoji = []   # 🏭/🎌 — empilha ao lado do número
@@ -2452,7 +2452,8 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
             _top_row_controls.append(emoji_col)
         _top_row = ft.Row(controls=_top_row_controls, spacing=3,
                            alignment=ft.MainAxisAlignment.START,
-                           vertical_alignment=ft.CrossAxisAlignment.CENTER)
+                           vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                           height=scaled(20))
 
         _cell_controls = [_top_row]
         if other_row:

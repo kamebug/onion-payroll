@@ -22,6 +22,23 @@
 > já existentes passaram a depender (ex: um formato de arquivo, uma
 > config salva que outra versão não entende mais), sobe **MAJOR**.
 
+## [2.59.9] — 2026-07-21 — EMOJI 🏭/🎌 MAIORES (PATCH)
+
+### 🔧 Alterado
+
+- Caixinha do emoji aumentada de 11px pra 16px, e o fator de
+  encolhimento reduzido de 0,62 pra 0,85 — emoji visivelmente maior,
+  ainda contido/protegido dentro da caixinha (`clip_behavior`) contra
+  o bug de escala do emoji colorido
+- Altura da linha do número fixada em 20px — como o emoji agora é
+  maior que a linha do número sozinha, sem essa altura fixa o número
+  voltaria a mudar de posição entre dias com e sem emoji (mesmo
+  problema já corrigido antes)
+- Validado com teste isolado no pior caso (2 emoji empilhados + 2
+  badges na linha de baixo) — ainda cabe dentro dos 48px da célula
+
+---
+
 ## [2.59.8] — 2026-07-21 — EMOJI EMPILHA JUNTO AO NÚMERO, DEMAIS SÍMBOLOS REDUZIDOS E BRANCOS EMBAIXO (PATCH)
 
 ### 🔧 Alterado
