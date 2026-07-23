@@ -22,6 +22,27 @@
 > já existentes passaram a depender (ex: um formato de arquivo, uma
 > config salva que outra versão não entende mais), sobe **MAJOR**.
 
+## [2.59.4] — 2026-07-21 — CORRIGE NÚMERO/BADGES DESLOCANDO ENTRE DIAS (PATCH)
+
+### 🐛 Corrigido
+
+- **Posição do número e dos badges mudava de um dia pro outro**,
+  reportado comparando dois dias lado a lado (um com badge no topo,
+  outro sem). Causa: a linha do número não tinha altura fixa — um
+  emoji como 🏭 é naturalmente mais alto que um dígito no mesmo
+  tamanho de fonte, então a linha ficava mais alta nos dias COM badge
+  no topo do que nos dias SEM, empurrando tudo abaixo (inclusive o
+  próprio número, centralizado contra o vizinho mais alto) pra uma
+  posição diferente entre os dois casos
+- `height` fixo adicionado nas duas linhas da célula (número e
+  badges) — agora ocupam sempre o mesmo espaço vertical, com ou sem
+  conteúdo, garantindo que a posição de tudo seja idêntica em
+  qualquer dia do calendário
+- Validado com teste isolado comparando os dois cenários (dia com
+  badge no topo vs. dia sem) lado a lado
+
+---
+
 ## [2.59.3] — 2026-07-21 — CORRIGE ESTOURO DE LARGURA DOS BADGES (PATCH)
 
 ### 🐛 Corrigido

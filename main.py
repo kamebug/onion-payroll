@@ -1706,8 +1706,8 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607231104"   # atualizado automaticamente pelo deploy.ps1
-APP_VERSION    = "2.59.3"       # sincronizar manualmente com pyproject.toml/CHANGELOG.md a cada bump de versão
+BUILD_ID       = "2607201037"   # atualizado automaticamente pelo deploy.ps1
+APP_VERSION    = "2.59.4"       # sincronizar manualmente com pyproject.toml/CHANGELOG.md a cada bump de versão
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -2399,7 +2399,9 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
 
         badges_line = (
             ft.Row(controls=bottom_badges, spacing=2,
-                   alignment=ft.MainAxisAlignment.END)
+                   alignment=ft.MainAxisAlignment.END,
+                   vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                   height=scaled(12))
             if bottom_badges else None
         )
 
@@ -2417,12 +2419,20 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
         def _tap_handler(e, d=day_num):
             open_day_modal(d)
 
+        # Altura FIXA na linha do número — sem isso, quando tinha badge
+        # em cima (ex: 🏭, um emoji, naturalmente mais alto que um
+        # dígito), essa linha ficava mais alta que em dias sem badge, e
+        # tudo abaixo (inclusive o próprio número, centralizado contra
+        # o vizinho mais alto) deslocava de posição entre um dia e
+        # outro — reportado comparando dois dias lado a lado.
         _top_row = ft.Row(
             controls=[
                 ft.Text(str(day_num), size=scaled(14),
                         color=num_color, weight=ft.FontWeight.W_800),
             ] + ([top_indicator] if top_indicator else []),
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            height=scaled(18),
         )
         _cell_controls = [_top_row]
         if badges_line:
