@@ -22,6 +22,31 @@
 > já existentes passaram a depender (ex: um formato de arquivo, uma
 > config salva que outra versão não entende mais), sobe **MAJOR**.
 
+## [2.59.7] — 2026-07-21 — EMOJI 🏭/🎌 MANTIDOS, PROTEGIDOS CONTRA ESTOURO DE ESCALA + ABONO EM ¥ (PATCH)
+
+### 🐛 Corrigido
+
+- **Causa real do "piorou" reportado**: emoji colorido (🏭, 💰)
+  costuma IGNORAR o `size=8` pedido e renderizar no tamanho nativo da
+  fonte de emoji do sistema — bem maior que o resto dos badges
+  (kanji/símbolo sempre respeitam `size`). Chegou a ser cogitado trocar
+  os emoji por texto puro, mas o usuário pediu pra manter 🏭 e 🎌
+- **Solução aplicada**: 🏭 e 🎌 agora vão dentro de um `Container` de
+  tamanho FIXO (11px) com `clip_behavior` — mesmo que o emoji tente
+  renderizar maior por dentro, fica contido/cortado dentro da
+  caixinha, nunca vaza pra fora nem empurra o resto do layout. Kanji/
+  símbolo (延, indicadores de status) continuam como texto simples,
+  sem essa proteção — nunca precisaram dela
+
+### 🔧 Alterado
+
+- **💰 (abono) trocado por "¥"** — a pedido do usuário, símbolo de
+  iene, texto puro sem os problemas de escala de emoji colorido
+- Manual (aba Ajuda → 🔣 Símbolos) e badges do calendário atualizados
+  de volta pra refletir 🏭/🎌 restaurados
+
+---
+
 ## [2.59.6] — 2026-07-21 — CORRIGE DESLOCAMENTO POR DÍGITO DO DIA (1 vs 2 DÍGITOS) (PATCH)
 
 ### 🐛 Corrigido
