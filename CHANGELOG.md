@@ -22,6 +22,25 @@
 > já existentes passaram a depender (ex: um formato de arquivo, uma
 > config salva que outra versão não entende mais), sobe **MAJOR**.
 
+## [2.59.3] — 2026-07-21 — CORRIGE ESTOURO DE LARGURA DOS BADGES (PATCH)
+
+### 🐛 Corrigido
+
+- **Badges cortados na lateral da célula** quando 4 apareciam juntos
+  (ex: 🏭 + 🎌 + 延 + 💰) — reportado com captura de tela (dia 11). A
+  v2.59.2 corrigiu o vazamento vertical colocando todos numa linha
+  horizontal só, mas 4 glyphs lado a lado não cabem nos ~36px de
+  largura útil da célula
+- Reorganizado por sugestão do usuário: **1 badge em cima** (o
+  indicador principal — 欠/有/休/↓/●/🏭, ao lado do número, como
+  sempre foi desde antes da v2.59.0) **+ até 3 embaixo** (🎌, 延, 💰,
+  numa linha própria). A linha de cima nunca teve mais que 1 item
+  (sempre coube); a de baixo cai de 4 pra no máximo 3
+- Validado com teste isolado da árvore de controles reproduzindo o
+  cenário exato reportado (🏭 em cima, 🎌/延/💰 embaixo)
+
+---
+
 ## [2.59.2] — 2026-07-21 — CORRIGE VAZAMENTO DE BADGES NO CALENDÁRIO (PATCH)
 
 ### 🐛 Corrigido

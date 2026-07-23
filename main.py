@@ -1706,8 +1706,8 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607231049"   # atualizado automaticamente pelo deploy.ps1
-APP_VERSION    = "2.59.2"       # sincronizar manualmente com pyproject.toml/CHANGELOG.md a cada bump de versão
+BUILD_ID       = "2607201037"   # atualizado automaticamente pelo deploy.ps1
+APP_VERSION    = "2.59.3"       # sincronizar manualmente com pyproject.toml/CHANGELOG.md a cada bump de versão
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -2374,36 +2374,33 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
             indicator  = ""
             ind_color  = C_WHITE
 
-        # Bandeira de feriado nacional — INDEPENDENTE do indicador acima,
-        # aparece junto (não troca, soma) quando o dia também tem outro
-        # status/indicador.
-        indicators_row = [ft.Text(indicator, size=scaled(8), color=ind_color)] if indicator else []
+        # Bandeira de feriado nacional, 延長 e abono ficam numa linha À
+        # PARTE, embaixo do número — só o indicador PRINCIPAL (欠/有/休/
+        # ↓/●/🏭, no máximo 1) fica ao lado do número, como sempre foi.
+        # v2.59.2 colocou os 4 juntos numa linha só e estourou a LARGURA
+        # da célula (36px não cabe 4 glyphs lado a lado — reportado com
+        # captura de tela, "延" e o próximo badge saindo cortados pra
+        # fora do card). Separar em "1 em cima + até 3 embaixo" resolve
+        # os dois lados: a linha de cima nunca teve mais que 1 item
+        # (sempre coube), e a de baixo cai de 4 pra no máximo 3.
+        top_indicator = (
+            ft.Text(indicator, size=scaled(8), color=ind_color) if indicator else None
+        )
+        bottom_badges = []
         if is_hol:
-            indicators_row.append(ft.Text("🎌", size=scaled(8)))
+            bottom_badges.append(ft.Text("🎌", size=scaled(8)))
         # v2.59: 延長 (minutos extras) e abono do dia também viram badge —
         # antes só apareciam vasculhando o modal dia a dia, sem NENHUM
-        # sinal no calendário. Adicionados por ÚLTIMO na lista (menor
-        # prioridade visual que status/feriado), mas sempre visíveis
-        # quando presentes — são valores que afetam o holerite mesmo
-        # em dias "normais" sem status especial.
+        # sinal no calendário.
         if day_extra_min > 0:
-            indicators_row.append(ft.Text("延", size=scaled(8), color="#FFD54F"))
+            bottom_badges.append(ft.Text("延", size=scaled(8), color="#FFD54F"))
         if day_abono != 0:
-            indicators_row.append(ft.Text("💰", size=scaled(8)))
+            bottom_badges.append(ft.Text("💰", size=scaled(8)))
 
-        # v2.59.2: o grid 2x2 (v2.59.0) ficava DENTRO da mesma Row do
-        # número — quando a coluna de badges tinha 2 linhas (3+ badges
-        # no mesmo dia), o cross-axis da Row centralizava tudo, e o
-        # conjunto ficava mais alto que a célula (48px fixo, sem
-        # clip_behavior) — o "休" saía do lugar e a badge de baixo
-        # vazava pra fora do card, sobre a célula vizinha (ver captura
-        # de tela reportada). Corrigido: badges agora ficam numa linha
-        # HORIZONTAL própria, ABAIXO do número — nunca competem de
-        # altura com o número, e nunca precisam de mais de 1 linha.
         badges_line = (
-            ft.Row(controls=indicators_row, spacing=2,
+            ft.Row(controls=bottom_badges, spacing=2,
                    alignment=ft.MainAxisAlignment.END)
-            if indicators_row else None
+            if bottom_badges else None
         )
 
         # ── Borda cinza claro (vermelha se feriado nacional, turquesa se hoje) ─
@@ -2420,10 +2417,14 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
         def _tap_handler(e, d=day_num):
             open_day_modal(d)
 
-        _cell_controls = [
-            ft.Text(str(day_num), size=scaled(14),
-                    color=num_color, weight=ft.FontWeight.W_800),
-        ]
+        _top_row = ft.Row(
+            controls=[
+                ft.Text(str(day_num), size=scaled(14),
+                        color=num_color, weight=ft.FontWeight.W_800),
+            ] + ([top_indicator] if top_indicator else []),
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+        )
+        _cell_controls = [_top_row]
         if badges_line:
             _cell_controls.append(badges_line)
 
