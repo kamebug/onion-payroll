@@ -22,6 +22,28 @@
 > já existentes passaram a depender (ex: um formato de arquivo, uma
 > config salva que outra versão não entende mais), sobe **MAJOR**.
 
+## [2.59.0] — 2026-07-21 — BADGES DE 延長 E ABONO NO CALENDÁRIO + MANUAL DE SÍMBOLOS
+
+### 🟢 Adicionado
+
+- **延長 (minutos extras) e abono do dia ganham badge próprio no
+  calendário** — "延" (dourado) e "💰", no canto superior direito do
+  dia. Antes, esses dois valores só apareciam abrindo o modal de cada
+  dia um por um, sem NENHUM sinal visual — impossível saber onde
+  foram lançados sem vasculhar o mês inteiro
+- **Área de badges virou grade 2 colunas** em vez de coluna única —
+  com status + feriado nacional + 延長 + abono podendo coexistir no
+  mesmo dia (até 4 badges), uma coluna só estourava a altura da
+  célula (46×48px). Agora quebra em pares, sem sobrepor
+- **Nova seção "🔣 Símbolos no Canto do Dia" na aba Ajuda** —
+  documenta TODOS os símbolos que já existiam sem explicação nenhuma
+  (欠 falta, 有 yukyu, 休 folga trabalhada, ↓ saída antecipada, ●
+  horário customizado, 🎌 feriado nacional + borda vermelha, 🏭
+  feriado corporativo) e os dois novos (延, 💰), incluindo a regra de
+  prioridade de quando um símbolo "some" porque outro status venceu
+
+---
+
 ## [2.58.3] — 2026-07-21 — LEGENDA DA ABA CALENDÁRIO SINCRONIZADA COM A DE AJUDA (PATCH)
 
 ### 🐛 Corrigido

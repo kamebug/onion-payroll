@@ -1706,8 +1706,8 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607221125"   # atualizado automaticamente pelo deploy.ps1
-APP_VERSION    = "2.58.3"       # sincronizar manualmente com pyproject.toml/CHANGELOG.md a cada bump de versão
+BUILD_ID       = "2607201037"   # atualizado automaticamente pelo deploy.ps1
+APP_VERSION    = "2.59.0"       # sincronizar manualmente com pyproject.toml/CHANGELOG.md a cada bump de versão
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -2285,6 +2285,8 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
         status   = ov.get("status", "normal")
         has_time = bool(ov.get("start") or ov.get("end"))
         yukyu_hol = ov.get("yukyu_on_holiday", False)
+        day_extra_min = int(ov.get("extra_minutes", 0) or 0)  # 延長
+        day_abono     = int(ov.get("abono", 0) or 0)           # abono/vale do dia
 
         # Dia da semana: 0=Dom,1=Seg…6=Sáb (grade começa no domingo)
         weekday_col = (date(view_year, view_month, day_num).weekday() + 1) % 7
@@ -2378,6 +2380,25 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
         indicators_row = [ft.Text(indicator, size=scaled(8), color=ind_color)] if indicator else []
         if is_hol:
             indicators_row.append(ft.Text("🎌", size=scaled(8)))
+        # v2.59: 延長 (minutos extras) e abono do dia também viram badge —
+        # antes só apareciam vasculhando o modal dia a dia, sem NENHUM
+        # sinal no calendário. Adicionados por ÚLTIMO na lista (menor
+        # prioridade visual que status/feriado), mas sempre visíveis
+        # quando presentes — são valores que afetam o holerite mesmo
+        # em dias "normais" sem status especial.
+        if day_extra_min > 0:
+            indicators_row.append(ft.Text("延", size=scaled(8), color="#FFD54F"))
+        if day_abono != 0:
+            indicators_row.append(ft.Text("💰", size=scaled(8)))
+
+        # Grade 2 colunas em vez de coluna única — com status + feriado +
+        # 延長 + abono coexistindo no mesmo dia (até 4 badges), uma coluna
+        # só estourava a altura da célula. Quebra em pares de linhas.
+        indicator_rows = [
+            ft.Row(controls=indicators_row[i:i + 2], spacing=1,
+                   alignment=ft.MainAxisAlignment.END)
+            for i in range(0, len(indicators_row), 2)
+        ]
 
         # ── Borda cinza claro (vermelha se feriado nacional, turquesa se hoje) ─
         if is_hol:
@@ -2401,7 +2422,7 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
                             ft.Text(str(day_num), size=scaled(14),
                                     color=num_color,
                                     weight=ft.FontWeight.W_800),
-                            ft.Column(controls=indicators_row, spacing=0, tight=True,
+                            ft.Column(controls=indicator_rows, spacing=0, tight=True,
                                       horizontal_alignment=ft.CrossAxisAlignment.END),
                         ],
                         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
@@ -5075,6 +5096,25 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
             ], spacing=0, tight=True, expand=True),
         ], spacing=8)
 
+    def _symbol_legend(glyph, glyph_color, label, desc):
+        # v2.59: símbolos pequenos no canto do dia (欠/有/休/↓/●/🎌/🏭/延/💰)
+        # nunca tinham explicação nenhuma no manual — só a cor de fundo
+        # da célula era documentada. Mesmo padrão visual do
+        # _color_legend acima, trocando o quadrado de cor por um
+        # círculo com o glifo de verdade, do tamanho real do calendário.
+        return ft.Row(controls=[
+            ft.Container(width=20, height=20, bgcolor="#2A2A2A",
+                         border_radius=10,
+                         border=ft.Border.all(1, "#333333"),
+                         alignment=ft.alignment.center,
+                         content=ft.Text(glyph, size=11, color=glyph_color)),
+            ft.Column(controls=[
+                ft.Text(label, size=11, color=TEXT_PRIMARY,
+                        weight=ft.FontWeight.W_600),
+                ft.Text(desc, size=10, color=TEXT_SECONDARY),
+            ], spacing=0, tight=True, expand=True),
+        ], spacing=8)
+
     # ── Seções do manual ─────────────────────────────────────────────
     APP_URL = "https://kamebug.github.io/onion-payroll/"
     FEEDBACK_URL = APP_URL + "feedback.html?build=" + BUILD_ID
@@ -5277,6 +5317,28 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
                           "Trabalho em folga/feriado não-domingo — taxa configurável em ⚙️ Config"),
             _color_legend("#00796B", "Verde-azulado — Saída Antecipada",
                           "Horário customizado registrado manualmente"),
+
+            # ── Símbolos do calendário ────────────────────────────────
+            _title("🔣 Símbolos no Canto do Dia"),
+            _p("Além da cor de fundo, cada dia pode mostrar pequenos símbolos no canto superior direito — aparecem JUNTOS quando mais de um se aplica ao mesmo dia (organizados em pares, não se sobrepõem)."),
+            _symbol_legend("欠", "#EF9A9A", "欠 — 欠勤 Falta",
+                           "Falta registrada nesse dia"),
+            _symbol_legend("有", "#FFE082", "有 — 有休 Yukyu",
+                           "Férias remuneradas usadas, ou Yukyu combinado com folga/feriado trabalhado"),
+            _symbol_legend("休", "#FFFFFF", "休 — Folga Trabalhada",
+                           "休日出勤 (Kyūjitsu Shukkin) registrado — folga não-domingo trabalhada"),
+            _symbol_legend("↓", "#FFFFFF", "↓ — Saída Antecipada",
+                           "Status \"Saiu mais cedo\" selecionado no dia"),
+            _symbol_legend("●", "#FFFFFF", "● — Horário Customizado",
+                           "Entrada/Saída editadas manualmente, sem nenhum status especial"),
+            _symbol_legend("延", "#FFD54F", "延 — 延長 Minutos Extras",
+                           "Minutos extras (延長) preenchidos no modal do dia, além do horário do turno"),
+            _symbol_legend("💰", "#FFFFFF", "💰 — Abono/Vale do Dia",
+                           "Valor de abono preenchido no modal do dia, somado ao salário do mês"),
+            _symbol_legend("🎌", "#FFFFFF", "🎌 — Feriado Nacional",
+                           "Vem junto com a borda vermelha ao redor do dia inteiro — feriado embutido ou do CSV, atualiza sozinho"),
+            _symbol_legend("🏭", "#212121", "🏭 — Feriado Corporativo",
+                           "Marcado manualmente ou importado na aba 🏭 Feriados. Se o dia também tiver outro status (ex: trabalhado), o outro símbolo E a cor de fundo do outro status têm prioridade — o 🏭 amarelo só aparece quando o feriado corporativo não foi trabalhado"),
 
             # ── Bônus e Adicionais ────────────────────────────────────
             # ── Mudança de 時給 ────────────────────────────────────────
