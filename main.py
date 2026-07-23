@@ -1706,8 +1706,8 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607231028"   # atualizado automaticamente pelo deploy.ps1
-APP_VERSION    = "2.59.1"       # sincronizar manualmente com pyproject.toml/CHANGELOG.md a cada bump de versão
+BUILD_ID       = "2607201037"   # atualizado automaticamente pelo deploy.ps1
+APP_VERSION    = "2.59.2"       # sincronizar manualmente com pyproject.toml/CHANGELOG.md a cada bump de versão
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -2391,14 +2391,20 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
         if day_abono != 0:
             indicators_row.append(ft.Text("💰", size=scaled(8)))
 
-        # Grade 2 colunas em vez de coluna única — com status + feriado +
-        # 延長 + abono coexistindo no mesmo dia (até 4 badges), uma coluna
-        # só estourava a altura da célula. Quebra em pares de linhas.
-        indicator_rows = [
-            ft.Row(controls=indicators_row[i:i + 2], spacing=1,
+        # v2.59.2: o grid 2x2 (v2.59.0) ficava DENTRO da mesma Row do
+        # número — quando a coluna de badges tinha 2 linhas (3+ badges
+        # no mesmo dia), o cross-axis da Row centralizava tudo, e o
+        # conjunto ficava mais alto que a célula (48px fixo, sem
+        # clip_behavior) — o "休" saía do lugar e a badge de baixo
+        # vazava pra fora do card, sobre a célula vizinha (ver captura
+        # de tela reportada). Corrigido: badges agora ficam numa linha
+        # HORIZONTAL própria, ABAIXO do número — nunca competem de
+        # altura com o número, e nunca precisam de mais de 1 linha.
+        badges_line = (
+            ft.Row(controls=indicators_row, spacing=2,
                    alignment=ft.MainAxisAlignment.END)
-            for i in range(0, len(indicators_row), 2)
-        ]
+            if indicators_row else None
+        )
 
         # ── Borda cinza claro (vermelha se feriado nacional, turquesa se hoje) ─
         if is_hol:
@@ -2414,20 +2420,16 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
         def _tap_handler(e, d=day_num):
             open_day_modal(d)
 
+        _cell_controls = [
+            ft.Text(str(day_num), size=scaled(14),
+                    color=num_color, weight=ft.FontWeight.W_800),
+        ]
+        if badges_line:
+            _cell_controls.append(badges_line)
+
         return ft.Container(
             content=ft.Column(
-                controls=[
-                    ft.Row(
-                        controls=[
-                            ft.Text(str(day_num), size=scaled(14),
-                                    color=num_color,
-                                    weight=ft.FontWeight.W_800),
-                            ft.Column(controls=indicator_rows, spacing=0, tight=True,
-                                      horizontal_alignment=ft.CrossAxisAlignment.END),
-                        ],
-                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                    ),
-                ],
+                controls=_cell_controls,
                 spacing=0, tight=True,
             ),
             bgcolor=bg, border_radius=8,
@@ -2437,6 +2439,9 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
             on_click=_tap_handler,
             ink=True,
             ink_color="#00D2C633",
+            clip_behavior=ft.ClipBehavior.ANTI_ALIAS,  # rede de segurança —
+                # se algum dia tiver badges demais mesmo assim, corta
+                # dentro da célula em vez de vazar pra cima da vizinha
         )
 
     # ── Grid — semana começa no DOMINGO ─────────────────────────────

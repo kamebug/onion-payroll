@@ -22,6 +22,29 @@
 > já existentes passaram a depender (ex: um formato de arquivo, uma
 > config salva que outra versão não entende mais), sobe **MAJOR**.
 
+## [2.59.2] — 2026-07-21 — CORRIGE VAZAMENTO DE BADGES NO CALENDÁRIO (PATCH)
+
+### 🐛 Corrigido
+
+- **Badges vazando pra fora da célula** quando 3+ apareciam no mesmo
+  dia (ex: Folga Trabalhada + 延長 + abono) — reportado com captura de
+  tela. Causa: o grid 2×2 da v2.59.0 ficava DENTRO da mesma `Row` do
+  número do dia; quando a coluna de badges tinha 2 linhas, o
+  cross-axis da `Row` centralizava todo o conjunto, ficando mais alto
+  que os 48px fixos da célula — sem `clip_behavior`, o conteúdo
+  vazava visualmente sobre a célula vizinha
+- Badges agora ficam numa linha HORIZONTAL própria, ABAIXO do número
+  — nunca competem de altura com ele, e nunca precisam de mais de 1
+  linha, não importa quantos apareçam no mesmo dia
+- Adicionado `clip_behavior=ft.ClipBehavior.ANTI_ALIAS` na célula como
+  rede de segurança extra — se algum cenário futuro ainda estourar a
+  altura, corta dentro da própria célula em vez de vazar pra vizinha
+- Validado com teste isolado da árvore de controles (fora do app,
+  igual ao processo da v2.59.1) simulando o pior caso: 4 badges no
+  mesmo dia (休 + 🎌 + 延 + 💰)
+
+---
+
 ## [2.59.1] — 2026-07-21 — CORRIGE TRAVAMENTO DA ABA AJUDA (PATCH)
 
 ### 🐛 Corrigido
