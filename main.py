@@ -1706,8 +1706,8 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607231138"   # atualizado automaticamente pelo deploy.ps1
-APP_VERSION    = "2.59.5"       # sincronizar manualmente com pyproject.toml/CHANGELOG.md a cada bump de versão
+BUILD_ID       = "2607201037"   # atualizado automaticamente pelo deploy.ps1
+APP_VERSION    = "2.59.6"       # sincronizar manualmente com pyproject.toml/CHANGELOG.md a cada bump de versão
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -2434,17 +2434,28 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
         # houver) — altura fixa em ambas as linhas, senão a posição do
         # número balança de dia pra dia dependendo de ter kanji ou não
         # (mesmo problema já corrigido uma vez pro caso emoji/sem-badge).
+        #
+        # LARGURA fixa no número (não só altura): "11" (2 dígitos) é
+        # mais largo que "6" (1 dígito) — sem uma largura reservada
+        # constante, dias de dois dígitos empurravam a coluna de emoji
+        # (à direita, ver _row_controls abaixo) mais pra dentro da
+        # célula, e a linha de kanji ficava CENTRALIZADA por baixo do
+        # número (Column sem horizontal_alignment explícito default
+        # pra center no Flet/Flutter) — deslocando o kanji também.
+        # Reportado comparando dia 6 (1 dígito) com dia 11 (2 dígitos).
         _left_col_controls = [
             ft.Row(
                 controls=[ft.Text(str(day_num), size=scaled(14),
                                    color=num_color, weight=ft.FontWeight.W_800)],
+                width=scaled(22),
                 height=scaled(18),
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
             ),
         ]
         if kanji_row:
             _left_col_controls.append(kanji_row)
-        _left_col = ft.Column(controls=_left_col_controls, spacing=0, tight=True)
+        _left_col = ft.Column(controls=_left_col_controls, spacing=0, tight=True,
+                               horizontal_alignment=ft.CrossAxisAlignment.START)
 
         _row_controls = [_left_col]
         if emoji_stack:

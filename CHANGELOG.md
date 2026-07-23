@@ -22,6 +22,26 @@
 > já existentes passaram a depender (ex: um formato de arquivo, uma
 > config salva que outra versão não entende mais), sobe **MAJOR**.
 
+## [2.59.6] — 2026-07-21 — CORRIGE DESLOCAMENTO POR DÍGITO DO DIA (1 vs 2 DÍGITOS) (PATCH)
+
+### 🐛 Corrigido
+
+- **Causa raiz identificada pelo usuário**: dias de 2 dígitos (ex: 11)
+  são mais largos que dias de 1 dígito (ex: 6), e sem uma largura
+  reservada constante pro número, isso empurrava a coluna de emoji (à
+  direita) e descentralizava a linha de kanji (embaixo, que ficava
+  CENTRALIZADA sob o número por padrão do Flet/Flutter) de forma
+  diferente entre os dois casos
+- `width` fixo (não só `height`) adicionado no slot do número —
+  "6" e "11" agora ocupam sempre a mesma largura reservada, sem
+  precisar reduzir o tamanho da fonte (dígito continua a 14px normal,
+  só o espaço AO REDOR dele que ficou constante)
+- `horizontal_alignment=START` explícito na coluna esquerda — sem
+  isso, o Flet centraliza por padrão a linha de kanji sob o número,
+  o que também deslocava as coisas dependendo da largura do número
+
+---
+
 ## [2.59.5] — 2026-07-21 — BADGES REORGANIZADOS POR TIPO (EMOJI VERTICAL, KANJI HORIZONTAL) (PATCH)
 
 ### 🔧 Alterado
