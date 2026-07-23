@@ -1706,8 +1706,8 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607231015"   # atualizado automaticamente pelo deploy.ps1
-APP_VERSION    = "2.59.0"       # sincronizar manualmente com pyproject.toml/CHANGELOG.md a cada bump de versão
+BUILD_ID       = "2607201037"   # atualizado automaticamente pelo deploy.ps1
+APP_VERSION    = "2.59.1"       # sincronizar manualmente com pyproject.toml/CHANGELOG.md a cada bump de versão
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -5106,7 +5106,7 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
             ft.Container(width=20, height=20, bgcolor="#2A2A2A",
                          border_radius=10,
                          border=ft.Border.all(1, "#333333"),
-                         alignment=ft.alignment.center,
+                         alignment=ft.Alignment(0, 0),
                          content=ft.Text(glyph, size=11, color=glyph_color)),
             ft.Column(controls=[
                 ft.Text(label, size=11, color=TEXT_PRIMARY,

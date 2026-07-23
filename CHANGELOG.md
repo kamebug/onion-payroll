@@ -22,6 +22,22 @@
 > já existentes passaram a depender (ex: um formato de arquivo, uma
 > config salva que outra versão não entende mais), sobe **MAJOR**.
 
+## [2.59.1] — 2026-07-21 — CORRIGE TRAVAMENTO DA ABA AJUDA (PATCH)
+
+### 🐛 Corrigido
+
+- **Aba Ajuda travava** desde a v2.59.0: `_symbol_legend()` usava
+  `ft.alignment.center`, que não existe no Flet 0.85.3 (pinado neste
+  projeto) — `AttributeError` em runtime assim que a seção "🔣
+  Símbolos no Canto do Dia" era montada. Corrigido pra `ft.Alignment(0,
+  0)`, o padrão já usado em TODO o resto do arquivo (28+ ocorrências)
+- `py_compile` não pega esse tipo de erro (é válido sintaticamente, só
+  falha em runtime quando o atributo é acessado) — confirmado com um
+  teste isolado construindo a árvore de controles fora do app antes de
+  reenviar
+
+---
+
 ## [2.59.0] — 2026-07-21 — BADGES DE 延長 E ABONO NO CALENDÁRIO + MANUAL DE SÍMBOLOS
 
 ### 🟢 Adicionado
