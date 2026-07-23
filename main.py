@@ -1706,8 +1706,8 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607231121"   # atualizado automaticamente pelo deploy.ps1
-APP_VERSION    = "2.59.4"       # sincronizar manualmente com pyproject.toml/CHANGELOG.md a cada bump de versão
+BUILD_ID       = "2607201037"   # atualizado automaticamente pelo deploy.ps1
+APP_VERSION    = "2.59.5"       # sincronizar manualmente com pyproject.toml/CHANGELOG.md a cada bump de versão
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -2374,35 +2374,46 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
             indicator  = ""
             ind_color  = C_WHITE
 
-        # Bandeira de feriado nacional, 延長 e abono ficam numa linha À
-        # PARTE, embaixo do número — só o indicador PRINCIPAL (欠/有/休/
-        # ↓/●/🏭, no máximo 1) fica ao lado do número, como sempre foi.
-        # v2.59.2 colocou os 4 juntos numa linha só e estourou a LARGURA
-        # da célula (36px não cabe 4 glyphs lado a lado — reportado com
-        # captura de tela, "延" e o próximo badge saindo cortados pra
-        # fora do card). Separar em "1 em cima + até 3 embaixo" resolve
-        # os dois lados: a linha de cima nunca teve mais que 1 item
-        # (sempre coube), e a de baixo cai de 4 pra no máximo 3.
-        top_indicator = (
-            ft.Text(indicator, size=scaled(8), color=ind_color) if indicator else None
-        )
-        bottom_badges = []
+        # v2.59.5: reorganizado por TIPO de símbolo, não mais por
+        # "1 principal + resto" — o "1 principal" às vezes era emoji
+        # (🏭) e às vezes kanji (休/欠/有/↓/●), então dias diferentes
+        # ficavam com o mesmo símbolo ora na linha de cima ora na de
+        # baixo, sem padrão consistente entre os meses (reportado
+        # comparando dois dias lado a lado). Regra nova, fixa:
+        # EMOJI (🏭, 🎌, 💰) sempre empilham na VERTICAL, à direita do
+        # número, prioridade de cima pra baixo. KANJI/símbolo (欠, 有,
+        # 休, ↓, ●, 延) sempre ficam numa linha HORIZONTAL, abaixo do
+        # número, prioridade da esquerda pra direita.
+        vertical_badges   = []  # emoji — empilha à direita, cima→baixo
+        horizontal_badges = []  # kanji/símbolo — linha embaixo, esq→dir
+
+        if indicator:
+            _ind_text = ft.Text(indicator, size=scaled(8), color=ind_color)
+            if indicator == "🏭":
+                vertical_badges.append(_ind_text)
+            else:
+                horizontal_badges.append(_ind_text)
         if is_hol:
-            bottom_badges.append(ft.Text("🎌", size=scaled(8)))
+            vertical_badges.append(ft.Text("🎌", size=scaled(8)))
         # v2.59: 延長 (minutos extras) e abono do dia também viram badge —
         # antes só apareciam vasculhando o modal dia a dia, sem NENHUM
         # sinal no calendário.
         if day_extra_min > 0:
-            bottom_badges.append(ft.Text("延", size=scaled(8), color="#FFD54F"))
+            horizontal_badges.append(ft.Text("延", size=scaled(8), color="#FFD54F"))
         if day_abono != 0:
-            bottom_badges.append(ft.Text("💰", size=scaled(8)))
+            vertical_badges.append(ft.Text("💰", size=scaled(8)))
 
-        badges_line = (
-            ft.Row(controls=bottom_badges, spacing=2,
-                   alignment=ft.MainAxisAlignment.END,
+        emoji_stack = (
+            ft.Column(controls=vertical_badges, spacing=1, tight=True,
+                      horizontal_alignment=ft.CrossAxisAlignment.END)
+            if vertical_badges else None
+        )
+        kanji_row = (
+            ft.Row(controls=horizontal_badges, spacing=2,
+                   alignment=ft.MainAxisAlignment.START,
                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
                    height=scaled(12))
-            if bottom_badges else None
+            if horizontal_badges else None
         )
 
         # ── Borda cinza claro (vermelha se feriado nacional, turquesa se hoje) ─
@@ -2419,29 +2430,30 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
         def _tap_handler(e, d=day_num):
             open_day_modal(d)
 
-        # Altura FIXA na linha do número — sem isso, quando tinha badge
-        # em cima (ex: 🏭, um emoji, naturalmente mais alto que um
-        # dígito), essa linha ficava mais alta que em dias sem badge, e
-        # tudo abaixo (inclusive o próprio número, centralizado contra
-        # o vizinho mais alto) deslocava de posição entre um dia e
-        # outro — reportado comparando dois dias lado a lado.
-        _top_row = ft.Row(
-            controls=[
-                ft.Text(str(day_num), size=scaled(14),
-                        color=num_color, weight=ft.FontWeight.W_800),
-            ] + ([top_indicator] if top_indicator else []),
-            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-            vertical_alignment=ft.CrossAxisAlignment.CENTER,
-            height=scaled(18),
-        )
-        _cell_controls = [_top_row]
-        if badges_line:
-            _cell_controls.append(badges_line)
+        # Coluna ESQUERDA: número em cima, linha de kanji embaixo (se
+        # houver) — altura fixa em ambas as linhas, senão a posição do
+        # número balança de dia pra dia dependendo de ter kanji ou não
+        # (mesmo problema já corrigido uma vez pro caso emoji/sem-badge).
+        _left_col_controls = [
+            ft.Row(
+                controls=[ft.Text(str(day_num), size=scaled(14),
+                                   color=num_color, weight=ft.FontWeight.W_800)],
+                height=scaled(18),
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+        ]
+        if kanji_row:
+            _left_col_controls.append(kanji_row)
+        _left_col = ft.Column(controls=_left_col_controls, spacing=0, tight=True)
+
+        _row_controls = [_left_col]
+        if emoji_stack:
+            _row_controls.append(emoji_stack)
 
         return ft.Container(
-            content=ft.Column(
-                controls=_cell_controls,
-                spacing=0, tight=True,
+            content=ft.Row(
+                controls=_row_controls,
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             ),
             bgcolor=bg, border_radius=8,
             padding=ft.Padding(left=5, right=5, top=5, bottom=5),

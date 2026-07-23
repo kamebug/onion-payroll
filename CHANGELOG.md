@@ -22,6 +22,30 @@
 > já existentes passaram a depender (ex: um formato de arquivo, uma
 > config salva que outra versão não entende mais), sobe **MAJOR**.
 
+## [2.59.5] — 2026-07-21 — BADGES REORGANIZADOS POR TIPO (EMOJI VERTICAL, KANJI HORIZONTAL) (PATCH)
+
+### 🔧 Alterado
+
+- **Regra de posicionamento trocada de "1 principal + resto" pra
+  agrupamento por TIPO de símbolo** — reportado com capturas de tela
+  comparando dois dias: o "indicador principal" às vezes era emoji
+  (🏭) e às vezes era kanji (休/欠/有/↓/●), então o mesmo slot "em
+  cima" mostrava coisas de natureza diferente dependendo do dia, sem
+  padrão visual único entre os meses do calendário
+- Regra nova, por sugestão do usuário: **emoji (🏭, 🎌, 💰) sempre
+  empilham na VERTICAL**, à direita do número, prioridade de cima pra
+  baixo. **Kanji/símbolo (欠, 有, 休, ↓, ●, 延) sempre ficam numa linha
+  HORIZONTAL**, abaixo do número, prioridade da esquerda pra direita
+- Como existe uma ÚNICA função `day_cell()` usada pra todo dia de
+  todo mês do calendário (sem nenhum código específico por mês), essa
+  regra passa a ser estruturalmente idêntica em qualquer mês — não há
+  como divergir entre eles
+- Validado com teste isolado cobrindo 4 combinações reais: feriado
+  corporativo com 3 emoji + 1 kanji, Folga Trabalhada com 2 emoji + 2
+  kanji, dia normal sem nenhum badge, e indicador kanji sozinho
+
+---
+
 ## [2.59.4] — 2026-07-21 — CORRIGE NÚMERO/BADGES DESLOCANDO ENTRE DIAS (PATCH)
 
 ### 🐛 Corrigido
