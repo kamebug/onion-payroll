@@ -1706,7 +1706,7 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607201037"   # atualizado automaticamente pelo deploy.ps1
+BUILD_ID       = "2607231121"   # atualizado automaticamente pelo deploy.ps1
 APP_VERSION    = "2.59.4"       # sincronizar manualmente com pyproject.toml/CHANGELOG.md a cada bump de versão
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
