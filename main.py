@@ -1706,8 +1706,8 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607231245"   # atualizado automaticamente pelo deploy.ps1
-APP_VERSION    = "2.59.9"       # sincronizar manualmente com pyproject.toml/CHANGELOG.md a cada bump de versão
+BUILD_ID       = "2607201037"   # atualizado automaticamente pelo deploy.ps1
+APP_VERSION    = "2.59.10"       # sincronizar manualmente com pyproject.toml/CHANGELOG.md a cada bump de versão
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -2395,7 +2395,7 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
                 scale=0.85,
             )
 
-        vertical_emoji = []   # 🏭/🎌 — empilha ao lado do número
+        vertical_emoji = []   # 🏭 — empilha ao lado do número
         other_badges   = []   # kanji/símbolo — linha reduzida embaixo, branco
 
         if indicator:
@@ -2403,16 +2403,17 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
                 vertical_emoji.append(_emoji_badge("🏭"))
             else:
                 other_badges.append(ft.Text(indicator, size=scaled(7), color="#FFFFFF"))
-        if is_hol:
-            vertical_emoji.append(_emoji_badge("🎌"))
+        # v2.59.10: 🎌 removido — feriado nacional já é sinalizado pela
+        # borda vermelha ao redor da célula inteira (HOL_COLOR, ver
+        # abaixo), que é independente e sempre visível; o badge era
+        # redundante com ela.
         # v2.59: 延長 (minutos extras) e abono do dia também viram badge —
         # antes só apareciam vasculhando o modal dia a dia, sem NENHUM
         # sinal no calendário.
         if day_extra_min > 0:
             other_badges.append(ft.Text("延", size=scaled(7), color="#FFFFFF"))
         if day_abono != 0:
-            other_badges.append(ft.Text("¥", size=scaled(7), color="#FFFFFF",
-                                         weight=ft.FontWeight.BOLD))
+            other_badges.append(ft.Text("¥", size=scaled(7), color="#FFFFFF"))
 
         emoji_col = (
             ft.Column(controls=vertical_emoji, spacing=1, tight=True,
@@ -5358,7 +5359,7 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
 
             # ── Símbolos do calendário ────────────────────────────────
             _title("🔣 Símbolos no Canto do Dia"),
-            _p("🏭 e 🎌 empilham ao lado do número (caixinha de tamanho fixo, protegidos contra emoji renderizando maior que o pedido). Os demais símbolos (欠, 有, 休, ↓, ●, 延, ¥) ficam numa linha própria embaixo, em tamanho reduzido e cor branca."),
+            _p("🏭 empilha ao lado do número (caixinha de tamanho fixo, protegido contra emoji renderizando maior que o pedido). Os demais símbolos (欠, 有, 休, ↓, ●, 延, ¥) ficam numa linha própria embaixo, em tamanho reduzido e cor branca."),
             _symbol_legend("欠", "#FFFFFF", "欠 — 欠勤 Falta",
                            "Falta registrada nesse dia"),
             _symbol_legend("有", "#FFFFFF", "有 — 有休 Yukyu",
@@ -5375,8 +5376,7 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
                            "Minutos extras (延長) preenchidos no modal do dia, além do horário do turno"),
             _symbol_legend("¥", "#FFFFFF", "¥ — Abono/Vale do Dia",
                            "Valor de abono preenchido no modal do dia, somado ao salário do mês"),
-            _symbol_legend("🎌", "#FFFFFF", "🎌 — Feriado Nacional",
-                           "Vem junto com a borda vermelha ao redor do dia inteiro — feriado embutido ou do CSV, atualiza sozinho"),
+            _p("🎌 Feriado nacional NÃO tem símbolo próprio — o dia inteiro ganha uma borda vermelha ao redor da célula (feriado embutido ou do CSV, atualiza sozinho), sempre visível independente de qualquer outro símbolo."),
 
             # ── Bônus e Adicionais ────────────────────────────────────
             # ── Mudança de 時給 ────────────────────────────────────────

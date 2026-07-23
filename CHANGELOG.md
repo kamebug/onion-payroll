@@ -22,6 +22,19 @@
 > já existentes passaram a depender (ex: um formato de arquivo, uma
 > config salva que outra versão não entende mais), sobe **MAJOR**.
 
+## [2.59.10] — 2026-07-21 — REMOVE BADGE DE BANDEIRA, TIRA NEGRITO DO IENE (PATCH)
+
+### 🔧 Alterado
+
+- **🎌 removido do badge** — feriado nacional passa a ser sinalizado
+  SÓ pela borda vermelha ao redor da célula (já existia, independente
+  e sempre visível), sem o emoji redundante ao lado do número
+- **"¥" sem negrito** — peso normal, igual aos demais símbolos da
+  linha de baixo
+- Manual (aba Ajuda → 🔣 Símbolos) atualizado
+
+---
+
 ## [2.59.9] — 2026-07-21 — EMOJI 🏭/🎌 MAIORES (PATCH)
 
 ### 🔧 Alterado
