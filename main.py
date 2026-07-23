@@ -1706,8 +1706,8 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607231212"   # atualizado automaticamente pelo deploy.ps1
-APP_VERSION    = "2.59.7"       # sincronizar manualmente com pyproject.toml/CHANGELOG.md a cada bump de versão
+BUILD_ID       = "2607201037"   # atualizado automaticamente pelo deploy.ps1
+APP_VERSION    = "2.59.8"       # sincronizar manualmente com pyproject.toml/CHANGELOG.md a cada bump de versão
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -2374,17 +2374,18 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
             indicator  = ""
             ind_color  = C_WHITE
 
-        # v2.59.8: 🏭 e 🎌 de volta (mantidos a pedido do usuário) — mas
-        # agora PROTEGIDOS contra o bug de escala do emoji colorido, que
-        # costuma ignorar o size= do Text e renderizar no tamanho nativo
-        # da fonte de emoji do sistema (bem maior, quebrando o layout —
-        # reportado com captura de tela). Em vez de confiar em size=,
-        # cada emoji vai num Container de tamanho FIXO com
-        # clip_behavior — mesmo que o glifo tente renderizar maior por
-        # dentro, fica contido/cortado dentro da caixinha, nunca vaza
-        # pra fora ou empurra o resto do layout. Kanji/símbolo (延, ¥,
-        # indicadores de status) não têm esse problema — continuam
-        # como ft.Text simples, que sempre respeita size=.
+        # v2.59.9: reportado que emoji (🏭/🎌) protegidos em caixinha
+        # ficaram bons no tamanho atual — mantidos como estão. Mudanças
+        # pedidas: (1) emoji voltam a empilhar na VERTICAL, coladas ao
+        # número com espaçamento pequeno e FIXO (não mais
+        # MainAxisAlignment.SPACE_BETWEEN esticando até a borda da
+        # célula — isso, sozinho, já resolve "2 dígitos empurra o emoji
+        # pra longe", sem precisar de nenhuma condição por quantidade
+        # de dígitos: o grupo número+emoji fica sempre igualmente
+        # compacto, 1 ou 2 dígitos); (2) os demais símbolos (kanji/
+        # símbolo — status, 延, ¥) descem pra uma linha própria embaixo,
+        # tamanho reduzido e cor branca uniforme, em vez de ficarem do
+        # lado do número competindo por espaço/tamanho com o emoji.
         def _emoji_badge(char, box=11):
             return ft.Container(
                 width=scaled(box), height=scaled(box),
@@ -2394,31 +2395,36 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
                 scale=0.62,
             )
 
-        badges = []
+        vertical_emoji = []   # 🏭/🎌 — empilha ao lado do número
+        other_badges   = []   # kanji/símbolo — linha reduzida embaixo, branco
+
         if indicator:
             if indicator == "🏭":
-                badges.append(_emoji_badge("🏭"))
+                vertical_emoji.append(_emoji_badge("🏭"))
             else:
-                badges.append(ft.Text(indicator, size=scaled(8), color=ind_color))
+                other_badges.append(ft.Text(indicator, size=scaled(7), color="#FFFFFF"))
         if is_hol:
-            badges.append(_emoji_badge("🎌"))
+            vertical_emoji.append(_emoji_badge("🎌"))
         # v2.59: 延長 (minutos extras) e abono do dia também viram badge —
         # antes só apareciam vasculhando o modal dia a dia, sem NENHUM
         # sinal no calendário.
         if day_extra_min > 0:
-            badges.append(ft.Text("延", size=scaled(8), color="#FFD54F"))
+            other_badges.append(ft.Text("延", size=scaled(7), color="#FFFFFF"))
         if day_abono != 0:
-            # v2.59.7: era 💰 (emoji) — trocado por "¥", texto puro sem
-            # os problemas de escala de emoji colorido.
-            badges.append(ft.Text("¥", size=scaled(9), color="#69F0AE",
-                                   weight=ft.FontWeight.BOLD))
+            other_badges.append(ft.Text("¥", size=scaled(7), color="#FFFFFF",
+                                         weight=ft.FontWeight.BOLD))
 
-        badges_row = (
-            ft.Row(controls=badges, spacing=2,
+        emoji_col = (
+            ft.Column(controls=vertical_emoji, spacing=1, tight=True,
+                      horizontal_alignment=ft.CrossAxisAlignment.CENTER)
+            if vertical_emoji else None
+        )
+        other_row = (
+            ft.Row(controls=other_badges, spacing=3,
                    alignment=ft.MainAxisAlignment.START,
                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                   height=scaled(12))
-            if badges else None
+                   height=scaled(10))
+            if other_badges else None
         )
 
         # ── Borda cinza claro (vermelha se feriado nacional, turquesa se hoje) ─
@@ -2435,26 +2441,27 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
         def _tap_handler(e, d=day_num):
             open_day_modal(d)
 
-        # Número em cima (largura E altura fixas — "11" é mais largo
-        # que "6", sem slot reservado isso empurrava/descentralizava
-        # tudo que vinha depois, reportado comparando dias de 1 e 2
-        # dígitos), badges numa linha embaixo (se houver).
-        _cell_controls = [
-            ft.Row(
-                controls=[ft.Text(str(day_num), size=scaled(14),
-                                   color=num_color, weight=ft.FontWeight.W_800)],
-                width=scaled(22),
-                height=scaled(18),
-                vertical_alignment=ft.CrossAxisAlignment.CENTER,
-            ),
+        # Linha de cima: número + emoji colados (spacing pequeno e FIXO,
+        # não esticado) — grupo sempre igualmente compacto com 1 ou 2
+        # dígitos, sem precisar de largura reservada nem lógica condicional.
+        _top_row_controls = [
+            ft.Text(str(day_num), size=scaled(14),
+                    color=num_color, weight=ft.FontWeight.W_800),
         ]
-        if badges_row:
-            _cell_controls.append(badges_row)
+        if emoji_col:
+            _top_row_controls.append(emoji_col)
+        _top_row = ft.Row(controls=_top_row_controls, spacing=3,
+                           alignment=ft.MainAxisAlignment.START,
+                           vertical_alignment=ft.CrossAxisAlignment.CENTER)
+
+        _cell_controls = [_top_row]
+        if other_row:
+            _cell_controls.append(other_row)
 
         return ft.Container(
             content=ft.Column(
                 controls=_cell_controls,
-                spacing=0, tight=True,
+                spacing=1, tight=True,
                 horizontal_alignment=ft.CrossAxisAlignment.START,
             ),
             bgcolor=bg, border_radius=8,
@@ -5350,10 +5357,10 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
 
             # ── Símbolos do calendário ────────────────────────────────
             _title("🔣 Símbolos no Canto do Dia"),
-            _p("Além da cor de fundo, cada dia pode mostrar até 4 pequenos símbolos numa linha, abaixo do número. 🏭 e 🎌 ficam numa caixinha de tamanho fixo (protegidos contra emoji renderizando maior que o pedido); os demais são texto simples (kanji/símbolo)."),
-            _symbol_legend("欠", "#EF9A9A", "欠 — 欠勤 Falta",
+            _p("🏭 e 🎌 empilham ao lado do número (caixinha de tamanho fixo, protegidos contra emoji renderizando maior que o pedido). Os demais símbolos (欠, 有, 休, ↓, ●, 延, ¥) ficam numa linha própria embaixo, em tamanho reduzido e cor branca."),
+            _symbol_legend("欠", "#FFFFFF", "欠 — 欠勤 Falta",
                            "Falta registrada nesse dia"),
-            _symbol_legend("有", "#FFE082", "有 — 有休 Yukyu",
+            _symbol_legend("有", "#FFFFFF", "有 — 有休 Yukyu",
                            "Férias remuneradas usadas, ou Yukyu combinado com folga/feriado trabalhado"),
             _symbol_legend("休", "#FFFFFF", "休 — Folga Trabalhada",
                            "休日出勤 (Kyūjitsu Shukkin) registrado — folga não-domingo trabalhada"),
@@ -5363,9 +5370,9 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
                            "Entrada/Saída editadas manualmente, sem nenhum status especial"),
             _symbol_legend("🏭", "#212121", "🏭 — Feriado Corporativo",
                            "Marcado manualmente ou importado na aba 🏭 Feriados. Se o dia também tiver outro status (ex: trabalhado), o outro símbolo E a cor de fundo do outro status têm prioridade — o 🏭 amarelo só aparece quando o feriado corporativo não foi trabalhado"),
-            _symbol_legend("延", "#FFD54F", "延 — 延長 Minutos Extras",
+            _symbol_legend("延", "#FFFFFF", "延 — 延長 Minutos Extras",
                            "Minutos extras (延長) preenchidos no modal do dia, além do horário do turno"),
-            _symbol_legend("¥", "#69F0AE", "¥ — Abono/Vale do Dia",
+            _symbol_legend("¥", "#FFFFFF", "¥ — Abono/Vale do Dia",
                            "Valor de abono preenchido no modal do dia, somado ao salário do mês"),
             _symbol_legend("🎌", "#FFFFFF", "🎌 — Feriado Nacional",
                            "Vem junto com a borda vermelha ao redor do dia inteiro — feriado embutido ou do CSV, atualiza sozinho"),

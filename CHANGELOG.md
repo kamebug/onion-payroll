@@ -22,6 +22,33 @@
 > já existentes passaram a depender (ex: um formato de arquivo, uma
 > config salva que outra versão não entende mais), sobe **MAJOR**.
 
+## [2.59.8] — 2026-07-21 — EMOJI EMPILHA JUNTO AO NÚMERO, DEMAIS SÍMBOLOS REDUZIDOS E BRANCOS EMBAIXO (PATCH)
+
+### 🔧 Alterado
+
+- **🏭/🎌 voltam a empilhar na VERTICAL**, colados ao número — tamanho
+  mantido (a caixinha protegida da v2.59.7 já estava boa, reportado
+  pelo usuário)
+- **Espaçamento número↔emoji trocado de "esticado até a borda" pra
+  fixo e pequeno** (`spacing=3`, `MainAxisAlignment.START`, sem mais
+  `SPACE_BETWEEN`) — resolve "dia de 2 dígitos empurra o emoji pra
+  longe" sem precisar de nenhuma lógica condicional por quantidade de
+  dígitos: o grupo número+emoji fica sempre igualmente compacto, com
+  1 ou 2 dígitos
+- **Demais símbolos (欠, 有, 休, ↓, ●, 延, ¥) descem pra uma linha
+  própria embaixo**, tamanho reduzido (7px) e cor branca uniforme —
+  antes competiam por espaço/tamanho ao lado do emoji na mesma linha,
+  o que fazia "延" (kanji, sempre respeitava o tamanho pedido) parecer
+  desproporcional ao lado do emoji (que tinha sido ampliado por engano
+  em versões anteriores)
+- Manual (aba Ajuda → 🔣 Símbolos) atualizado para refletir o novo
+  agrupamento e as cores brancas uniformes
+- Validado com teste isolado reproduzindo os dias 5, 6 e 11 exatamente
+  como reportados (1 dígito com 4 badges, 1 dígito só com os 2 emoji,
+  2 dígitos com 4 badges)
+
+---
+
 ## [2.59.7] — 2026-07-21 — EMOJI 🏭/🎌 MANTIDOS, PROTEGIDOS CONTRA ESTOURO DE ESCALA + ABONO EM ¥ (PATCH)
 
 ### 🐛 Corrigido
