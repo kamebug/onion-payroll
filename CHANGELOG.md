@@ -22,6 +22,45 @@
 > já existentes passaram a depender (ex: um formato de arquivo, uma
 > config salva que outra versão não entende mais), sobe **MAJOR**.
 
+## [2.60.0] — 2026-07-21 — MARCO HISTÓRICO PRO ADICIONAL FIXO MENSAL E ABONO MENSAL
+
+### 🐛 Corrigido (era comportamento não intencional, nunca reportado antes)
+
+- **Alterar "Adicional Fixo Mensal" ou "Abono Mensal" em ⚙️ Config
+  afetava retroativamente TODOS os meses**, inclusive os já fechados/
+  registrados no Histórico — porque os dois liam direto o valor atual
+  de `settings`, sem nenhum registro histórico por mês. Reportado
+  pelo usuário comparando com o comportamento do 時給, que já tinha
+  proteção contra isso desde a v2.52
+
+### 🟢 Adicionado
+
+- **Mesmo mecanismo de marco histórico do 時給, agora também pro
+  Adicional Fixo Mensal e Abono Mensal** — nova seção no formulário
+  do Histórico ("📈 MUDANÇA DE ADICIONAL FIXO / ABONO MENSAL"), com
+  campos opcionais `fixed_monthly_bonus_effective` e
+  `monthly_allowance_effective`. Preenchendo um marco num mês, a
+  previsão de qualquer mês IGUAL OU POSTERIOR usa esse valor; meses
+  ANTERIORES ao marco mais antigo continuam usando o valor atual de
+  ⚙️ Config, como sempre
+- Duas funções novas, mesma assinatura/lógica de
+  `jikyuu_vigente_para_mes()`: `fixed_bonus_vigente_para_mes()` e
+  `monthly_allowance_vigente_para_mes()`
+- **Diferença importante em relação ao jikyuu**: os marcos aceitam
+  "0" explicitamente (ex: parou de ser líder a partir de um mês, o
+  adicional zera) — 時給=0 nunca é um valor real, então o jikyuu podia
+  usar checagem "truthy" simples; aqui isso quebraria o caso de
+  zerar um valor. Implementado com um helper novo (`_vi_opt`/
+  `_v_opt`) que distingue "campo vazio" de "campo preenchido com 0"
+- 15 novos testes automatizados: 11 unitários (inclusive os casos de
+  marco zero, fora de ordem, e sem marco algum) + 4 de integração
+  simulando o fluxo real (resolve o marco vigente → passa o valor
+  resolvido pro cálculo do mês, mesma arquitetura do jikyuu)
+- Manual (aba Ajuda) atualizado explicando a nova opção nos dois
+  campos
+
+---
+
 ## [2.59.10] — 2026-07-21 — REMOVE BADGE DE BANDEIRA, TIRA NEGRITO DO IENE (PATCH)
 
 ### 🔧 Alterado

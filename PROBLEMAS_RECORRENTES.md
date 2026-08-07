@@ -430,6 +430,26 @@ carregamento, seguindo exatamente o que está declarado em
     premissa de uniformidade ainda era verdadeira e nunca precisaram
     ser revisitadas até agora
 
+35. **Campo de config "irmão" de outro que já tinha proteção histórica
+    não herdou a mesma proteção — só descoberto quando o usuário
+    comparou o comportamento dos dois.** `fixed_monthly_bonus`
+    (Adicional Fixo Mensal) e `monthly_allowance` (Abono Mensal)
+    sempre leram direto o valor atual de `settings`, afetando
+    retroativamente TODOS os meses (passados e futuros) quando
+    alterados — exatamente o bug que `jikyuu_vigente_para_mes()`
+    (marco histórico) foi criado pra evitar, desde a v2.52, só que
+    pro 時給 especificamente. Os dois campos novos nunca ganharam o
+    mesmo tratamento, porque quando foram criados não pareciam
+    precisar mudar de valor no meio do caminho — até precisarem.
+    **Lição prática:** quando um campo ganha uma proteção especial
+    (aqui: resistência a mudança retroativa via marco histórico),
+    vale perguntar quais OUTROS campos do mesmo "formato" (valores
+    numéricos configuráveis que alimentam o cálculo mensal, lidos
+    direto de `settings`) têm exatamente o mesmo risco estrutural —
+    a proteção não generaliza sozinha só porque um campo parecido já
+    tem. `fixed_deduction`, `odd_month_bonus` e `extra_bonus` têm o
+    MESMO risco e ainda não foram revisados
+
 ---
 
 ## 🔮 Possível melhoria futura (não implementada)

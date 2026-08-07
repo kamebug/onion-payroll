@@ -119,6 +119,40 @@ def jikyuu_vigente_para_mes(month_key: str, history: list, default: int) -> int:
     return marcos[-1][1]
 
 
+def fixed_bonus_vigente_para_mes(month_key: str, history: list, default: int) -> int:
+    """Adicional Fixo Mensal vigente pra um mês específico — MESMA lógica
+    de marco histórico do jikyuu_vigente_para_mes() acima (campo
+    "fixed_monthly_bonus_effective" no Histórico), pra que alterar o
+    valor atual em ⚙️ Config não mude retroativamente a previsão de
+    meses passados já fechados/registrados."""
+    marcos = [
+        (e["month"], int(e["fixed_monthly_bonus_effective"]))
+        for e in history
+        if e.get("fixed_monthly_bonus_effective") is not None
+        and e.get("month", "") <= month_key
+    ]
+    if not marcos:
+        return default
+    marcos.sort(key=lambda x: x[0])
+    return marcos[-1][1]
+
+
+def monthly_allowance_vigente_para_mes(month_key: str, history: list, default: int) -> int:
+    """Abono Mensal (separado) vigente pra um mês específico — MESMA
+    lógica de marco histórico do jikyuu_vigente_para_mes() acima (campo
+    "monthly_allowance_effective" no Histórico)."""
+    marcos = [
+        (e["month"], int(e["monthly_allowance_effective"]))
+        for e in history
+        if e.get("monthly_allowance_effective") is not None
+        and e.get("month", "") <= month_key
+    ]
+    if not marcos:
+        return default
+    marcos.sort(key=lambda x: x[0])
+    return marcos[-1][1]
+
+
 def parse_e_mesclar_feriados_corp_csv(texto: str, hols_corp: dict) -> tuple:
     """Faz o parse de um CSV de feriados corporativos (uma data por
     linha, AAAA-MM-DD) e mescla no dict hols_corp passado (mutado in
@@ -1706,8 +1740,8 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2607231258"   # atualizado automaticamente pelo deploy.ps1
-APP_VERSION    = "2.59.10"       # sincronizar manualmente com pyproject.toml/CHANGELOG.md a cada bump de versão
+BUILD_ID       = "2607201037"   # atualizado automaticamente pelo deploy.ps1
+APP_VERSION    = "2.60.0"       # sincronizar manualmente com pyproject.toml/CHANGELOG.md a cada bump de versão
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -2653,6 +2687,13 @@ def build_holerite_tab(page: ft.Page, state: dict, refresh_all):
     # do arquivo pra a lógica completa e testável isoladamente.
     _jikyuu_efetivo = jikyuu_vigente_para_mes(
         month_key, history, int(settings.get("jikyuu") or 1500))
+    # Mesma proteção pro Adicional Fixo Mensal e Abono Mensal — ver
+    # fixed_bonus_vigente_para_mes()/monthly_allowance_vigente_para_mes()
+    # no topo do arquivo.
+    _fixed_bonus_efetivo = fixed_bonus_vigente_para_mes(
+        month_key, history, int(settings.get("fixed_monthly_bonus") or 0))
+    _monthly_allowance_efetivo = monthly_allowance_vigente_para_mes(
+        month_key, history, int(settings.get("monthly_allowance") or 0))
 
     # Mesclar feriados nacionais (embutidos/CSV) + corporativos da aba 🏭
     # para que ambos afetem o cálculo do holerite, não só a cor da célula
@@ -2683,8 +2724,8 @@ def build_holerite_tab(page: ft.Page, state: dict, refresh_all):
             alt_end_day=settings.get("shift_end_day", "20:35"),
             alt_start_night=settings.get("shift_start_night", "20:35"),
             alt_end_night=settings.get("shift_end_night", "08:35"),
-            fixed_monthly_bonus=int(settings.get("fixed_monthly_bonus") or 0),
-            monthly_allowance=int(settings.get("monthly_allowance") or 0),
+            fixed_monthly_bonus=_fixed_bonus_efetivo,
+            monthly_allowance=_monthly_allowance_efetivo,
             round_mode=settings.get("round_mode", "truncate"),
             wage_round_mode=settings.get("wage_round_mode", "up"),
             use_leader_addon=bool(settings.get("use_leader_addon", False)),
@@ -2916,6 +2957,17 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
             v = ee.get(key, default)
             return str(v) if v else default
 
+        def _v_opt(key):
+            """Como _v(), mas mostra "0" de verdade quando o valor
+            salvo for explicitamente zero, em vez de ficar em branco
+            (_v() trata qualquer valor "falsy" — inclusive 0 — como
+            "não preenchido"). Necessário pros marcos de Adicional
+            Fixo Mensal/Abono Mensal, onde reabrir um marco de R$0 tem
+            que mostrar "0", não um campo vazio enganando o usuário a
+            achar que nunca foi preenchido."""
+            v = ee.get(key)
+            return str(v) if v is not None else ""
+
         # ── 勤怠 Frequência ──────────────────────────────────────────
         f_dias      = _tf("平日出勤 Dias Úteis", val=_v("dias_uteis"))
         f_kyujitsu  = _tf("所休出 Trab.Folga", val=_v("dias_kyujitsu"))
@@ -2979,6 +3031,20 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
         f_jikyuu_novo = _tf("時給 Jikyuu — Valor por Hora a partir deste mês (¥, opcional)",
                             val=_v("jikyuu_effective"))
 
+        # ── Adicional Fixo Mensal / Abono Mensal vigentes a partir deste
+        # mês (opcional) ─────────────────────────────────────────────
+        # MESMA lógica do 時給 acima — sem isso, mudar o valor atual em
+        # ⚙️ Config afetava retroativamente a previsão de TODOS os
+        # meses, inclusive os já fechados/registrados no Histórico.
+        # Aceita "0" explicitamente (ex: abono que deixou de existir a
+        # partir de um mês) — ver _vi_opt()/_v_opt() acima.
+        f_fixed_bonus_novo = _tf(
+            "Adicional Fixo Mensal vigente a partir deste mês (¥, opcional)",
+            val=_v_opt("fixed_monthly_bonus_effective"))
+        f_monthly_allowance_novo = _tf(
+            "Abono Mensal vigente a partir deste mês (¥, opcional)",
+            val=_v_opt("monthly_allowance_effective"))
+
         ov_ref = [None]
 
         def _close(_=None):
@@ -2989,6 +3055,22 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
         def _vi(f):
             try: return int(f.value or 0)
             except: return 0
+
+        def _vi_opt(f):
+            """Como _vi(), mas retorna None se o campo estiver vazio, em
+            vez de 0 — necessário pros marcos históricos de Adicional
+            Fixo Mensal/Abono Mensal, onde 0 é um valor VÁLIDO e
+            diferente de "não preenchido" (ex: abono que zera a partir
+            de um mês específico, marco tem que registrar isso, não
+            ficar indistinguível de "campo nunca usado"). jikyuu_effective
+            não precisou disso porque 時給=0 nunca é um valor real."""
+            s = (f.value or "").strip()
+            if not s:
+                return None
+            try:
+                return int(s)
+            except Exception:
+                return None
 
         def _vf(f):
             """Lê campo como float — para horas (ex: 155.5)"""
@@ -3067,6 +3149,8 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
                 # 時給 vigente a partir deste mês (opcional) — vazio se
                 # não houve mudança de salário nesse mês
                 "jikyuu_effective": _vi(f_jikyuu_novo),
+                "fixed_monthly_bonus_effective": _vi_opt(f_fixed_bonus_novo),
+                "monthly_allowance_effective": _vi_opt(f_monthly_allowance_novo),
             }
             # Remove tanto o mês antigo (se editando e mudou o mês) quanto
             # qualquer registro existente com o novo mês (evita duplicar)
@@ -3153,6 +3237,23 @@ def build_history_tab(page: ft.Page, state: dict, refresh_all):
                         "antigo do seu histórico, com o valor ANTIGO — "
                         "isso cobre todos os meses entre ele e o "
                         "aumento, sem precisar preencher mês a mês.",
+                        size=9, color=TEXT_MUTED,
+                    ),
+                    padding=ft.Padding(left=0, right=0, top=0, bottom=6),
+                ),
+
+                _sec("📈 MUDANÇA DE ADICIONAL FIXO / ABONO MENSAL (opcional)"),
+                _padded_row(f_fixed_bonus_novo, f_monthly_allowance_novo),
+                ft.Container(
+                    ft.Text(
+                        "Mesma lógica do 時給 acima — só preencha se o "
+                        "Adicional Fixo Mensal ou o Abono Mensal (os "
+                        "campos de ⚙️ Config) mudaram A PARTIR deste "
+                        "mês (inclusive pra ZERAR um deles, ex: parou "
+                        "de ser líder). Pode preencher \"0\" — é "
+                        "diferente de deixar em branco. Sem nenhum "
+                        "marco em nenhum mês, o app usa o valor atual "
+                        "de ⚙️ Config pra todo mundo, como sempre foi.",
                         size=9, color=TEXT_MUTED,
                     ),
                     padding=ft.Padding(left=0, right=0, top=0, bottom=6),
@@ -5388,9 +5489,9 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
 
             _title("💰 Bônus e Adicionais Mensais"),
             _item("Adicional Fixo Mensal", "Configure em ⚙️ Config.",
-                  "Valor somado AUTOMATICAMENTE todo mês — ideal para função de líder, técnico ou qualquer adicional fixo recorrente. Configure uma vez e esqueça. Também pode ser usado no Arredondamento de Salário (abaixo), sem precisar duplicar o valor em outro campo."),
+                  "Valor somado AUTOMATICAMENTE todo mês — ideal para função de líder, técnico ou qualquer adicional fixo recorrente. Configure uma vez e esqueça. Também pode ser usado no Arredondamento de Salário (abaixo), sem precisar duplicar o valor em outro campo. Mudou de valor no meio do caminho (ganhou/perdeu a função)? Registre um marco no Histórico do mês em que a mudança começou (seção \"Mudança de Adicional Fixo/Abono Mensal\") — meses passados continuam usando o valor antigo automaticamente, igual já funciona pro 時給."),
             _item("Abono Mensal (separado)", "Configure em ⚙️ Config.",
-                  "Igual ao Adicional Fixo Mensal (soma todo mês automaticamente), mas NUNCA entra no cálculo de Extra/Noturno/Domingo, mesmo com o Arredondamento com Adicional de Líder ativado. Use pra qualquer abono fixo que não deva afetar essa taxa."),
+                  "Igual ao Adicional Fixo Mensal (soma todo mês automaticamente), mas NUNCA entra no cálculo de Extra/Noturno/Domingo, mesmo com o Arredondamento com Adicional de Líder ativado. Use pra qualquer abono fixo que não deva afetar essa taxa. Também aceita marco no Histórico, mesma lógica do Adicional Fixo Mensal acima."),
             _item("Bônus Mês Ímpar 奇数月", "Configure em ⚙️ Config.",
                   "Valor somado apenas em meses ímpares (jan, mar, mai, jul, set, nov)."),
             _item("Abono Extra", "Configure em ⚙️ Config.",

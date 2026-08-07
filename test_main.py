@@ -58,6 +58,8 @@ calcular_yukyu              = FUNCS["calcular_yukyu"]
 normalize_hhmm             = FUNCS["normalize_hhmm"]
 normalize_yyyymm           = FUNCS["normalize_yyyymm"]
 jikyuu_vigente_para_mes    = FUNCS["jikyuu_vigente_para_mes"]
+fixed_bonus_vigente_para_mes = FUNCS["fixed_bonus_vigente_para_mes"]
+monthly_allowance_vigente_para_mes = FUNCS["monthly_allowance_vigente_para_mes"]
 desconto_real_para_mes     = FUNCS["desconto_real_para_mes"]
 
 JIKYUU = 1500
@@ -1314,7 +1316,111 @@ class TestJikyuuVigentePorMes(unittest.TestCase):
         self.assertEqual(jikyuu_vigente_para_mes("2026-12", hist, 1500), 1650)
 
 
-class TestDescontoRealParaMes(unittest.TestCase):
+class TestFixedBonusEAbonoVigentePorMes(unittest.TestCase):
+    """v2.60 — trava fixed_bonus_vigente_para_mes()/
+    monthly_allowance_vigente_para_mes(): mesma proteção do jikyuu, mas
+    pro Adicional Fixo Mensal e Abono Mensal — permite registrar
+    mudanças desses dois valores no Histórico sem afetar
+    retroativamente a previsão de meses passados não registrados."""
+
+    # ── Adicional Fixo Mensal ──────────────────────────────────────
+    def test_fixed_bonus_sem_historico_usa_default(self):
+        self.assertEqual(fixed_bonus_vigente_para_mes("2026-05", [], 30000), 30000)
+
+    def test_fixed_bonus_sem_marco_algum_usa_default(self):
+        hist = [{"month": "2026-01", "deductions": 40000}]  # sem o campo
+        self.assertEqual(fixed_bonus_vigente_para_mes("2026-05", hist, 30000), 30000)
+
+    def test_fixed_bonus_mes_antes_do_primeiro_marco_usa_default(self):
+        hist = [{"month": "2026-06", "fixed_monthly_bonus_effective": 50000}]
+        self.assertEqual(fixed_bonus_vigente_para_mes("2026-01", hist, 30000), 30000)
+
+    def test_fixed_bonus_mes_entre_dois_marcos_usa_o_anterior(self):
+        hist = [
+            {"month": "2026-01", "fixed_monthly_bonus_effective": 30000},
+            {"month": "2026-06", "fixed_monthly_bonus_effective": 50000},
+        ]
+        self.assertEqual(fixed_bonus_vigente_para_mes("2026-03", hist, 0), 30000)
+
+    def test_fixed_bonus_mes_depois_do_ultimo_marco_usa_o_mais_recente(self):
+        hist = [
+            {"month": "2026-01", "fixed_monthly_bonus_effective": 30000},
+            {"month": "2026-06", "fixed_monthly_bonus_effective": 50000},
+        ]
+        self.assertEqual(fixed_bonus_vigente_para_mes("2026-12", hist, 0), 50000)
+
+    def test_fixed_bonus_marco_zero_explicito_e_respeitado(self):
+        # Diferença chave em relação ao jikyuu: 0 é um valor VÁLIDO de
+        # marco (ex: parou de ser líder a partir de um mês), não deve
+        # cair no default como se o marco não existisse.
+        hist = [{"month": "2026-06", "fixed_monthly_bonus_effective": 0}]
+        self.assertEqual(fixed_bonus_vigente_para_mes("2026-08", hist, 30000), 0)
+
+    def test_fixed_bonus_marco_zero_nao_confunde_com_ausencia(self):
+        hist = [
+            {"month": "2026-01", "fixed_monthly_bonus_effective": 30000},
+            {"month": "2026-06", "fixed_monthly_bonus_effective": 0},
+        ]
+        self.assertEqual(fixed_bonus_vigente_para_mes("2026-03", hist, 0), 30000)
+        self.assertEqual(fixed_bonus_vigente_para_mes("2026-08", hist, 0), 0)
+
+    # ── Abono Mensal ────────────────────────────────────────────────
+    def test_allowance_sem_historico_usa_default(self):
+        self.assertEqual(monthly_allowance_vigente_para_mes("2026-05", [], 5000), 5000)
+
+    def test_allowance_mes_exatamente_no_marco(self):
+        hist = [{"month": "2026-01", "monthly_allowance_effective": 8000}]
+        self.assertEqual(monthly_allowance_vigente_para_mes("2026-01", hist, 5000), 8000)
+
+    def test_allowance_marco_zero_explicito_e_respeitado(self):
+        hist = [{"month": "2026-06", "monthly_allowance_effective": 0}]
+        self.assertEqual(monthly_allowance_vigente_para_mes("2026-08", hist, 8000), 0)
+
+    def test_allowance_marcos_fora_de_ordem_ainda_funciona(self):
+        hist = [
+            {"month": "2026-06", "monthly_allowance_effective": 8000},
+            {"month": "2026-01", "monthly_allowance_effective": 5000},
+        ]
+        self.assertEqual(monthly_allowance_vigente_para_mes("2026-03", hist, 0), 5000)
+        self.assertEqual(monthly_allowance_vigente_para_mes("2026-12", hist, 0), 8000)
+
+
+class TestFixedBonusEAbonoIntegradoNoForecast(unittest.TestCase):
+    """v2.60 — integração ponta a ponta: exatamente o padrão de uso real
+    em build_holerite_tab() — resolve o marco vigente PRIMEIRO
+    (fixed_bonus_vigente_para_mes/monthly_allowance_vigente_para_mes),
+    só DEPOIS passa o valor já resolvido pra compute_monthly_forecast()
+    (que não conhece Histórico/marcos, só recebe o valor final —
+    mesma arquitetura já usada pro jikyuu)."""
+
+    def test_mes_sem_marco_usa_valor_atual_de_config(self):
+        efetivo = fixed_bonus_vigente_para_mes("2026-06", [], 40000)
+        r = base_forecast(fixed_monthly_bonus=efetivo)
+        self.assertEqual(r["fixed_monthly_bonus"], 40000)
+
+    def test_mes_passado_nao_muda_com_marco_futuro(self):
+        # Marco registrado só a partir de julho — junho (mês do
+        # base_forecast, YEAR-MONTH = 2026-06) tem que continuar usando
+        # o valor ANTIGO, não o novo marco futuro.
+        hist = [{"month": "2026-07", "fixed_monthly_bonus_effective": 60000}]
+        efetivo = fixed_bonus_vigente_para_mes("2026-06", hist, 40000)
+        r = base_forecast(fixed_monthly_bonus=efetivo)
+        self.assertEqual(r["fixed_monthly_bonus"], 40000)
+
+    def test_mes_atingido_pelo_marco_usa_o_novo_valor(self):
+        hist = [{"month": "2026-06", "fixed_monthly_bonus_effective": 60000}]
+        efetivo = fixed_bonus_vigente_para_mes("2026-06", hist, 40000)
+        r = base_forecast(fixed_monthly_bonus=efetivo)
+        self.assertEqual(r["fixed_monthly_bonus"], 60000)
+
+    def test_monthly_allowance_marco_zero_integrado(self):
+        hist = [{"month": "2026-06", "monthly_allowance_effective": 0}]
+        efetivo = monthly_allowance_vigente_para_mes("2026-06", hist, 8000)
+        r = base_forecast(monthly_allowance=efetivo)
+        self.assertEqual(r["monthly_allowance"], 0)
+
+
+
     """v2.52 — trava desconto_real_para_mes(): mês com holerite real
     registrado no Histórico usa o valor de desconto REAL, não a
     previsão (Média Histórica/Fixo)."""
