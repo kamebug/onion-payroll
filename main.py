@@ -1068,6 +1068,83 @@ def calcular_yukyu(hire_date: date, today: date, usage_dates: list) -> dict:
     }
 
 
+CYCLE_CFG_KEYS = ("cycle_type", "group", "anchor_date", "anchor_group",
+                  "alt_monthly_rest_pattern", "shift_anchor_date")
+
+
+def cycle_cfg_from_settings(s: dict) -> dict:
+    """Extrai de `settings` só os campos que definem a ESCALA (ciclo/grupo/
+    data-âncora). v2.61: usado para congelar a escala anterior numa 'era'."""
+    return {k: s.get(k) for k in CYCLE_CFG_KEYS}
+
+
+def cycle_cfg_for_date(d: date, current_cfg: dict, eras: list = None) -> dict:
+    """Escala em vigor no dia `d`. `eras` = lista de escalas ANTIGAS, cada uma
+    com {"until": "AAAA-MM-DD", ...campos da escala}: vale para datas
+    ANTERIORES a `until` (e a partir do `until` da era anterior). Datas
+    iguais ou posteriores ao maior `until` usam `current_cfg` (a escala
+    atual da ⚙️ Config). Sem eras = comportamento idêntico ao de antes."""
+    parsed = []
+    for era in (eras or []):
+        try:
+            parsed.append((date.fromisoformat(str(era.get("until"))), era))
+        except Exception:
+            continue
+    parsed.sort(key=lambda t: t[0])
+    for until, era in parsed:
+        if d < until:
+            return era
+    return current_cfg
+
+
+def _generate_cycle_single(cfg: dict, year: int, month: int) -> tuple:
+    """Gera (cycle, alt_shift_map) de UMA escala para o mês inteiro."""
+    ctype = cfg.get("cycle_type") or "4x2"
+    group = cfg.get("group") or "A"
+    try:
+        anchor = date.fromisoformat(str(cfg.get("anchor_date")))
+    except Exception:
+        anchor = date(year, month, 1)
+    if ctype == "5x2":
+        return generate_weekly_calendar(year, month), {}
+    if ctype == "alternating":
+        raw = generate_alternating_calendar(anchor, year, month)
+        return ({d: st for d, (st, sh) in raw.items()},
+                {d: sh for d, (st, sh) in raw.items()})
+    if ctype == "alternating_monthly":
+        try:
+            shift_anchor = date.fromisoformat(str(cfg.get("shift_anchor_date") or cfg.get("anchor_date")))
+        except Exception:
+            shift_anchor = anchor
+        raw = generate_alternating_monthly_calendar(
+            shift_anchor, year, month,
+            rest_pattern=cfg.get("alt_monthly_rest_pattern") or "5x2",
+            rest_anchor_date=anchor, group=group,
+            anchor_group=cfg.get("anchor_group"),
+        )
+        return ({d: st for d, (st, sh) in raw.items()},
+                {d: sh for d, (st, sh) in raw.items()})
+    return generate_4x2_calendar(anchor, year, month, group, cfg.get("anchor_group")), {}
+
+
+def generate_cycle_for_month(year: int, month: int, current_cfg: dict,
+                             eras: list = None) -> tuple:
+    """Ciclo do mês dia a dia, respeitando as eras (v2.61). Retorna
+    (cycle, alt_shift_map): `alt_shift_map` só tem os dias cuja escala
+    em vigor é alternada — os demais dias NÃO entram, então o turno
+    volta ao padrão da ⚙️ Config naquele dia."""
+    cycle, alt_map, cache = {}, {}, {}
+    for dn in range(1, calendar.monthrange(year, month)[1] + 1):
+        cfg = cycle_cfg_for_date(date(year, month, dn), current_cfg, eras)
+        if id(cfg) not in cache:
+            cache[id(cfg)] = _generate_cycle_single(cfg, year, month)
+        c, a = cache[id(cfg)]
+        cycle[dn] = c.get(dn, "off")
+        if dn in a:
+            alt_map[dn] = a[dn]
+    return cycle, alt_map
+
+
 def compute_monthly_forecast(
     year: int, month: int, jikyuu: int, anchor_date: date, group: str,
     holiday_days: list, day_overrides: dict, odd_month_bonus: int, extra_bonus: int,
@@ -1089,31 +1166,22 @@ def compute_monthly_forecast(
     anchor_group: str = None,
     alt_monthly_rest_pattern: str = "5x2", shift_anchor_date: date = None,
     break_periods: list = None,
+    cycle_eras: list = None,  # v2.61: escalas antigas congeladas (ver cycle_cfg_for_date)
     kyujitsu_rate_mode: str = "1.35",  # v2.56: taxa configurável de
         # 休日出勤 (所定休日) — "1.35" (padrão), "1.25", ou "normal" (dia
         # comum, sem taxa de feriado). Domingo (法定休日) NUNCA usa esse
         # parâmetro — continua sempre 1,35x fixo por lei, ver
         # holiday_kind="legal" abaixo.
 ) -> dict:
-    # ── Seleção do tipo de ciclo ──────────────────────────────────
-    _alt_shift_map = {}  # dia -> "day"/"night" (só usado se cycle_type=alternating*)
-    if cycle_type == "5x2":
-        cycle = generate_weekly_calendar(year, month)
-    elif cycle_type == "alternating":
-        _alt_raw = generate_alternating_calendar(anchor_date, year, month)
-        cycle = {d: status for d, (status, shift) in _alt_raw.items()}
-        _alt_shift_map = {d: shift for d, (status, shift) in _alt_raw.items()}
-    elif cycle_type == "alternating_monthly":
-        _shift_anchor = shift_anchor_date if shift_anchor_date else anchor_date
-        _alt_raw = generate_alternating_monthly_calendar(
-            _shift_anchor, year, month,
-            rest_pattern=alt_monthly_rest_pattern,
-            rest_anchor_date=anchor_date, group=group, anchor_group=anchor_group,
-        )
-        cycle = {d: status for d, (status, shift) in _alt_raw.items()}
-        _alt_shift_map = {d: shift for d, (status, shift) in _alt_raw.items()}
-    else:
-        cycle = generate_4x2_calendar(anchor_date, year, month, group, anchor_group)
+    # ── Seleção do ciclo (v2.61: dia a dia, respeitando as eras) ──
+    _cur_cfg = {
+        "cycle_type": cycle_type, "group": group,
+        "anchor_date": anchor_date.isoformat() if anchor_date else None,
+        "anchor_group": anchor_group,
+        "alt_monthly_rest_pattern": alt_monthly_rest_pattern,
+        "shift_anchor_date": shift_anchor_date.isoformat() if shift_anchor_date else None,
+    }
+    cycle, _alt_shift_map = generate_cycle_for_month(year, month, _cur_cfg, cycle_eras)
 
     _stype        = shift_type_cfg if shift_type_cfg else ("night" if group == "B" else "day")
     default_shift = _stype
@@ -1137,9 +1205,12 @@ def compute_monthly_forecast(
     _rate_ot = _rate_night = _rate_legal = _rate_kyujitsu = _rate_base = 0
     days_normal = days_holiday = days_legal = days_yukyu = 0
 
+    _base_shift_vars = (default_shift, _start, _end, _ot)
     for day_num, cycle_status in cycle.items():
-        # No modo alternado (semanal ou mensal), o turno do dia muda
-        if cycle_type in ("alternating", "alternating_monthly") and day_num in _alt_shift_map:
+        # v2.61: a cada dia volta ao turno-base da ⚙️ Config; só dias de
+        # escala alternada (presentes no mapa) trocam de turno.
+        default_shift, _start, _end, _ot = _base_shift_vars
+        if day_num in _alt_shift_map:
             _day_shift = _alt_shift_map[day_num]
             default_shift = _day_shift
             if _day_shift == "day":
@@ -1617,6 +1688,7 @@ DEFAULT_SETTINGS = {
         # "1.25", ou "normal" (dia comum, sem taxa de feriado). Domingo
         # (法定休日) nunca lê essa configuração — sempre 1,35x fixo.
     "anchor_group": None,
+    "cycle_eras": [],  # v2.61: escalas antigas travadas ({"until": data, ...escala})
     "cycle_type_confirmed": False,
     "disclaimer_accepted": False,
     "disclaimer_accepted_at": None,  # timestamp ISO de quando o usuário clicou Aceitar
@@ -1740,8 +1812,8 @@ BG_SURFACE     = "#2A2A2A"   # Inputs e superfícies
 
 # ACENTOS — Petronas Cyan
 ACCENT         = "#00D2C6"   # Destaque principal
-BUILD_ID       = "2608071132"   # atualizado automaticamente pelo deploy.ps1
-APP_VERSION    = "2.60.0"       # sincronizar manualmente com pyproject.toml/CHANGELOG.md a cada bump de versão
+BUILD_ID       = "2607201037"   # atualizado automaticamente pelo deploy.ps1
+APP_VERSION    = "2.61.1"       # sincronizar manualmente com pyproject.toml/CHANGELOG.md a cada bump de versão
 ACCENT_LITE    = "#5EEAD4"   # Turquesa claro
 ACCENT_DARK    = "#009E94"   # Turquesa escuro
 
@@ -1874,26 +1946,9 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
         anchor = today
 
     _cycle_type = settings.get("cycle_type", "4x2")
-    if _cycle_type == "5x2":
-        cycle = generate_weekly_calendar(view_year, view_month)
-    elif _cycle_type == "alternating":
-        _alt_raw = generate_alternating_calendar(anchor, view_year, view_month)
-        cycle = {d: status for d, (status, shift) in _alt_raw.items()}
-    elif _cycle_type == "alternating_monthly":
-        try:
-            _shift_anchor = date.fromisoformat(settings.get("shift_anchor_date") or settings["anchor_date"])
-        except Exception:
-            _shift_anchor = anchor
-        _alt_raw = generate_alternating_monthly_calendar(
-            _shift_anchor, view_year, view_month,
-            rest_pattern=settings.get("alt_monthly_rest_pattern", "5x2"),
-            rest_anchor_date=anchor, group=settings.get("group", "A"),
-            anchor_group=settings.get("anchor_group"),
-        )
-        cycle = {d: status for d, (status, shift) in _alt_raw.items()}
-    else:
-        cycle = generate_4x2_calendar(anchor, view_year, view_month, settings.get("group", "A"),
-                                       settings.get("anchor_group"))
+    cycle, _cal_alt_map = generate_cycle_for_month(
+        view_year, view_month, cycle_cfg_from_settings(settings),
+        settings.get("cycle_eras") or [])
     month_key       = f"{view_year}-{view_month:02d}"
     month_overrides = overrides.get(month_key, {})
     month_holidays  = holidays.get(month_key, [])
@@ -2602,12 +2657,17 @@ def build_calendar_tab(page: ft.Page, state: dict, refresh_all):
     )
 
     group_badge = None
-    _mostra_grupo = (_cycle_type == "4x2" or
-                      (_cycle_type == "alternating_monthly"
-                       and settings.get("alt_monthly_rest_pattern", "5x2") == "4x2"))
+    # v2.61: o selo mostra a escala em vigor no ÚLTIMO dia do mês exibido
+    # (meses antigos mostram o grupo da época, não o atual).
+    _cfg_vista = cycle_cfg_for_date(
+        date(view_year, view_month, calendar.monthrange(view_year, view_month)[1]),
+        cycle_cfg_from_settings(settings), settings.get("cycle_eras") or [])
+    _mostra_grupo = (_cfg_vista.get("cycle_type") in (None, "4x2") or
+                      (_cfg_vista.get("cycle_type") == "alternating_monthly"
+                       and (_cfg_vista.get("alt_monthly_rest_pattern") or "5x2") == "4x2"))
     if _mostra_grupo:
-        _grupo_atual = settings.get("group", "A")
-        _grupo_ref   = settings.get("anchor_group")
+        _grupo_atual = _cfg_vista.get("group") or "A"
+        _grupo_ref   = _cfg_vista.get("anchor_group")
         _badge_txt   = f"📅 Escala do Grupo {_grupo_atual}"
         if _grupo_ref and _grupo_ref != _grupo_atual:
             _badge_txt += f"  (calculada a partir do Grupo {_grupo_ref})"
@@ -2733,6 +2793,7 @@ def build_holerite_tab(page: ft.Page, state: dict, refresh_all):
             night_interval_minutes=int(settings.get("night_interval_minutes") or 0),
             kyujitsu_rate_mode=settings.get("kyujitsu_rate_mode", "1.35"),
             anchor_group=settings.get("anchor_group"),
+            cycle_eras=settings.get("cycle_eras") or [],
             alt_monthly_rest_pattern=settings.get("alt_monthly_rest_pattern", "5x2"),
             shift_anchor_date=(date.fromisoformat(settings["shift_anchor_date"])
                                 if settings.get("shift_anchor_date") else None),
@@ -3895,6 +3956,99 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
     ], spacing=12, tight=True))
     step2_turno_container.visible = _cur_cycle_confirmed
 
+    # ── 🔒 Travar escala anterior (v2.61) ─────────────────────────
+    # A escala nova só vale a partir da data digitada; tudo antes dela
+    # continua com a escala antiga (calendário, previsão do Holerite e
+    # barra de assiduidade). Fluxo: 1) digita a data, 2) toca em Travar
+    # (guarda a escala ATUAL até a véspera), 3) muda Grupo/Ciclo/Início.
+    eras_msg = ft.Text("", size=11, color=WARNING, visible=False)
+    eras_col = ft.Column(controls=[], spacing=6, tight=True)
+    era_date_field = ft.TextField(
+        label="Nova escala vale a partir de (AAAA-MM-DD)",
+        hint_text="ex.: 2026-08-01",
+        keyboard_type=ft.KeyboardType.TEXT,
+        bgcolor="#2A2A2A", color="#F0F0F0",
+        border_color="#333333", focused_border_color="#00D2C6",
+        label_style=ft.TextStyle(color="#A0A0A0"),
+    )
+
+    def _era_resumo(era):
+        ct = era.get("cycle_type") or "4x2"
+        nome = {"4x2": "4×2", "5x2": "5×2", "alternating": "Alternado Semanal",
+                "alternating_monthly": "Alternado Mensal"}.get(ct, ct)
+        if ct in ("4x2", "alternating_monthly"):
+            nome += f" · Grupo {era.get('group') or 'A'}"
+        return nome
+
+    def _remover_era(until):
+        settings["cycle_eras"] = [e for e in (settings.get("cycle_eras") or [])
+                                  if e.get("until") != until]
+        _mem_cache[KEY_SETTINGS] = settings
+        save_json(page, KEY_SETTINGS, settings)
+        _render_eras()
+        eras_col.update()
+
+    def _render_eras():
+        eras = sorted(settings.get("cycle_eras") or [], key=lambda e: e.get("until", ""))
+        rows = []
+        for e in eras:
+            u = e.get("until", "")
+            rows.append(ft.Row(controls=[
+                ft.Text(f"🔒 {_era_resumo(e)} — até a véspera de {u}",
+                        size=11, color=TEXT_SECONDARY, expand=True),
+                ft.TextButton("Remover", on_click=lambda _, _u=u: _remover_era(_u),
+                              style=ft.ButtonStyle(color=DANGER)),
+            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN))
+        if not rows:
+            rows.append(ft.Text("Nenhuma escala travada ainda.", size=11, color=TEXT_MUTED))
+        eras_col.controls = rows
+
+    def _travar_escala(_):
+        v = normalize_date((era_date_field.value or "").strip())
+        era_date_field.value = v
+        try:
+            nova = date.fromisoformat(v)
+        except Exception:
+            eras_msg.value = "⚠️ Data inválida. Use AAAA-MM-DD (ex.: 2026-08-01)."
+            eras_msg.color = WARNING
+            eras_msg.visible = True
+            page.update()
+            return
+        eras = settings.get("cycle_eras") or []
+        ultimo = max((e.get("until", "") for e in eras), default="")
+        if ultimo and v <= ultimo:
+            eras_msg.value = f"⚠️ A data precisa ser depois da última trava ({ultimo})."
+            eras_msg.color = WARNING
+            eras_msg.visible = True
+            page.update()
+            return
+        eras = eras + [{"until": v, **cycle_cfg_from_settings(settings)}]
+        settings["cycle_eras"] = eras
+        _mem_cache[KEY_SETTINGS] = settings
+        save_json(page, KEY_SETTINGS, settings)
+        _render_eras()
+        eras_msg.value = (f"✅ Escala atual travada até a véspera de {v}. Agora mude "
+                          f"Ciclo/Grupo/Data de início abaixo: a mudança vale a partir de {v}.")
+        eras_msg.color = SUCCESS
+        eras_msg.visible = True
+        page.update()
+
+    _render_eras()
+    eras_card = card(ft.Column(controls=[
+        section_header("🔒 TRAVAR ESCALA ANTERIOR"),
+        ft.Text("Vai mudar de Grupo, de ciclo ou de data de início? Primeiro "
+                "trave a escala atual: ela continua valendo para o passado "
+                "(calendário, previsão e assiduidade) e a nova só vale a "
+                "partir da data que você digitar.",
+                size=10, color=TEXT_MUTED),
+        era_date_field,
+        ft.FilledButton("🔒 Travar escala atual até esta data",
+                        on_click=_travar_escala,
+                        style=ft.ButtonStyle(bgcolor=ACCENT, color="#121212")),
+        eras_msg,
+        eras_col,
+    ], spacing=10, tight=True))
+
     step3_grupo_container = card(ft.Column(controls=[
         section_header("3️⃣ GRUPO DE TURNO"),
         group_label,
@@ -4759,6 +4913,9 @@ def build_settings_tab(page: ft.Page, state: dict, refresh_all):
                     color=TEXT_PRIMARY, weight=ft.FontWeight.W_700),
             ft.Container(height=4),
 
+            # ═══ 🔒 Travar escala anterior (v2.61) ═══
+            eras_card,
+
             # ═══ ETAPA 1 — Tipo de Ciclo (sempre visível, primeiro) ═══
             card(ft.Column(controls=[
                 section_header("1️⃣ TIPO DE CICLO DE TRABALHO"),
@@ -5301,6 +5458,8 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
                   "Abra ⚙️ Config. → insira seu 時給 Jikyuu (Valor por Hora), escolha o Tipo de Ciclo (4×2, 5×2 ou Alternado) e a Data Início."),
             _item("2️⃣", "Importe os feriados",
                   "Feriados nacionais já vêm embutidos, e se atualizam sozinhos automaticamente quando o app tem conexão com a internet. Para feriados corporativos, acesse 🏭 Feriados — toque em \"🔄 Buscar Feriados da Empresa\" pra importar automaticamente (se o mantenedor tiver publicado uma lista), ou marque manualmente tocando nos dias."),
+            _item("🔒", "Vai mudar de Grupo ou de escala depois?",
+                  "Antes de trocar, trave a escala atual em ⚙️ Config. para não alterar os meses passados — passo a passo na seção \"🔒 Mudança de Escala\" mais abaixo."),
             _item("3️⃣", "Acompanhe no Calendário",
                   "A aba 📅 gera automaticamente o ciclo escolhido. Toque em qualquer dia para registrar horários, faltas ou férias."),
             _item("4️⃣", "Consulte o Holerite",
@@ -5312,7 +5471,7 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
 
             # ── Grupos de turno ──────────────────────────────────────
             _title("👥 Grupo (identificação da equipe)"),
-            _p("O Grupo (A/B/C...) serve apenas para identificar sua equipe — não afeta o cálculo. O turno (🌙/☀️) e os horários são configurados separadamente em ⚙️ Config."),
+            _p("O Grupo (A/B/C) define em QUAL DIA começa a sua folga dentro do ciclo 4×2 — cada grupo está deslocado 2 dias do outro —, então trocar de grupo muda o calendário. Já o valor do pagamento não depende do grupo: o turno (🌙/☀️) e os horários são configurados separadamente em ⚙️ Config. Mudou de grupo? Veja \"🔒 Mudança de Escala\" abaixo para não alterar os meses passados."),
 
                     # ── Configuração de turno ────────────────────────────────
                     _title("⚙️ Configuração de Turno"),
@@ -5361,6 +5520,19 @@ def build_help_tab(page: ft.Page, state: dict, refresh_all):
                 ], spacing=4),
                 padding=ft.Padding(left=0, right=0, top=6, bottom=6),
             ),
+
+            # ── Mudança de escala (v2.61) ─────────────────────────────
+            _title("🔒 Mudança de Escala — Travar o Passado"),
+            _p("Trocar o Grupo, o Tipo de Ciclo ou a Data Início em ⚙️ Config. recalcula o calendário inteiro. Para que os meses passados NÃO mudem, use o cartão \"🔒 Travar escala anterior\" ANTES de trocar:"),
+            _item("1️⃣", "Digite a data da escala nova",
+                  "Campo \"Nova escala vale a partir de\" (AAAA-MM-DD). É o primeiro dia em que a escala nova vale."),
+            _item("2️⃣", "Toque em \"Travar escala atual até esta data\"",
+                  "O app guarda a escala de hoje (ciclo, grupo e data início) para todos os dias ANTES da data digitada. A data precisa ser posterior à última trava."),
+            _item("3️⃣", "Agora troque Grupo / Ciclo / Data Início",
+                  "A mudança vale só a partir da data digitada. Calendário, previsão do Holerite, barra de Assiduidade e o selo \"Escala do Grupo\" dos meses anteriores continuam como eram. Um mês que atravessa a data usa cada escala no seu período."),
+            _item("↩️", "Travou por engano?",
+                  "Toque em \"Remover\" na lista de escalas travadas — o período volta a seguir a escala atual."),
+            _p("⚠️ Mudanças de escala feitas ANTES desta função não podem ser recuperadas automaticamente. Os horários do turno (entrada, saída, 残業) ainda valem para todos os meses; já o 時給 e os adicionais mensais têm marcos próprios no 📋 Histórico."),
 
             # ── Adicionais (Lei Trabalhista Japonesa) ────────────────
             _title("💴 Adicionais (Lei Trabalhista 労働基準法)"),

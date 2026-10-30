@@ -22,6 +22,48 @@
 > já existentes passaram a depender (ex: um formato de arquivo, uma
 > config salva que outra versão não entende mais), sobe **MAJOR**.
 
+## [2.61.1] — 2026-07-22 — AJUDA: MUDANÇA DE ESCALA
+
+### 📝 Documentação (só texto, sem mudança de comportamento)
+
+- Aba ❓ Ajuda: nova seção **"🔒 Mudança de Escala — Travar o Passado"**
+  com o passo a passo da v2.61.0; item do Início Rápido virou um
+  ponteiro curto para ela.
+- Corrigido texto antigo e impreciso da seção **"Grupo"**, que dizia
+  que o grupo "não afeta o cálculo": o grupo define o deslocamento de
+  2 dias no ciclo 4×2 e portanto muda o calendário (só não muda o valor
+  do pagamento por si).
+
+---
+
+## [2.61.0] — 2026-07-22 — TRAVAR ESCALA ANTERIOR (ERAS DE CICLO)
+
+### ✨ Adicionado
+
+- **🔒 Travar escala anterior (⚙️ Config.)**: ao mudar de Grupo, Tipo de
+  Ciclo ou Data Início, a escala nova passa a valer só a partir de uma
+  data digitada; tudo antes dela mantém a escala antiga (calendário,
+  previsão do Holerite, barra de assiduidade e selo do Grupo). Antes,
+  qualquer troca recalculava retroativamente todos os meses.
+  - Novo setting `cycle_eras` (lista de `{"until": data, ...escala}`),
+    com 3 helpers puros e testáveis: `cycle_cfg_from_settings`,
+    `cycle_cfg_for_date`, `generate_cycle_for_month`.
+  - `compute_monthly_forecast` ganhou o parâmetro `cycle_eras`
+    (padrão `None` = comportamento idêntico ao anterior).
+  - A seleção de ciclo, antes duplicada em `compute_monthly_forecast` e
+    `build_calendar_tab`, agora vem de um único gerador.
+  - No loop do Holerite o turno volta ao padrão da Config em cada dia que
+    não é de escala alternada (necessário para meses que misturam escalas).
+- 9 testes novos (160 no total) e item no manual (Início Rápido).
+
+### ⚠️ Observação
+
+- Fluxo: digitar a data → Travar → só então mudar Grupo/Ciclo. Escalas
+  já alteradas ANTES desta versão não têm como ser recuperadas
+  automaticamente (a escala antiga já foi sobrescrita).
+
+---
+
 ## [2.60.0] — 2026-07-21 — MARCO HISTÓRICO PRO ADICIONAL FIXO MENSAL E ABONO MENSAL
 
 ### 🐛 Corrigido (era comportamento não intencional, nunca reportado antes)
